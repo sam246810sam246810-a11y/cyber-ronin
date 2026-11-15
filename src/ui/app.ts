@@ -644,9 +644,10 @@ export class App {
       this.modal(`<button class="x" data-a="close">✕</button><h3>最近埋點</h3><pre class="events">${ev.map((e) => `${new Date(e.t).toLocaleTimeString()} ${e.e} ${e.p ? JSON.stringify(e.p) : ''}`).join('\n')}</pre>`, 'events-modal');
     },
     reset: () => {
-      if (!confirm('確定要重置所有進度？')) return;
-      S.resetSave(); S.onBoot(); this.closeAll(); this.go('home');
+      this.modal(`<h3>重置存檔</h3><p>所有裝備、資源與嘉年華進度都會清除，無法復原。</p>
+        <div class="row"><button class="btn" data-a="close">取消</button><button class="btn red" data-a="resetOk">確認重置</button></div>`, 'pay');
     },
+    resetOk: () => { S.resetSave(); S.onBoot(); this.closeAll(); this.go('home'); this.toast('存檔已重置'); },
   };
 
   chestReveal(chestId: string, it: Item) {
