@@ -24,6 +24,8 @@ import classData from '../../data/classes.json';
 import jobData from '../../data/jobs.json';
 import { getSettings, updateSettings, type Settings } from '../../systems/settings';
 import { sound } from '../../audio/sound';
+import { FISH_HITS, FISH_MISSES, inZone, rollFish, type Fish } from '../../systems/fishing';
+import { canCook, cook, FOODS, FOOD_BY_NAME } from '../../systems/cooking';
 import { MAX_PLUS, RECIPES, SYNTH_COST, craft, enhance, enhanceCost, missingFor, recipeOutput, synthesize } from '../../systems/forge';
 
 type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest' | 'settings' | 'skills' | 'bestiary' | 'achievements';
@@ -77,7 +79,9 @@ export function getOverlay(): GameOverlay { return (shared ??= new GameOverlay()
 
 export class GameOverlay {
   private root: HTMLDivElement;
-  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' | 'forge' | 'credits' = 'menu';
+  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' | 'forge' | 'credits' | 'fishing' | 'cook' = 'menu';
+  private fishSpot = 'pond';
+  private fishState: { phase: 'wait' | 'bite' | 'done'; pos: number; dir: number; hits: number; misses: number; fish?: Fish; raf?: number; timer?: number; result?: string } = { phase: 'wait', pos: 0, dir: 1, hits: 0, misses: 0 };
   private credits?: CreditsInfo;
   private onTitle: () => void = () => {};
   private onNGPlus: () => void = () => {};
@@ -116,6 +120,71 @@ export class GameOverlay {
   openMenu(onClose: () => void): void { this.mode = 'menu'; this.open(onClose); }
   openShop(shopId: string, onClose: () => void): void { this.mode = 'shop'; this.shopId = shopId; this.shopTab = 'buy'; this.open(onClose); }
   openCredits(info: CreditsInfo, onTitle: () => void, onContinue: () => void, onNGPlus: () => void): void { this.mode = 'credits'; this.credits = info; this.onTitle = onTitle; this.onNGPlus = onNGPlus; this.open(onContinue); }
+  openCook(onClose: () => void): void { this.mode = 'cook'; this.open(onClose); }
+  openFishing(spot: string, onClose: () => void): void {
+    this.mode = 'fishing'; this.fishSpot = spot;
+    this.fishState = { phase: 'wait', pos: 0, dir: 1, hits: 0, misses: 0 };
+    this.open(onClose);
+    this.startFishing();
+  }
+
+  /** 釣魚：等 1～3 秒上鉤，指針左右跑，在綠色區域按「拉」 */
+  private startFishing(): void {
+    const f = this.fishState;
+    f.timer = window.setTimeout(() => {
+      if (this.mode !== 'fishing' || this.root.hidden) return;
+      f.phase = 'bite'; f.fish = rollFish(this.fishSpot); f.pos = 0; f.dir = 1;
+      this.render();
+      let last = performance.now();
+      const speed = 1.1 + (0.3 - (f.fish.zone ?? 0.3)) * 3; // 越難的魚跑越快
+      const step = (t: number) => {
+        if (f.phase !== 'bite' || this.root.hidden) return;
+        f.pos += f.dir * speed * ((t - last) / 1000); last = t;
+        if (f.pos > 1) { f.pos = 1; f.dir = -1; } else if (f.pos < 0) { f.pos = 0; f.dir = 1; }
+        const m = this.root.querySelector<HTMLElement>('.kf-needle'); if (m) m.style.left = `${f.pos * 100}%`;
+        f.raf = requestAnimationFrame(step);
+      };
+      f.raf = requestAnimationFrame(step);
+    }, 1000 + Math.random() * 2000);
+  }
+
+  private fishPull(): void {
+    const f = this.fishState;
+    if (f.phase !== 'bite' || !f.fish) return;
+    if (inZone(f.pos, f.fish.zone)) f.hits++; else f.misses++;
+    if (f.hits >= FISH_HITS) {
+      f.phase = 'done'; gameState.items[f.fish.name] = (gameState.items[f.fish.name] ?? 0) + 1;
+      f.result = `釣到了「${f.fish.name}」！${f.fish.desc}`; sound.sfx('chest');
+    } else if (f.misses >= FISH_MISSES) { f.phase = 'done'; f.result = '魚跑掉了……'; sound.sfx('wrong'); }
+    else sound.sfx(inZone(f.pos, f.fish.zone) ? 'pickup' : 'hit');
+    this.render();
+  }
+
+  private fishingView(): string {
+    const f = this.fishState;
+    const body = f.phase === 'wait' ? '<div style="font-size:16px">靜靜等待……浮標動了就要準備！</div>'
+      : f.phase === 'bite' ? `<div style="font-size:16px;color:#f2c94c">上鉤了！指針進到綠色區域時按「拉！」</div>
+          <div style="position:relative;height:28px;width:min(420px,80vw);background:#2a2640;border-radius:6px;overflow:hidden;margin:10px auto">
+            <div style="position:absolute;top:0;bottom:0;left:${(0.5 - f.fish!.zone / 2) * 100}%;width:${f.fish!.zone * 100}%;background:#3a8a4a"></div>
+            <div class="kf-needle" style="position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:#f2e6c9;left:${f.pos * 100}%"></div></div>
+          <div class="kf-tag">成功 ${f.hits}/${FISH_HITS}・失手 ${f.misses}/${FISH_MISSES}</div>
+          <div class="kf-btns" style="justify-content:center"><button class="kf-btn" data-act="pull" style="min-width:140px;min-height:48px;font-size:18px">拉！</button></div>`
+      : `<div style="font-size:16px">${esc(f.result ?? '')}</div><div class="kf-btns" style="justify-content:center"><button class="kf-btn" data-act="fishAgain">再釣一次</button><button class="kf-btn secondary" data-act="close">收竿</button></div>`;
+    return `<div class="kf-col" style="grid-column:1 / -1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center">${body}</div>`;
+  }
+
+  private cookView(): string {
+    const s = gameState;
+    const rows = FOODS.map((f) => {
+      const ok = canCook(s, f);
+      const mats = Object.entries(f.mats).map(([n, c]) => `<span class="${(s.items[n] ?? 0) >= c ? 'kf-up' : 'kf-down'}">${esc(n)} ${s.items[n] ?? 0}/${c}</span>`).join('、');
+      return `<div class="kf-card"><h3>${esc(f.name)}${s.items[f.name] ? `　<span class="kf-tag">持有 ${s.items[f.name]}</span>` : ''}</h3><div>${esc(f.desc)}</div><div class="kf-tag">材料：${mats}</div>
+        <div class="kf-btns"><button class="kf-btn" data-cookfood="${esc(f.name)}" ${ok ? '' : 'disabled'}>料理</button></div></div>`;
+    }).join('');
+    return `<div class="kf-col" style="grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;align-content:start">
+      <div class="kf-tag" style="grid-column:1 / -1">做好的料理在「選單 → 背包」使用。有加成的料理，效果時間內再吃會重新計時。</div>${rows}<div class="kf-msg" style="grid-column:1 / -1">${esc(this.msg)}</div></div>`;
+  }
+
   openBoard(onClose: () => void): void { this.mode = 'board'; this.open(onClose); }
   openForge(onClose: () => void): void { this.mode = 'forge'; this.forgeTab = 'craft'; this.recipe = ''; this.synthSel = []; this.open(onClose); }
   openSave(req: SaveRequest, onClose: () => void, onWarp: (map: string, spawn: string) => void = () => {}): void { this.mode = 'save'; this.saveReq = req; this.onWarp = onWarp; this.open(onClose); }
@@ -129,6 +198,9 @@ export class GameOverlay {
 
   close(): void {
     if (this.root.hidden) return;
+    if (this.fishState.raf) cancelAnimationFrame(this.fishState.raf);
+    if (this.fishState.timer) clearTimeout(this.fishState.timer);
+    this.fishState.phase = 'done';
     this.root.hidden = true;
     this.onClose();
   }
@@ -315,6 +387,12 @@ export class GameOverlay {
   }
 
   private render(): void {
+    if (this.mode === 'fishing' || this.mode === 'cook') {
+      const title = this.mode === 'fishing' ? '釣魚' : '料理';
+      this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}"><div class="kf-head"><span class="kf-title">${title}</span><span class="kf-spacer"></span>
+        <button class="kf-close" data-act="close" aria-label="關閉">✕</button></div><div class="kf-body">${this.mode === 'fishing' ? this.fishingView() : this.cookView()}</div></div>`;
+      return;
+    }
     if (this.mode === 'credits') {
       this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="片尾"><div class="kf-body">${this.creditsView()}</div></div>`;
       return;
@@ -442,8 +520,8 @@ export class GameOverlay {
     if (sel.kind === 'item') {
       const n = s.items[sel.name] ?? 0;
       if (!n) return '<div class="kf-empty">已經用完了。</div>';
-      const usable = !!ITEMS[sel.name] && sel.name !== '擴充布袋';
-      return `<div class="kf-card"><h3>${esc(sel.name)}　×${n}</h3><div>${ITEM_DESC[sel.name] ?? ''}</div><div class="kf-btns">
+      const usable = (!!ITEMS[sel.name] && sel.name !== '擴充布袋') || !!FOOD_BY_NAME[sel.name];
+      return `<div class="kf-card"><h3>${esc(sel.name)}　×${n}</h3><div>${ITEM_DESC[sel.name] ?? FOOD_BY_NAME[sel.name]?.desc ?? ''}</div><div class="kf-btns">
         ${selling ? `<button class="kf-btn" data-act="sellItem">賣出 1 個（${this.itemSell(sel.name)} 文）</button>`
           : usable ? '<button class="kf-btn" data-act="useItem">使用</button>' : ''}</div></div>`;
     }
@@ -493,9 +571,12 @@ export class GameOverlay {
 
   // ---------- 操作 ----------
   private onClick(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-warp],[data-beast],[data-slot0],[data-slot1],[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-cookfood],[data-warp],[data-beast],[data-slot0],[data-slot1],[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
     if (!el) { if (e.target === this.root) this.close(); return; }
     const d = el.dataset, s = gameState;
+    if (d.act === 'pull') { this.fishPull(); return; }
+    if (d.act === 'fishAgain') { this.fishState = { phase: 'wait', pos: 0, dir: 1, hits: 0, misses: 0 }; this.render(); this.startFishing(); return; }
+    if (d.cookfood) { this.msg = cook(s, d.cookfood) ?? '材料不夠'; if (this.msg !== '材料不夠') sound.sfx('heal'); this.render(); return; }
     if (d.warp) { const [m, sp] = d.warp.split(':'); this.root.hidden = true; this.onWarp(m, sp); return; }
     if (d.beast) { this.beast = d.beast; this.render(); return; }
     if (d.slot0 || d.slot1) { setSkillSlot(s, d.slot0 ? 0 : 1, (d.slot0 ?? d.slot1)!); this.msg = '換好了'; this.render(); return; }

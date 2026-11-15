@@ -26,6 +26,10 @@ export const EV = {
   warp: 'warp',
   /** World → UI：第一次遇到某個機制的提示 */
   hint: 'hint',
+  /** World → UI：釣魚（資料是釣點類型） */
+  fish: 'fish',
+  /** World → UI：料理 */
+  cook: 'cook',
 } as const;
 
 export interface DialogueRequest { lines: Line[]; choices?: string[]; onDone: (choice?: number) => void }

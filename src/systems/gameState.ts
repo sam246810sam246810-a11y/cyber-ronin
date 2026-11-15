@@ -5,6 +5,7 @@ import { BASES, canUse, equipName, equipStats, generateEquip, RARITIES, type Bas
 import { BAG_START, canAddGear, canAddItem, type Bag } from './inventory';
 import { addExp, computeStats, JOB_LEVEL, type Stats } from './progression';
 import jobs from '../data/jobs.json';
+import { buffMultipliers, FOOD_BY_NAME, type BuffKind } from './cooking';
 
 export interface Reward { money?: number; item?: string; count?: number; gearTier?: number; minRarity?: number; key?: string }
 export type ClassId = keyof typeof classes;
@@ -38,6 +39,8 @@ export interface GameState extends Bag {
   ngPlus: number;
   /** 百鬼塔最高到第幾層 */
   towerBest: number;
+  /** 料理的加成（剩餘秒數） */
+  buffs: Partial<Record<BuffKind, number>>;
   /** 任務進度（PRD 9） */
   quests: Record<string, { status: 'active' | 'done'; progress: number }>;
 }
@@ -61,7 +64,7 @@ export function newGameState(classId: ClassId = 'swordsman', difficulty: Difficu
     checkpoint: { map: 'home', spawn: 'door' },
     bond: 0, anger: 0, playTime: 0, quests: {},
     job: null, skillSlots: [c.skills[0], c.skills[1]] as [string, string],
-    kills: {}, ngPlus: 0, towerBest: 0,
+    kills: {}, ngPlus: 0, towerBest: 0, buffs: {},
   };
   const st = statsOf(s); s.hp = st.maxHp; s.mp = st.maxMp;
   return s;
@@ -73,7 +76,9 @@ export function equippedGear(s: GameState): Equip[] {
 
 /** 目前的最終能力值（等級＋裝備） */
 export function statsOf(s: GameState): Stats {
-  return computeStats(s.classId, s.level, equippedGear(s).map(equipStats), !!s.job);
+  const st = computeStats(s.classId, s.level, equippedGear(s).map(equipStats), !!s.job);
+  const b = buffMultipliers(s.buffs ?? {});
+  return { ...st, atk: Math.round(st.atk * b.atk), def: Math.round(st.def * b.def), crit: st.crit + b.crit };
 }
 
 /** 能力上限改變後，HP／MP 不超過上限 */
@@ -152,6 +157,16 @@ export function statsIfSwapped(s: GameState, slot: Slot, uid: number | null): St
 /** 從背包使用消耗品。HP／MP 已滿且沒有異常時不使用，回傳 null。 */
 export function useItem(s: GameState, name: string): string | null {
   if ((s.items[name] ?? 0) <= 0) return null;
+  const food = FOOD_BY_NAME[name];
+  if (food) {
+    const st0 = statsOf(s);
+    s.items[name]--; if (s.items[name] <= 0) delete s.items[name];
+    if (food.buff) s.buffs[food.buff] = food.seconds ?? 180;
+    const st = statsOf(s);
+    s.hp = Math.min(st.maxHp, s.hp + (food.hp ?? 0)); s.mp = Math.min(st.maxMp, s.mp + (food.mp ?? 0));
+    void st0;
+    return `吃了「${food.name}」：${food.desc}`;
+  }
   const st = statsOf(s);
   const v = { hp: s.hp, maxHp: st.maxHp, mp: s.mp, maxMp: st.maxMp, statuses: s.statuses };
   const before = JSON.stringify(v);

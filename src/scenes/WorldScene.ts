@@ -48,7 +48,7 @@ const BOSSES: Record<string, { name: string; intro: string; retry: string; seen:
 /** 神器碎片放在這些寶箱裡（舊存檔開過的話，最終章開始時補發） */
 const SHARD_CHESTS = ['forest_chest_secret', 'swamp_chest_secret', 'mt_chest_secret', 'oni_chest_secret'];
 
-type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice' | 'trial' | 'relay' | 'sealgate' | 'portal';
+type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice' | 'trial' | 'relay' | 'sealgate' | 'portal' | 'fishspot' | 'cook';
 interface Thing { id: string; kind: Kind; x: number; y: number; sprite: Phaser.GameObjects.Sprite; props: Record<string, unknown> }
 interface Block { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; dir: string; moving: boolean; pushMs: number }
 interface Plate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string }
@@ -58,9 +58,9 @@ interface Pool { x: number; y: number; until: number; next: number; gfx: Phaser.
 
 const FRAME = {
   chest: [25, 26], ironChest: [45, 46], goldChest: [47, 48], shimenawa: 27, well: 28, sign: 29,
-  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54, plank: 59, lever: [63, 64], waterGate: 65, bell: 69, trial: [70, 71], barrel: 78, sealStone: 79, sealDoor: 80,
+  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54, plank: 59, lever: [63, 64], waterGate: 65, bell: 69, trial: [70, 71], barrel: 78, sealStone: 79, sealDoor: 80, cookpot: 81, pearl: 87,
 };
-const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘', trial: '挑戰', relay: '點燈', sealgate: '調查', portal: '進入' };
+const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘', trial: '挑戰', relay: '點燈', sealgate: '調查', portal: '進入', fishspot: '釣魚', cook: '料理' };
 const DIRS: Record<string, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const gateFlag = (group: string) => `gate:${group}`;
 
@@ -95,6 +95,9 @@ export class WorldScene extends Phaser.Scene {
   private areaName = '';
   private hintTimer = 0;
   private floor = 0;
+  private pet?: Phaser.GameObjects.Sprite;
+  private petShotAt = 0;
+  private petFindAt = 0;
   private floorCleared = false;
   private achTimer = 0;
   private pickupObjs: Phaser.Types.Tilemaps.TiledObject[] = [];
@@ -146,6 +149,11 @@ export class WorldScene extends Phaser.Scene {
     this.player = new Player(this, spawn?.x ?? 64, spawn?.y ?? 64);
     if (data.face) { this.player.setFacing(data.face); this.player.anims.play(`idle-${data.face}`); }
 
+    this.pet = undefined;
+    if (gameState.flags.has('pet_kon') && mapKey !== 'shrine') {
+      this.pet = this.add.sprite(this.player.x - 14, this.player.y + 4, 'npcs', (npcs as Record<string, { frame: number }>).kon.frame).setScale(0.85);
+      this.petFindAt = this.time.now + 90000;
+    }
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     this.physics.add.collider(this.player, this.obstacles);
     this.solids = this.physics.add.staticGroup();
@@ -255,6 +263,12 @@ export class WorldScene extends Phaser.Scene {
       case 'sign': add('sign', this.add.sprite(x, y, 'tilesheet', FRAME.sign)); break;
       case 'well': add('well', this.add.sprite(x, y, 'tilesheet', FRAME.well)); break;
       case 'jizo': add('jizo', this.add.sprite(x, y, 'tilesheet', FRAME.jizo)); break;
+      case 'fishspot': {
+        const fs = add('fishspot', this.add.sprite(x, y, 'fx', 14).setAlpha(0.8), false);
+        this.tweens.add({ targets: fs, scale: 1.25, alpha: 0.4, duration: 900, yoyo: true, repeat: -1 });
+        break;
+      }
+      case 'cook': add('cook', this.add.sprite(x, y, 'tilesheet', FRAME.cookpot)); break;
       case 'portal': {
         if (props.showFlag && !gameState.flags.has(String(props.showFlag))) break;
         const pt = add('portal', this.add.sprite(x, y, 'tilesheet', 9).setTint(0xff6a8a));
@@ -452,6 +466,31 @@ export class WorldScene extends Phaser.Scene {
     ring(this, t.x, t.y, 30, 0x5ab0e8, 500);
     if (this.boss?.alive && this.boss.started) { this.boss.stun(4000); this.game.events.emit(EV.toast, '水退了！河童王頭上的皿乾掉了！'); }
     this.time.delayedCall(15000, () => { if (t.sprite.active) t.sprite.setFrame(FRAME.lever[0]); });
+  }
+
+  // ---------- 寵物小紺 ----------
+  private updatePet(locked: boolean): void {
+    const pet = this.pet!, now = this.time.now, a = this.player.aim;
+    const tx = this.player.x - a.x * 16 - a.y * 6, ty = this.player.y - a.y * 12 + 3;
+    pet.setPosition(pet.x + (tx - pet.x) * 0.12, pet.y + (ty - pet.y) * 0.12).setDepth(pet.y);
+    pet.setFrame((npcs as Record<string, { frame: number }>).kon.frame + (Math.floor(now / 300) % 2)).setFlipX(tx < pet.x - 1);
+    if (locked) return;
+    // 攻擊：附近有妖怪就丟狐火
+    if (now >= this.petShotAt) {
+      const e = this.enemies.find((x) => x.alive && x.kind !== 'dummy' && Math.hypot(x.center.x - pet.x, x.center.y - pet.y) < 95);
+      if (e) { this.petShotAt = now + 2500; this.combat.petShot({ x: pet.x, y: pet.y - 4 }, e); }
+    }
+    // 幫忙撿任務物品
+    const pk = this.things.find((t) => t.kind === 'pickup' && Math.hypot(t.x - pet.x, t.y - pet.y) < 30);
+    if (pk) { this.game.events.emit(EV.toast, '小紺幫你撿起來了！'); this.interact(pk); }
+    // 偶爾挖到東西
+    if (now >= this.petFindAt) {
+      this.petFindAt = now + 150000;
+      const finds: [string, number][] = [['回復丸', 1], ['靈水', 1], ['玉鋼', 1], ['狐火的殘焰', 2], ['萬能符', 1]];
+      if (Math.random() < 0.4) { const m = Phaser.Math.Between(30, 120); gameState.money += m; this.game.events.emit(EV.toast, `小紺挖到了 ${m} 文！`); }
+      else { const [n, c] = finds[Math.floor(Math.random() * finds.length)]; gameState.items[n] = (gameState.items[n] ?? 0) + c; this.game.events.emit(EV.toast, `小紺挖到了 ${n} ×${c}！`); }
+      ring(this, pet.x, pet.y, 10, 0xf2c94c, 400);
+    }
   }
 
   // ---------- 百鬼塔 ----------
@@ -1033,6 +1072,12 @@ export class WorldScene extends Phaser.Scene {
     if (t.kind === 'sluice') { this.openSluice(t); return; }
     if (t.kind === 'trial') { this.startTrial(t); return; }
     if (t.kind === 'portal') { this.runDialogue('tower_portal'); return; }
+    if (t.kind === 'fishspot') {
+      if (!gameState.flags.has('has_rod')) { this.game.events.emit(EV.toast, '水裡有魚在游……需要釣竿。（河童沼澤的漁夫好像有）'); return; }
+      this.game.events.emit(EV.fish, String(t.props.spot ?? 'pond'));
+      return;
+    }
+    if (t.kind === 'cook') { this.game.events.emit(EV.cook); return; }
     if (t.kind === 'sealgate') {
       const item = String(t.props.item), label = String(t.props.label);
       if ((gameState.items[item] ?? 0) <= 0) { this.game.events.emit(EV.toast, `「${label}」被封住了。好像需要「${item}」……`); return; }
@@ -1214,6 +1259,7 @@ export class WorldScene extends Phaser.Scene {
       if (Math.abs(ec.x - target.x) < reach && Math.abs(ec.y - target.y) < reach - 1) this.combat.touchedBy(e);
     }
     this.playerGlow?.setPosition(this.player.x, this.player.y);
+    if (this.pet) this.updatePet(locked);
 
     // 旋風：追著主角跑
     const now = this.time.now;

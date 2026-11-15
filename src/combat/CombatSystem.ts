@@ -7,6 +7,7 @@ import { facingFromVector } from '../systems/movement';
 import { canChangeJob, classStats, gainExp, gameState, gearLabel, giveRandomGear, statsOf } from '../systems/gameState';
 import { canAddItem } from '../systems/inventory';
 import { onKill as questKill } from '../systems/quests';
+import { tickBuffs } from '../systems/cooking';
 import { hudState } from '../systems/hudState';
 import type { Action } from '../systems/inputState';
 import type { Vec2 } from '../systems/movement';
@@ -570,6 +571,14 @@ export class CombatSystem {
     this.damagePlayer(e.info.atk, a, { burn: info.burnChance }, a.mult ?? 1.6);
   }
 
+  /** 寵物小紺的狐火：飛向敵人，傷害是主角攻擊的 40% */
+  petShot(from: Vec2, e: Enemy): void {
+    const c = e.center, dx = c.x - from.x, dy = c.y - from.y, l = Math.hypot(dx, dy) || 1;
+    const s = this.scene.physics.add.sprite(from.x, from.y, 'fx', 0).setDepth(130000).setTint(0x7fd8ff).setScale(0.6);
+    s.setVelocity((dx / l) * 170, (dy / l) * 170).setRotation(Math.atan2(dy, dx));
+    this.projectiles.push({ sprite: s, mult: 0.4, dieAt: this.now + 900, pierce: false, hit: new Set(), opts: { knock: 40 } });
+  }
+
   /** 河童王的大浪：一整排的範圍攻擊 */
   enemyBand(e: Enemy, b: { y: number; h: number; mult: number }): void {
     sound.sfx('slam');
@@ -621,6 +630,7 @@ export class CombatSystem {
   // ---------- 每幀 ----------
   update(dt: number, move: Vec2): void {
     const now = this.now, sec = dt / 1000;
+    tickBuffs(gameState.buffs, sec);
     this.syncStats();
     if (!this.dead) {
       const st = this.st;

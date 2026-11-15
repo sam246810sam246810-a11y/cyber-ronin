@@ -2,7 +2,7 @@
 import classes from '../data/classes.json';
 import { sumStats, type StatBlock } from './equipment';
 
-export const LEVEL_CAP = 20; // 第二章開放到 Lv20（PRD 5.1 全遊戲上限 30）
+export const LEVEL_CAP = 30; // 第五章開放到 Lv30（PRD 5.1 全遊戲上限）
 export const JOB_LEVEL = 10; // 轉職等級（PRD 4.3）
 export const JOB_BONUS = 1.1; // 轉職後屬性 +10%
 

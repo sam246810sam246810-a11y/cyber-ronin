@@ -106,6 +106,8 @@ export class UIScene extends Phaser.Scene {
       [EV.board, () => this.openOverlay(() => this.overlay.openBoard(() => this.closeOverlay()))],
       [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay(), (map, spawn) => { this.closeOverlay(); this.game.events.emit(EV.warp, { map, spawn }); }))],
       [EV.hint, (text: string) => this.showHint(text)],
+      [EV.fish, (spot: string) => this.openOverlay(() => this.overlay.openFishing(spot, () => this.closeOverlay()))],
+      [EV.cook, () => this.openOverlay(() => this.overlay.openCook(() => this.closeOverlay()))],
     ];
     handlers.forEach(([e, h]) => ev.on(e, h, this));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => handlers.forEach(([e, h]) => ev.off(e, h, this)));
@@ -166,7 +168,9 @@ export class UIScene extends Phaser.Scene {
     this.hpText.setText(`${Math.ceil(gameState.hp)}/${hudState.maxHp}`);
     this.mpText.setText(`${Math.floor(gameState.mp)}/${hudState.maxMp}`);
     const st = (Object.keys(gameState.statuses) as StatusKind[]).filter((k) => (gameState.statuses[k] ?? 0) > 0).map((k) => STATUS_NAME[k]);
-    this.statusText.setText(st.join(' '));
+    const BN: Record<string, string> = { atk: '力', def: '固', crit: '專', all: '膳' };
+    const bf = Object.keys(gameState.buffs ?? {}).map((k) => BN[k]);
+    this.statusText.setText([...st, ...bf].join(' ')).setColor(st.length ? '#ff9a4a' : '#7fe08a');
   }
 
   private showAreaName(name: string): void {

@@ -66,6 +66,8 @@ const TILES = [
   // 72– 第四章：鬼之城、黃泉之門
   { name: 'castle_floor' }, { name: 'castle_wall', collides: true }, { name: 'ruin', collides: true }, { name: 'ash' },
   { name: 'yomi_floor' }, { name: 'yomi_wall', collides: true }, { name: 'barrel' }, { name: 'seal_stone' }, { name: 'seal_door' },
+  // 81– 生活系統、第五章
+  { name: 'cookpot' }, { name: 'sand' }, { name: 'sea', collides: true }, { name: 'coral', collides: true }, { name: 'coral_floor' }, { name: 'palace_wall', collides: true }, { name: 'pearl' },
 ];
 const COLS = 8;
 const ts = new Canvas(COLS * T, Math.ceil(TILES.length / COLS) * T);
@@ -448,6 +450,37 @@ const draw = {
     ts.rect(ox, oy, T, T, 0x2a1418); ts.rect(ox + 1, oy + 1, 14, 15, 0x4a2a2a);
     ts.rect(ox + 3, oy + 3, 10, 10, 0xe8e4d8); ts.rect(ox + 4, oy + 4, 8, 8, 0xc23b2f); ts.rect(ox + 6, oy + 6, 4, 4, 0xf2c94c);
   },
+  cookpot(ox, oy) {
+    ts.rect(ox + 2, oy + 12, 12, 3, 0x5a5a62); ts.rect(ox + 6, oy + 13, 4, 2, C.ember);
+    ts.rect(ox + 3, oy + 5, 10, 8, 0x2a2a30); ts.rect(ox + 2, oy + 5, 12, 2, 0x4a4a54); ts.rect(ox + 4, oy + 6, 8, 2, 0xd8c890);
+    ts.px(ox + 6, oy + 2, 0xe8e8e8); ts.px(ox + 9, oy + 1, 0xe8e8e8); ts.px(ox + 7, oy + 3, 0xe8e8e8);
+  },
+  sand(ox, oy) {
+    ts.rect(ox, oy, T, T, 0xe0cc94);
+    for (let i = 0; i < 10; i++) ts.px(ox + Math.floor(rnd() * T), oy + Math.floor(rnd() * T), rnd() > 0.5 ? 0xc8b47c : 0xf0e0b0);
+  },
+  sea(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x2a6ab0);
+    for (const [x, y] of [[1, 3], [8, 6], [3, 11], [11, 13]]) ts.rect(ox + x, oy + y, 5, 1, 0x6aa8e0);
+  },
+  coral(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x2a5a8a);
+    ts.rect(ox + 3, oy + 4, 2, 12, 0xff7a8a); ts.rect(ox + 1, oy + 6, 6, 2, 0xff7a8a); ts.rect(ox + 9, oy + 2, 2, 14, 0xffa86a); ts.rect(ox + 8, oy + 5, 5, 2, 0xffa86a);
+    ts.px(ox + 13, oy + 9, 0xfff2b0);
+  },
+  coral_floor(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x3a7aa8);
+    for (let i = 0; i < 8; i++) ts.px(ox + Math.floor(rnd() * T), oy + Math.floor(rnd() * T), rnd() > 0.5 ? 0x5a9ac8 : 0x2a6a98);
+    ts.px(ox + 4, oy + 4, 0xfff2b0);
+  },
+  palace_wall(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x8a2a3a); ts.rect(ox, oy, T, 3, 0x2a8a7a); ts.rect(ox, oy + 3, T, 1, 0xf2c94c);
+    ts.rect(ox + 2, oy + 6, 3, 8, 0x6a1a2a); ts.rect(ox + 11, oy + 6, 3, 8, 0x6a1a2a);
+  },
+  pearl(ox, oy) {
+    ts.rect(ox + 2, oy + 10, 12, 5, 0xc8a8d8); ts.rect(ox + 3, oy + 9, 10, 1, 0xe8c8f8);
+    ts.rect(ox + 5, oy + 3, 6, 6, 0xf8f0ff); ts.rect(ox + 4, oy + 4, 8, 4, 0xf8f0ff); ts.px(ox + 6, oy + 4, 0xffffff);
+  },
   water_gate(ox, oy) {
     ts.rect(ox, oy, T, T, 0x1e4a5a);
     for (const [x, y] of [[1, 2], [8, 5], [3, 9], [10, 12]]) ts.rect(ox + x, oy + y, 4, 1, 0x4a8aa0);
@@ -767,7 +800,7 @@ function drawHyakki(ox, f) {
 for (let f = 0; f < 4; f++) drawHyakki(f * BS, f);
 
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
-const fx = new Canvas(14 * T, T);
+const fx = new Canvas(15 * T, T);
 fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
 fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
 fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
@@ -787,6 +820,8 @@ fx.rect(10 * T + 4, 5, 8, 8, 0xe8823a); fx.rect(10 * T + 5, 4, 6, 10, 0xe8823a);
 fx.rect(11 * T + 7, 6, 2, 8, 0x3a7a3a); fx.rect(11 * T + 4, 5, 4, 3, 0x5ab05a); fx.rect(11 * T + 8, 3, 4, 3, 0x5ab05a); fx.rect(11 * T + 5, 9, 3, 2, 0x5ab05a); fx.px(11 * T + 10, 4, 0xf0d0e0);
 fx.rect(12 * T + 5, 6, 6, 5, 0xb87333); fx.rect(12 * T + 4, 10, 4, 2, 0xd89353); fx.px(12 * T + 7, 7, 0xe8b373); fx.rect(12 * T + 9, 5, 2, 2, 0x8a5a2a);
 fx.rect(13 * T + 4, 2, 8, 8, 0xc23b2f); fx.rect(13 * T + 5, 3, 6, 6, 0xf2e6c9); fx.rect(13 * T + 7, 4, 2, 4, 0xc23b2f); fx.rect(13 * T + 8, 10, 1, 5, 0xe8e4d8); fx.px(13 * T + 9, 13, 0xe8e4d8);
+// 14：釣點（水面波紋）
+for (const [r, a] of [[6, 0xffffff], [3, 0xbfe8ff]]) for (let k = 0; k < 16; k++) { const t = (k / 16) * Math.PI * 2; fx.px(14 * T + 8 + Math.round(Math.cos(t) * r), 8 + Math.round(Math.sin(t) * r * 0.5), a); }
 fx.rect(4 * T + 5, 5, 6, 6, 0xb04aff); fx.rect(4 * T + 4, 6, 8, 4, 0xb04aff); fx.rect(4 * T + 6, 6, 4, 4, 0xe8d8ff); fx.px(4 * T + 3, 8, 0xe8d8ff); fx.px(4 * T + 12, 8, 0xe8d8ff);
 
 // ---------- 地圖工具 ----------
@@ -917,6 +952,7 @@ const maps = {};
   sign(m, 'sign_dummy', 7, 13, 'sign_dummy');
   npcAt(m, 'ume', 13, 21);
   npcAt(m, 'oba', 7, 18);
+  obj(m, 'fishspot', 'village_fish', tilePoint(16, 25), { spot: 'pond' });
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
   obj(m, 'board', 'village_board', tilePoint(17, 13));
@@ -955,7 +991,7 @@ interior('home', '燈的家', [
   '#...tttt...#',
   '#..........#',
   '#####m######',
-], (m) => { chest(m, 'home_chest', 2, 6, { item: '回復丸', count: 3 }); sign(m, 'home_note', 9, 3, 'home_note'); });
+], (m) => { chest(m, 'home_chest', 2, 6, { item: '回復丸', count: 3 }); sign(m, 'home_note', 9, 3, 'home_note'); obj(m, 'cook', 'home_cook', tilePoint(4, 7)); });
 interior('minka', '阿梅的家', [
   '############',
   '#ff..s..ff.#',
@@ -1201,6 +1237,7 @@ const waterGate = (m, id, x, y, group) => { m.set('obst', x, y, 0); obj(m, 'wate
   obj(m, 'jizo', 'swamp_jizo', tilePoint(18, 3), { spawn: 'jizo' }); spawn(m, 'jizo', 18, 4);
   npcAt(m, 'kawataro', 24, 14);
   npcAt(m, 'fisher', 18, 13);
+  obj(m, 'fishspot', 'swamp_fish', tilePoint(5, 10), { spot: 'swamp' });
   obj(m, 'pickup', 'kite_1', tilePoint(40, 3), { group: 'kite', frame: 13, label: '太郎的風箏' });
   chest(m, 'swamp_chest_1', 12, 20, { item: '大回復丸', count: 1, money: 120 });
   chest(m, 'swamp_chest_2', 40, 9, { gearTier: 3, money: 80 });
