@@ -441,60 +441,84 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
+  /** 生成的全螢幕大招特效圖（黑底，用發光疊加去掉黑色） */
+  private ultArt(layer: Phaser.GameObjects.Container, key: string, scale = 1) {
+    if (!this.textures.exists(key)) return null;
+    const img = this.add.image(W / 2, H / 2, key).setBlendMode(Phaser.BlendModes.ADD);
+    const src = img.texture.getSourceImage();
+    const base = Math.max(W / src.width, H / src.height) * scale;
+    img.setScale(base);
+    layer.add(img);
+    return { img, base };
+  }
+
   private finisherSlash(layer: Phaser.GameObjects.Container) {
-    const lines = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    const cuts = [
-      [-40, H * 0.2, W + 40, H * 0.75],
-      [W + 40, H * 0.1, -40, H * 0.55],
-      [-40, H * 0.6, W + 40, H * 0.35],
-    ];
-    for (const [x1, y1, x2, y2] of cuts) {
-      lines.lineStyle(16, 0xff3d81, 0.6);
-      lines.lineBetween(x1, y1, x2, y2);
-      lines.lineStyle(5, 0xffffff, 1);
-      lines.lineBetween(x1, y1, x2, y2);
+    const a = this.ultArt(layer, 'ult-jin');
+    if (!a) return;
+    const { img, base } = a;
+    // 刀光由斜角猛力切入，再慢慢擴散淡出
+    img.setScale(base * 1.5).setAngle(-14).setAlpha(0);
+    this.tweens.add({ targets: img, scale: base * 1.02, angle: 0, alpha: 1, duration: 110, ease: 'Cubic.Out' });
+    this.tweens.add({ targets: img, scale: base * 1.12, delay: 110, duration: 750, ease: 'Sine.Out' });
+    this.tweens.add({ targets: img, alpha: 0, delay: 520, duration: 360 });
+    // 第二道：鏡像刀光晚 0.12 秒交錯切過
+    const b = this.ultArt(layer, 'ult-jin', 1.05);
+    if (b) {
+      b.img.setFlipX(true).setAlpha(0).setScale(b.base * 1.4).setAngle(12);
+      this.tweens.add({ targets: b.img, alpha: 0.45, scale: b.base, angle: 0, delay: 120, duration: 110, ease: 'Cubic.Out' });
+      this.tweens.add({ targets: b.img, alpha: 0, delay: 360, duration: 420 });
     }
-    layer.add(lines);
-    this.tweens.add({ targets: lines, alpha: 0, duration: 600, delay: 150 });
   }
 
   private finisherCode(layer: Phaser.GameObjects.Container) {
-    // 綠色程式碼雨＋畫面故障
-    const cols = 18;
-    for (let i = 0; i < cols; i++) {
-      const x = (i + 0.5) * (W / cols);
-      const str = Array.from({ length: 14 }, () => (Math.random() < 0.5 ? '0' : '1')).join('\n');
-      const t = this.add.text(x, -H * 0.6 - Math.random() * 300, str, { ...textStyle(16.5, '#5dff7a'), align: 'center', lineSpacing: 4 }).setOrigin(0.5, 0);
-      t.setShadow(0, 0, '#2bd96b', 8, true, true);
-      layer.add(t);
-      this.tweens.add({ targets: t, y: H + 50, duration: 700 + Math.random() * 400, ease: 'Linear' });
-      this.tweens.add({ targets: t, alpha: 0, delay: 700, duration: 300 });
+    const a = this.ultArt(layer, 'ult-zero');
+    if (a) {
+      const { img, base } = a;
+      // 從中心爆開，加上紅藍錯位與故障抖動
+      img.setScale(base * 0.5).setAlpha(0);
+      this.tweens.add({ targets: img, scale: base * 1.04, alpha: 1, duration: 160, ease: 'Back.Out' });
+      this.tweens.add({ targets: img, scale: base * 1.14, delay: 160, duration: 700 });
+      this.tweens.add({ targets: img, alpha: 0, delay: 560, duration: 340 });
+      for (const [tint, dx] of [[0xff3d81, -14], [0x3df5ff, 14]] as const) {
+        const c = this.ultArt(layer, 'ult-zero', 1.04);
+        if (!c) continue;
+        c.img.setTint(tint).setAlpha(0).setX(W / 2 + dx);
+        this.tweens.add({ targets: c.img, alpha: 0.45, delay: 120, duration: 60, yoyo: true, repeat: 3, onComplete: () => c.img.setAlpha(0) });
+      }
+      let n = 0;
+      this.time.addEvent({
+        delay: 55,
+        repeat: 6,
+        callback: () => {
+          n++;
+          img.x = W / 2 + (n % 2 ? 1 : -1) * (6 + Math.random() * 10);
+          if (n >= 7) img.x = W / 2;
+        },
+      });
     }
-    for (let i = 0; i < 6; i++) {
-      const r = this.add.rectangle(W / 2 + (Math.random() - 0.5) * 60, Math.random() * H, W, 8 + Math.random() * 30, Math.random() < 0.5 ? 0x5dff7a : 0xff3d81, 0.35);
+    // 故障橫條
+    for (let i = 0; i < 7; i++) {
+      const r = this.add.rectangle(W / 2 + (Math.random() - 0.5) * 60, Math.random() * H, W, 6 + Math.random() * 26, Math.random() < 0.6 ? 0x5dff7a : 0xff3d81, 0.3).setBlendMode(Phaser.BlendModes.ADD);
       layer.add(r);
-      this.tweens.add({ targets: r, alpha: 0, x: r.x + (Math.random() - 0.5) * 120, delay: i * 60, duration: 200 });
+      this.tweens.add({ targets: r, alpha: 0, x: r.x + (Math.random() - 0.5) * 140, delay: 80 + i * 55, duration: 180 });
     }
   }
 
   private finisherThunder(layer: Phaser.GameObjects.Container) {
-    const g = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    layer.add(g);
-    const o = { r: 20 };
-    this.tweens.add({
-      targets: o,
-      r: H * 0.8,
-      duration: 600,
-      ease: 'Cubic.Out',
-      onUpdate: () => {
-        g.clear();
-        const a = Math.max(0, 1 - o.r / (H * 0.8));
-        g.lineStyle(14, 0x6d7cff, a);
-        g.strokeCircle(W / 2, H / 2, o.r);
-        g.lineStyle(4, 0xffffff, a);
-        g.strokeCircle(W / 2, H / 2, o.r * 0.9);
-      },
-    });
+    const a = this.ultArt(layer, 'ult-tetsu');
+    if (!a) return;
+    const { img, base } = a;
+    // 落雷從上方砸下，閃爍數次後擴散淡出
+    img.setY(H / 2 - 120).setAlpha(0).setScale(base * 1.06);
+    this.tweens.add({ targets: img, y: H / 2, alpha: 1, duration: 90, ease: 'Cubic.In' });
+    this.tweens.add({ targets: img, alpha: 0.55, delay: 120, duration: 50, yoyo: true, repeat: 3 });
+    this.tweens.add({ targets: img, scale: base * 1.14, delay: 100, duration: 760, ease: 'Sine.Out' });
+    this.tweens.add({ targets: img, alpha: 0, delay: 600, duration: 320 });
+    const glow = this.ultArt(layer, 'ult-tetsu', 1.3);
+    if (glow) {
+      glow.img.setAlpha(0.5);
+      this.tweens.add({ targets: glow.img, alpha: 0, scale: glow.base * 1.3, duration: 420, ease: 'Cubic.Out' });
+    }
   }
 
   // ---------- 視窗共用 ----------
