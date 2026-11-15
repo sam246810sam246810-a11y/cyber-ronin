@@ -1,5 +1,6 @@
 // 大廳與各功能頁共用的外框：頂部資源列、底部分頁列、設定視窗、轉場。
 import Phaser from 'phaser';
+import { cloudState } from './cloud';
 import { COLORS, H, W, textStyle } from './layout';
 import { makeButton } from './ui';
 import { SaveData, loadSave, writeSave } from './storage';
@@ -220,6 +221,9 @@ export function openSettings(scene: Phaser.Scene) {
     qb.setLabel(qName[s.fxQuality]);
   }, 20);
   layer.add(qb);
+  const cs = cloudState();
+  const cText = { ok: '雲端存檔：已開啟（換裝置或更新都不會遺失）', syncing: '雲端存檔：同步中…', error: '雲端存檔：暫時無法連線，先存在本機', off: '雲端存檔：未開啟（只存在這個瀏覽器）' }[cs];
+  layer.add(scene.add.text(W / 2, H / 2 + 214, cText, textStyle(13, cs === 'ok' ? '#5dff7a' : cs === 'error' ? '#ff8a5d' : COLORS.dim, false)).setOrigin(0.5));
   const close = makeButton(scene, W / 2, H / 2 + 268, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
   layer.add(close);
   layer.setScale(0.9).setAlpha(0);

@@ -4,7 +4,46 @@ import type { ModuleItem, Slot } from '../config/meta';
 import type { PoolId, SpiritId } from '../config/gacha';
 import type { StageId } from '../config/stages';
 
+import { pushCloud } from './cloud';
+
 const KEY = 'cyber-ronin.save.v1';
+const KEY_TIME = 'cyber-ronin.save.time';
+/** 本機存檔讀不到時（被清掉或無法使用）的備援 */
+let mem: string | null = null;
+
+function readRaw(): string | null {
+  try {
+    const v = localStorage.getItem(KEY);
+    if (v) return v;
+  } catch {
+    /* 無法使用本機存檔 */
+  }
+  return mem;
+}
+
+/** 目前本機存檔與最後存檔時間（給雲端同步比較用） */
+export function localSaveInfo(): { json: string; savedAt: number } | null {
+  const json = readRaw();
+  if (!json) return null;
+  let savedAt = 0;
+  try {
+    savedAt = Number(localStorage.getItem(KEY_TIME)) || 0;
+  } catch {
+    /* 忽略 */
+  }
+  return { json, savedAt };
+}
+
+/** 用雲端的存檔取代本機存檔 */
+export function adoptSave(json: string, savedAt: number) {
+  mem = json;
+  try {
+    localStorage.setItem(KEY, json);
+    localStorage.setItem(KEY_TIME, String(savedAt));
+  } catch {
+    /* 忽略 */
+  }
+}
 
 export interface SaveData extends UnlockStats {
   bestKills: number;
@@ -168,7 +207,7 @@ const EMPTY: SaveData = {
 
 export function loadSave(): SaveData {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = readRaw();
     if (!raw) return structuredClone(EMPTY);
     const data = { ...structuredClone(EMPTY), ...JSON.parse(raw) } as SaveData;
     // M1 的存檔只有 totalCredits，沒有錢包
@@ -180,11 +219,16 @@ export function loadSave(): SaveData {
 }
 
 export function writeSave(data: SaveData): void {
+  const json = JSON.stringify(data);
+  const savedAt = Date.now();
+  mem = json;
   try {
-    localStorage.setItem(KEY, JSON.stringify(data));
+    localStorage.setItem(KEY, json);
+    localStorage.setItem(KEY_TIME, String(savedAt));
   } catch {
-    /* 無法存檔時忽略 */
+    /* 無法存檔時忽略（雲端仍會保存） */
   }
+  pushCloud({ json, savedAt });
 }
 
 export function formatTime(sec: number): string {
