@@ -36,6 +36,7 @@ import { SaveData, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
 import { applyRunToDaily, equippedStats } from '../game/meta';
+import { charStats, mergeStats, spiritStats, starOf } from '../game/gacha';
 import { MOD_RARITY, MODULE_BASES, ModuleItem, StatKey, dailyChallenge, dropRarity, makeModule, mulberry32, todayKey } from '../config/meta';
 import {
   AFFIXES,
@@ -318,6 +319,8 @@ export class GameScene extends Phaser.Scene {
   areaMult = 1;
   regen = 0;
   intentMult = 1;
+  /** 5 星：大招對 Boss 傷害 +50% */
+  starUlt = 1;
   xpMult = 1;
 
   // 第二期：義體模組、每日挑戰
@@ -455,6 +458,9 @@ export class GameScene extends Phaser.Scene {
       const charId = data?.char && this.save.chars.includes(data.char) ? data.char : this.save.lastChar;
       this.char = CHARACTERS[this.save.chars.includes(charId) ? charId : 'jin'];
     }
+    // 義體模組＋式神＋角色星級的永久加成
+    this.modStats = mergeStats(this.modStats, spiritStats(this.save), charStats(this.save, this.char.id));
+    this.starUlt = starOf(this.save, this.char.id) >= 5 ? 1.5 : 1;
     this.wmods = wantedMods(this.wanted);
 
     const cam = this.cameras.main;
@@ -666,7 +672,7 @@ export class GameScene extends Phaser.Scene {
     this.dmgTakenMult = has('glass') ? 2 : 1;
     this.spawnMult = has('bounty') ? 1.5 : 1;
     this.creditMult = (has('goldhack') ? 2 : 1) * (has('bounty') ? 1.5 : 1);
-    this.iaiBossMult = has('finaliai') ? 2 : 1;
+    this.iaiBossMult = (has('finaliai') ? 2 : 1) * this.starUlt;
     // 義體模組加成
     const m = this.modStats;
     this.might *= 1 + (m.might ?? 0);
@@ -2615,6 +2621,7 @@ export class GameScene extends Phaser.Scene {
       const firstClear = victory && save.dailyChallengeDay !== todayKey();
       if (firstClear) {
         chips += 100;
+        save.tickets.char = (save.tickets.char ?? 0) + 1;
         save.dailyClears = (save.dailyClears ?? 0) + 1;
         save.dailyChallengeDay = todayKey();
       }

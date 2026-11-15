@@ -1,6 +1,7 @@
 // 本機存檔；在無痕模式或沙盒中可能無法使用，所以全部包在 try/catch 裡。
 import type { CharId, PassiveId, UnlockStats, UpgradeId, WeaponId } from '../config/balance';
 import type { ModuleItem, Slot } from '../config/meta';
+import type { PoolId, SpiritId } from '../config/gacha';
 
 const KEY = 'cyber-ronin.save.v1';
 
@@ -40,6 +41,21 @@ export interface SaveData extends UnlockStats {
   dailyClears: number;
   dailyChallengeDay: string;
   dailyChallengeBest: { day: string; time: number; kills: number; victory: boolean } | null;
+  // 三池扭蛋
+  tickets: Record<PoolId, number>;
+  /** 角色池、靈物池的保底計數（義體池沿用 pity） */
+  pities: { char: number; spirit: number };
+  shards: Partial<Record<CharId, number>>;
+  /** 萬能碎片：任何角色都能用 */
+  wildShards: number;
+  stars: Partial<Record<CharId, number>>;
+  /** 式神收集到的份數 */
+  spirits: Partial<Record<SpiritId, number>>;
+  /** 靈玉：可以餵給任何式神 */
+  jade: number;
+  /** 自選頭像（已解鎖的角色）與頭像框 */
+  avatar?: CharId;
+  avatarFrame: string;
 }
 
 const EMPTY: SaveData = {
@@ -81,6 +97,14 @@ const EMPTY: SaveData = {
   dailyClears: 0,
   dailyChallengeDay: '',
   dailyChallengeBest: null,
+  tickets: { equip: 1, char: 3, spirit: 5 },
+  pities: { char: 0, spirit: 0 },
+  shards: {},
+  wildShards: 0,
+  stars: {},
+  spirits: {},
+  jade: 0,
+  avatarFrame: 'default',
 };
 
 export function loadSave(): SaveData {

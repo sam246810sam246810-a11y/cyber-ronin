@@ -196,7 +196,7 @@ export const DAILY_POOL: MissionDef[] = [
   { id: 'hack', desc: (n) => `用駭系武器擊殺 ${n} 個敵人`, target: 300, reward: 60, progress: (r) => r.tagKills.hack ?? 0 },
   { id: 'survive', desc: (n) => `累計存活 ${n} 分鐘`, target: 15, reward: 60, progress: (r) => Math.floor(r.time / 60) },
   { id: 'boss', desc: (n) => `擊敗 ${n} 隻 Boss`, target: 2, reward: 80, progress: (r) => r.bossKills },
-  { id: 'iai', desc: (n) => `發動 ${n} 次居合・一閃`, target: 8, reward: 60, progress: (r) => r.iai },
+  { id: 'iai', desc: (n) => `發動 ${n} 次大招`, target: 8, reward: 60, progress: (r) => r.iai },
   { id: 'relics', desc: (n) => `取得 ${n} 個遺物`, target: 4, reward: 60, progress: (r) => r.relics },
   { id: 'runs', desc: (n) => `出擊 ${n} 次`, target: 3, reward: 50, progress: () => 1 },
   { id: 'combo', desc: (n) => `單局達到 ${n} 連段`, target: 300, reward: 70, progress: (r) => r.maxCombo },

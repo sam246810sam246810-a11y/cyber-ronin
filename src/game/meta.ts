@@ -1,5 +1,5 @@
 // 第二期的共用邏輯：抽卡、模組、每日任務、成就。
-import { ACHIEVEMENTS, AchStats, GACHA, MAX_MOD_LEVEL, ModuleItem, RunStats, dailyMissions, makeModule, moduleStats, todayKey, upgradeCost, dismantleValue } from '../config/meta';
+import { ACHIEVEMENTS, AchStats, MAX_MOD_LEVEL, ModuleItem, RunStats, dailyMissions, moduleStats, todayKey, upgradeCost, dismantleValue } from '../config/meta';
 import { EVOLUTIONS } from '../config/balance';
 import { SaveData } from './storage';
 
@@ -11,34 +11,6 @@ export function equippedModules(s: SaveData): ModuleItem[] {
 
 export function equippedStats(s: SaveData) {
   return moduleStats(equippedModules(s));
-}
-
-/** 抽卡：回傳抽到的模組（含保底），並直接寫入存檔物件 */
-export function pull(s: SaveData, n: 1 | 10): ModuleItem[] | null {
-  const cost = n === 10 ? GACHA.ten : GACHA.single;
-  if (s.chips < cost) return null;
-  s.chips -= cost;
-  const out: ModuleItem[] = [];
-  for (let i = 0; i < n; i++) {
-    s.pity++;
-    let r: 0 | 1 | 2 | 3;
-    if (s.pity >= GACHA.pity) r = 3;
-    else {
-      const x = Math.random();
-      r = x < GACHA.rates[3] ? 3 : x < GACHA.rates[3] + GACHA.rates[2] ? 2 : x < GACHA.rates[3] + GACHA.rates[2] + GACHA.rates[1] ? 1 : 0;
-    }
-    if (r === 3) s.pity = 0;
-    out.push(makeModule(r));
-  }
-  // 十連保底：至少一個 SR
-  if (n === 10 && !out.some((m) => m.rarity >= 2)) {
-    const i = out.findIndex((m) => m.rarity <= 1);
-    out[i] = makeModule(2);
-  }
-  s.gachaPulls += n;
-  s.ssrCount += out.filter((m) => m.rarity === 3).length;
-  s.modules.push(...out);
-  return out;
 }
 
 export function upgradeModule(s: SaveData, uid: string): boolean {

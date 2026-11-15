@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { starOf } from '../game/gacha';
+import { MAX_STAR } from '../config/gacha';
 import { CHARACTERS, CHAR_ORDER, CharId, WEAPONS } from '../config/balance';
 import { WANTED_RULES, wantedMods } from '../config/expansion';
 import { COLORS, H, W, textStyle } from '../game/layout';
@@ -84,6 +86,10 @@ export class MenuScene extends Phaser.Scene {
     });
     const nameT = this.add.text(W / 2, heroY + 36, `${c.name}　${c.role}`, textStyle(18, owned ? '#ffffff' : '#8a86a8')).setOrigin(0.5);
     nameT.setStroke('#07060d', 4);
+    if (owned) {
+      const st = starOf(s, id);
+      this.add.text(W / 2, heroY + 12, '★'.repeat(st) + '☆'.repeat(MAX_STAR - st), textStyle(16, '#ffd84d')).setOrigin(0.5).setStroke('#07060d', 4);
+    }
     const trait = this.add
       .text(W / 2, heroY + 60, owned ? `${WEAPONS[c.weapon].name}・${c.trait}` : `解鎖需要 ${c.cost} 信用點`, textStyle(13, owned ? '#ffd84d' : '#ff8a5d', false))
       .setOrigin(0.5);

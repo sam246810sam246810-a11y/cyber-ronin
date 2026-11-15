@@ -8,6 +8,7 @@ import { setVibrate, vibrate, vibrateEnabled } from './haptics';
 import { claimableCount, equippedModules } from './meta';
 import { GACHA } from '../config/meta';
 import { UPGRADES, upgradeCost } from '../config/balance';
+import { currentAvatar, currentFrame, drawAvatar, openProfile } from './profile';
 
 export type TabKey = 'Shop' | 'Armory' | 'Menu' | 'Gacha' | 'Missions';
 
@@ -61,21 +62,24 @@ export function topBar(scene: Phaser.Scene, save: SaveData) {
   bg.fillStyle(COLORS.magenta, 0.5);
   bg.fillRect(0, TOP_H - 2, W, 1);
 
-  // 頭像
+  // 頭像（點了打開個人檔案，可以換頭像與頭像框）
   const ax = 40;
   const ay = TOP_H / 2;
-  scene.add.circle(ax, ay, 27, 0x14102a);
-  const pk = scene.textures.exists(`portrait-${save.lastChar}`) ? `portrait-${save.lastChar}` : `char-${save.lastChar}`;
-  const face = scene.add.image(ax, ay + 10, pk);
-  const fs = face.texture.getSourceImage();
-  face.setScale(78 / Math.max(fs.width, fs.height));
-  const mask = scene.make.graphics({}, false).fillCircle(ax, ay, 25);
-  face.setMask(mask.createGeometryMask());
-  const ring = iconImg(scene, ax, ay, 'ui-frame-avatar', 64);
-  if (!ring) scene.add.circle(ax, ay, 27).setStrokeStyle(2, COLORS.cyan);
+  let av = drawAvatar(scene, ax, ay, 64, currentAvatar(save), currentFrame(save));
+  const hitA = scene.add.zone(ax, ay, 70, 70).setInteractive({ useHandCursor: true });
+  hitA.on('pointerup', () => {
+    Audio.play('sfx-click', 0.3);
+    openProfile(scene, () => {
+      const sv = loadSave();
+      const depth = av.depth;
+      av.destroy();
+      av = drawAvatar(scene, ax, ay, 64, currentAvatar(sv), currentFrame(sv)).setDepth(depth);
+    });
+  });
   const wanted = save.bestWanted ?? 0;
   const lv = scene.add.text(ax, ay + 28, save.wins > 0 ? `通緝 ${wanted}` : '新人', textStyle(11, '#ffd84d')).setOrigin(0.5);
   lv.setStroke('#07060d', 3);
+  lv.setDepth(2);
 
   // 資源膠囊
   const items: { icon: string; value: number; color: string; to: TabKey }[] = [
@@ -126,7 +130,7 @@ export function tabBar(scene: Phaser.Scene, active: TabKey) {
     Shop: UPGRADES.some((u) => (save.upgrades[u.id] ?? 0) < u.maxLevel && save.credits >= upgradeCost(u, save.upgrades[u.id] ?? 0)),
     Armory: equippedModules(save).length < 3 && (save.modules?.length ?? 0) > equippedModules(save).length,
     Menu: false,
-    Gacha: (save.chips ?? 0) >= GACHA.single,
+    Gacha: (save.chips ?? 0) >= GACHA.single || Object.values(save.tickets ?? {}).some((n) => n > 0),
     Missions: claimableCount(save),
   };
   writeSave(save);
