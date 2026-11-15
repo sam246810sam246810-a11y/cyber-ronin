@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE } from './config';
 import { BootScene } from './scenes/BootScene';
 import { TitleScene } from './scenes/TitleScene';
+import { ClassSelectScene } from './scenes/ClassSelectScene';
 import { WorldScene } from './scenes/WorldScene';
 import { UIScene } from './scenes/UIScene';
 
@@ -16,8 +17,10 @@ const game = new Phaser.Game({
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
   input: { activePointers: 3 },
   physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 0 }, debug: false } },
-  scene: [BootScene, TitleScene, WorldScene, UIScene],
+  scene: [BootScene, TitleScene, ClassSelectScene, WorldScene, UIScene],
 });
 
 // 方便除錯與自動化測試
 (window as unknown as { __game: Phaser.Game }).__game = game;
+import { gameState } from './systems/gameState';
+(window as unknown as { __debug: object }).__debug = { get state() { return gameState; } };

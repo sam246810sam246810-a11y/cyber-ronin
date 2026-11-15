@@ -17,6 +17,7 @@ export const FONT_FAMILY = '"Noto Sans TC", "PingFang TC", "Microsoft JhengHei",
 export const SCENES = {
   boot: 'Boot',
   title: 'Title',
+  classSelect: 'ClassSelect',
   world: 'World',
   ui: 'UI',
 } as const;

@@ -279,6 +279,48 @@ NPCS.forEach(([, pal], r) => {
   }
 });
 
+// ---------- 怪物：每列一種，2 欄動畫 ----------
+// 順序要和 src/data/enemies.json 的 frame 對應：kitsunebi 0、karakasa 2、nogitsune 4、dummy 6
+const en = new Canvas(2 * T, 4 * T);
+function kitsunebi(ox, oy, f) {
+  const B = 0x4fb8ff, L = 0xbfe8ff, W = 0xffffff, D = 0x1f6fbf;
+  const s = f ? 1 : 0;
+  en.rect(ox + 4, oy + 6 + s, 8, 8, B); en.rect(ox + 5, oy + 4 + s, 6, 3, B); en.rect(ox + 6, oy + 2 + s, 4, 3, L);
+  en.rect(ox + 7, oy + (f ? 1 : 0), 2, 3, L); en.rect(ox + 3, oy + 9 + s, 1, 4, D); en.rect(ox + 12, oy + 9 + s, 1, 4, D);
+  en.rect(ox + 6, oy + 8 + s, 4, 4, L); en.px(ox + 6, oy + 9 + s, W); en.px(ox + 9, oy + 9 + s, W);
+  en.px(ox + 6, oy + 10 + s, 0x1a1a3a); en.px(ox + 9, oy + 10 + s, 0x1a1a3a);
+}
+function karakasa(ox, oy, f) {
+  const P = 0x9f4fbf, PL = 0xc78fdf, Y = 0xf2c94c, S = 0x6b4428;
+  const s = f ? 1 : 0;
+  en.rect(ox + 2, oy + 3 + s, 12, 3, P); en.rect(ox + 4, oy + 1 + s, 8, 2, P); en.rect(ox + 1, oy + 6 + s, 14, 3, PL);
+  en.rect(ox + 5, oy + 4 + s, 6, 4, 0xf4f4f0); en.rect(ox + 6, oy + 5 + s, 3, 2, Y); en.px(ox + 7, oy + 5 + s, 0x1a1a1a);
+  en.rect(ox + 7, oy + 9 + s, 2, 5 - s, S); en.rect(ox + 6, oy + 9 + s, 1, 1, 0xd04848); en.rect(ox + 7, oy + 10, 3, 1, 0xd04848); // 舌頭
+  en.rect(ox + 6, oy + 14, 4, 2, 0xf2d2b0);
+}
+function nogitsune(ox, oy, f) {
+  const O = 0x5a4a6a, L = 0x8a7a9a, R = 0xff4848;
+  const s = f ? 1 : 0;
+  en.rect(ox + 2, oy + 7, 10, 5, O); en.rect(ox + 11, oy + 5 + s, 3, 4, O); en.rect(ox + 13, oy + 3 + s, 2, 3, L);
+  en.rect(ox + 1, oy + 4, 6, 6, O); en.rect(ox + 1, oy + 2, 2, 3, O); en.rect(ox + 5, oy + 2, 2, 3, O);
+  en.px(ox + 2, oy + 6, R); en.px(ox + 5, oy + 6, R); en.rect(ox + 2, oy + 8, 4, 2, L);
+  en.rect(ox + 3, oy + 12, 2, 3 - s, O); en.rect(ox + 9, oy + 12, 2, 2 + s, O);
+}
+function dummy(ox, oy) {
+  const S = 0xd9c27a, W = 0x7a5232;
+  en.rect(ox + 7, oy + 4, 2, 12, W); en.rect(ox + 2, oy + 6, 12, 2, W);
+  en.rect(ox + 4, oy + 5, 8, 7, S); en.rect(ox + 5, oy + 1, 6, 5, S); en.rect(ox + 4, oy + 0, 8, 2, 0x8a6a3a);
+  en.px(ox + 6, oy + 3, 0x1a1a1a); en.px(ox + 9, oy + 3, 0x1a1a1a); en.rect(ox + 7, oy + 8, 2, 2, 0xc23b2f);
+}
+for (let f = 0; f < 2; f++) { kitsunebi(f * T, 0, f); karakasa(f * T, T, f); nogitsune(f * T, 2 * T, f); dummy(f * T, 3 * T); }
+
+// ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
+const fx = new Canvas(4 * T, T);
+fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
+fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
+fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
+fx.rect(3 * T + 5, 5, 6, 6, 0xf2c94c); fx.rect(3 * T + 4, 6, 8, 4, 0xf2c94c); fx.rect(3 * T + 7, 7, 2, 2, 0x8a6a1a); fx.px(3 * T + 6, 6, 0xfff2b0);
+
 // ---------- 地圖工具 ----------
 const gid = Object.fromEntries(TILES.map((t, i) => [t.name, i + 1]));
 const tilePoint = (x, y) => ({ x: x * T + T / 2, y: y * T + T / 2 });
@@ -403,6 +445,8 @@ const maps = {};
   spawn(m, 'east', W - 3, 16);
   for (let y = 15; y <= 17; y++) obj(m, 'blocker', `rope_${y}`, tilePoint(W - 2, y), { flag: 'talked_priest', dialogue: 'blocker_forest' });
 
+  obj(m, 'enemy', 'dummy', tilePoint(6, 13), { kind: 'dummy' });
+  sign(m, 'sign_dummy', 7, 13, 'sign_dummy');
   npcAt(m, 'ume', 13, 21);
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
@@ -504,6 +548,11 @@ interior('shrine', '狐火神社', [
   obj(m, 'foxfire', 'foxfire_path', tilePoint(14, 6));
   obj(m, 'well', 'old_well', tilePoint(28, 15), { dialogue: 'well' });
   sign(m, 'sign_forest', 25, 13, 'sign_forest');
+  const enemies = [
+    ['kitsunebi', 9, 10], ['karakasa', 15, 4], ['kitsunebi', 17, 5], ['nogitsune', 22, 4], ['nogitsune', 23, 3],
+    ['karakasa', 26, 9], ['kitsunebi', 25, 16], ['nogitsune', 29, 17], ['nogitsune', 31, 14], ['karakasa', 7, 17], ['kitsunebi', 5, 16],
+  ];
+  enemies.forEach(([kind, x, y], i) => obj(m, 'enemy', `${kind}_${i}`, tilePoint(x, y), { kind }));
 
   maps.forest = toTiled(m, { displayName: '迷霧竹林', fog: true });
 }
@@ -512,6 +561,8 @@ mkdirSync('assets/tiles', { recursive: true }); mkdirSync('assets/sprites', { re
 ts.save('assets/tiles/tiles.png');
 pl.save('assets/sprites/player.png');
 npc.save('assets/sprites/npcs.png');
+en.save('assets/sprites/enemies.png');
+fx.save('assets/sprites/fx.png');
 for (const [k, v] of Object.entries(maps)) writeFileSync(`assets/maps/${k}.json`, JSON.stringify(v));
 writeFileSync('src/data/npcs.json', JSON.stringify(Object.fromEntries(NPCS.map(([id], i) => [id, { frame: i * 2 }])), null, 2) + '\n');
 console.log('assets written:', Object.keys(maps).join(', '));

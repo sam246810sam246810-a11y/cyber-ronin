@@ -1,7 +1,6 @@
 import Phaser from 'phaser';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { useLogicalCamera } from '../ui/camera';
-import { resetGameState } from '../systems/gameState';
 
 export class TitleScene extends Phaser.Scene {
   constructor() { super(SCENES.title); }
@@ -24,14 +23,13 @@ export class TitleScene extends Phaser.Scene {
       .setOrigin(0.5).setResolution(RENDER_SCALE);
     this.tweens.add({ targets: hint, alpha: 0.25, duration: 800, yoyo: true, repeat: -1 });
 
-    this.add.text(GAME_WIDTH - 6, GAME_HEIGHT - 6, '序章試玩版', { fontFamily: FONT_FAMILY, fontSize: '9px', color: '#6b6780' })
+    this.add.text(GAME_WIDTH - 6, GAME_HEIGHT - 6, '序章試玩版・戰鬥', { fontFamily: FONT_FAMILY, fontSize: '9px', color: '#6b6780' })
       .setOrigin(1, 1).setResolution(RENDER_SCALE);
 
     this.input.once('pointerdown', () => {
-      resetGameState();
       this.cameras.main.fadeOut(300, 20, 18, 28);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
-        this.scene.start(SCENES.world, { map: 'home', spawn: 'door', face: 'up', intro: true }));
+        this.scene.start(SCENES.classSelect));
     });
   }
 }

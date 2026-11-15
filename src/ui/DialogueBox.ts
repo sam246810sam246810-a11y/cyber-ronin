@@ -46,7 +46,7 @@ export class DialogueBox {
   private showLine(): void {
     const [speaker, text] = this.req!.lines[this.index];
     this.name.setText(speaker);
-    this.nameBg.width = this.name.width + 16;
+    this.nameBg.setSize(this.name.width + 16, 18);
     this.full = text;
     this.shown = 0;
     this.body.setText('');

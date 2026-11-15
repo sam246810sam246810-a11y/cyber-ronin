@@ -6,6 +6,8 @@ import { MAPS } from '../data/maps';
 import tilesUrl from '../../assets/tiles/tiles.png';
 import playerUrl from '../../assets/sprites/player.png';
 import npcsUrl from '../../assets/sprites/npcs.png';
+import enemiesUrl from '../../assets/sprites/enemies.png';
+import fxUrl from '../../assets/sprites/fx.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super(SCENES.boot); }
@@ -22,6 +24,8 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('tilesheet', tilesUrl, frame); // 寶箱、告示牌等物件用同一張圖
     this.load.spritesheet('player', playerUrl, frame);
     this.load.spritesheet('npcs', npcsUrl, frame);
+    this.load.spritesheet('enemies', enemiesUrl, frame);
+    this.load.spritesheet('fx', fxUrl, frame);
     for (const [key, data] of Object.entries(MAPS)) this.load.tilemapTiledJSON(key, data);
   }
 

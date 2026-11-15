@@ -1,15 +1,34 @@
-// 遊戲進度（金錢、道具、旗標、已開寶箱）。M6 會把它存進 localStorage。
+// 遊戲進度。M6 會把它存進 localStorage。
+import classes from '../data/classes.json';
+import type { Difficulty, Statuses } from './combat';
+
 export interface Reward { money?: number; item?: string; count?: number }
+export type ClassId = keyof typeof classes;
 
 export interface GameState {
+  classId: ClassId;
+  difficulty: Difficulty;
+  hp: number;
+  mp: number;
+  exp: number;
+  statuses: Statuses;
   money: number;
   items: Record<string, number>;
   flags: Set<string>;
   openedChests: Set<string>;
+  /** 自動存檔點：最後一次進入的地圖與出生點，死亡時回到這裡（PRD 4.7） */
+  checkpoint: { map: string; spawn: string };
 }
 
-export function newGameState(): GameState {
-  return { money: 0, items: {}, flags: new Set(), openedChests: new Set() };
+export function classStats(id: ClassId) { return classes[id]; }
+
+export function newGameState(classId: ClassId = 'swordsman', difficulty: Difficulty = 'normal'): GameState {
+  const c = classes[classId];
+  return {
+    classId, difficulty, hp: c.hp, mp: c.mp, exp: 0, statuses: {},
+    money: 0, items: {}, flags: new Set(), openedChests: new Set(),
+    checkpoint: { map: 'home', spawn: 'door' },
+  };
 }
 
 /** 開寶箱：回傳獲得內容的描述；已開過則回傳 null 且不重複給獎勵。 */
@@ -37,6 +56,6 @@ export function currentObjective(flags: ReadonlySet<string>): string {
   return '序章完成！古井地城將在下一版開放';
 }
 
-/** 全域唯一的進度（重新開始遊戲時呼叫 resetGameState）。 */
+/** 全域唯一的進度。 */
 export let gameState = newGameState();
-export function resetGameState(): void { gameState = newGameState(); }
+export function resetGameState(classId?: ClassId, difficulty?: Difficulty): void { gameState = newGameState(classId, difficulty); }

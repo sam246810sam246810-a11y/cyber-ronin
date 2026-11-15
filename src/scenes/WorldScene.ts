@@ -1,16 +1,18 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { Player } from '../entities/Player';
+import { Enemy, type EnemyKind } from '../entities/Enemy';
+import { CombatSystem } from '../combat/CombatSystem';
 import npcs from '../data/npcs.json';
 import dialogues from '../data/dialogues.json';
 import { inputState, resetInput } from '../systems/inputState';
 import { pickVariant, type DialogueVariant, type Line } from '../systems/dialogue';
-import { gameState, openChest, type Reward } from '../systems/gameState';
+import { classStats, gameState, openChest, type Reward } from '../systems/gameState';
 import { findInFront } from '../systems/interaction';
 import { EV, type DialogueRequest, type HudInfo } from '../systems/events';
 import type { Facing } from '../systems/movement';
 
-interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean }
+interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean }
 
 type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker';
 interface Thing { id: string; kind: Kind; x: number; y: number; sprite: Phaser.GameObjects.Sprite; props: Record<string, unknown> }
@@ -26,8 +28,11 @@ function propsOf(o: Phaser.Types.Tilemaps.TiledObject): Record<string, unknown> 
 
 export class WorldScene extends Phaser.Scene {
   private player!: Player;
+  private combat!: CombatSystem;
+  private enemies: Enemy[] = [];
   private things: Thing[] = [];
   private solids!: Phaser.Physics.Arcade.StaticGroup;
+  private obstacles!: Phaser.Tilemaps.TilemapLayer;
   private transitioning = false;
   private lastHud = '';
 
@@ -36,34 +41,45 @@ export class WorldScene extends Phaser.Scene {
   create(data: WorldData): void {
     resetInput();
     this.things = [];
+    this.enemies = [];
     this.transitioning = false;
     this.lastHud = '';
     const mapKey = data.map ?? 'village';
+    const spawnName = data.spawn ?? 'start';
+    gameState.checkpoint = { map: mapKey, spawn: spawnName };
+    if (data.respawn) {
+      const c = classStats(gameState.classId);
+      gameState.hp = c.hp; gameState.mp = c.mp; gameState.statuses = {};
+    }
 
     const map = this.make.tilemap({ key: mapKey });
     const tiles = map.addTilesetImage('village_tiles', 'tiles');
     if (!tiles) throw new Error('找不到 tileset village_tiles');
     map.createLayer('ground', tiles, 0, 0);
-    const obstacles = map.createLayer('obstacles', tiles, 0, 0)!;
-    obstacles.setCollisionByProperty({ collides: true });
+    this.obstacles = map.createLayer('obstacles', tiles, 0, 0)!;
+    this.obstacles.setCollisionByProperty({ collides: true });
 
     const objects = map.getObjectLayer('objects')?.objects ?? [];
-    const spawn = objects.find((o) => o.type === 'spawn' && o.name === (data.spawn ?? 'start'))
-      ?? objects.find((o) => o.type === 'spawn');
+    const spawn = objects.find((o) => o.type === 'spawn' && o.name === spawnName) ?? objects.find((o) => o.type === 'spawn');
     this.player = new Player(this, spawn?.x ?? 64, spawn?.y ?? 64);
-    if (data.face) { this.player.facing = data.face; this.player.anims.play(`idle-${data.face}`); }
+    if (data.face) { this.player.setFacing(data.face); this.player.anims.play(`idle-${data.face}`); }
 
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
-    this.physics.add.collider(this.player, obstacles);
+    this.physics.add.collider(this.player, this.obstacles);
     this.solids = this.physics.add.staticGroup();
     this.physics.add.collider(this.player, this.solids);
 
     for (const o of objects) this.buildObject(o);
 
+    this.combat = new CombatSystem(this, this.player, this.enemies, this.obstacles, {
+      onDeath: () => this.onDeath(),
+      onHudChange: () => this.game.events.emit(EV.hud, null),
+      toast: (m) => this.game.events.emit(EV.toast, m),
+    });
+
     const cam = this.cameras.main;
     cam.setZoom(RENDER_SCALE);
     cam.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
-    // 地圖比畫面小（室內）時置中顯示
     if (map.widthInPixels < GAME_WIDTH || map.heightInPixels < GAME_HEIGHT) {
       cam.removeBounds();
       cam.centerOn(map.widthInPixels / 2, map.heightInPixels / 2);
@@ -80,9 +96,6 @@ export class WorldScene extends Phaser.Scene {
     if (!this.scene.isActive(SCENES.ui)) this.scene.launch(SCENES.ui, { areaName });
     else this.game.events.emit(EV.area, areaName);
 
-    this.game.events.on(EV.interact, this.interact, this);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(EV.interact, this.interact, this));
-
     if (data.intro) this.time.delayedCall(700, () => this.say([
       ['燈', '……嗯，睡過頭了！'],
       ['燈', '爺爺好像留了字條在房間裡。先看看再出門吧。'],
@@ -96,8 +109,7 @@ export class WorldScene extends Phaser.Scene {
       sprite.setDepth(y);
       if (solid) {
         this.solids.add(sprite);
-        const body = sprite.body as Phaser.Physics.Arcade.StaticBody;
-        body.setSize(12, 8).setOffset(2, 8);
+        (sprite.body as Phaser.Physics.Arcade.StaticBody).setSize(12, 8).setOffset(2, 8);
       }
       this.things.push({ id: o.name, kind, x, y, sprite, props });
     };
@@ -116,22 +128,26 @@ export class WorldScene extends Phaser.Scene {
         add('npc', s);
         break;
       }
-      case 'chest': {
-        const opened = gameState.openedChests.has(o.name);
-        add('chest', this.add.sprite(x, y, 'tilesheet', opened ? FRAME.chestOpen : FRAME.chestClosed));
+      case 'chest':
+        add('chest', this.add.sprite(x, y, 'tilesheet', gameState.openedChests.has(o.name) ? FRAME.chestOpen : FRAME.chestClosed));
         break;
-      }
       case 'sign': add('sign', this.add.sprite(x, y, 'tilesheet', FRAME.sign)); break;
       case 'well': add('well', this.add.sprite(x, y, 'tilesheet', FRAME.well)); break;
       case 'blocker': {
         if (gameState.flags.has(String(props.flag))) break;
         add('blocker', this.add.sprite(x, y, 'tilesheet', FRAME.shimenawa));
-        const body = this.things[this.things.length - 1].sprite.body as Phaser.Physics.Arcade.StaticBody;
-        body.setSize(16, 16).setOffset(0, 0);
+        (this.things[this.things.length - 1].sprite.body as Phaser.Physics.Arcade.StaticBody).setSize(16, 16).setOffset(0, 0);
+        break;
+      }
+      case 'enemy': {
+        const e = new Enemy(this, x, y, props.kind as EnemyKind, gameState.difficulty);
+        this.physics.add.collider(e, this.obstacles);
+        this.physics.add.collider(e, this.solids);
+        if (e.kind === 'dummy') this.physics.add.collider(this.player, e);
+        this.enemies.push(e);
         break;
       }
       case 'foxfire': {
-        // 狐火：提示附近藏著東西（PRD 2.2）
         const glow = this.add.circle(x, y, 3, 0x7fd8ff, 0.85).setDepth(100000).setBlendMode(Phaser.BlendModes.ADD);
         const halo = this.add.circle(x, y, 7, 0x7fd8ff, 0.25).setDepth(100000).setBlendMode(Phaser.BlendModes.ADD);
         this.tweens.add({ targets: [glow, halo], y: y - 5, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
@@ -146,25 +162,29 @@ export class WorldScene extends Phaser.Scene {
     this.tweens.add({ targets: fog, alpha: 0.6, duration: 3000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 
-  private goTo(map: string, spawn: string, face?: Facing): void {
+  private goTo(map: string, spawn: string, face?: Facing, extra: Partial<WorldData> = {}): void {
     if (this.transitioning) return;
     this.transitioning = true;
     inputState.locked = true;
     this.cameras.main.fadeOut(220, 20, 18, 28);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart({ map, spawn, face }));
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart({ map, spawn, face, ...extra }));
+  }
+
+  private onDeath(): void {
+    inputState.locked = true;
+    this.game.events.emit(EV.banner, { title: '力盡了……', sub: '回到最後進入的地點，道具都還在', duration: 1600 });
+    this.time.delayedCall(1700, () => {
+      const c = gameState.checkpoint;
+      this.goTo(c.map, c.spawn, undefined, { respawn: true });
+    });
   }
 
   private target(): Thing | undefined {
-    const b = this.player.body as Phaser.Physics.Arcade.Body;
-    // 物件的「中心」往下 4px，比較接近腳底位置
     const candidates = this.things.map((t) => ({ id: t.id, x: t.x, y: t.y + 4, thing: t }));
-    return findInFront({ x: b.center.x, y: b.center.y }, this.player.facing, candidates)?.thing;
+    return findInFront(this.player.center, this.player.facing, candidates)?.thing;
   }
 
-  private interact(): void {
-    if (inputState.locked || this.transitioning) return;
-    const t = this.target();
-    if (!t) return;
+  private interact(t: Thing): void {
     if (t.kind === 'chest') {
       const msg = openChest(gameState, t.id, t.props as Reward);
       if (msg) { t.sprite.setFrame(FRAME.chestOpen); this.game.events.emit(EV.toast, msg); this.refreshHud(true); }
@@ -182,12 +202,12 @@ export class WorldScene extends Phaser.Scene {
 
   private say(lines: Line[], onDone?: () => void): void {
     inputState.locked = true;
+    this.player.setVelocity(0, 0);
     const req: DialogueRequest = { lines, onDone: () => { inputState.locked = false; onDone?.(); } };
     this.game.events.emit(EV.dialogue, req);
   }
 
   private onFlagsChanged(added: string[]): void {
-    // 移除已解除的封鎖（例如竹林入口的注連繩）
     this.things = this.things.filter((t) => {
       if (t.kind === 'blocker' && gameState.flags.has(String(t.props.flag))) { t.sprite.destroy(); return false; }
       return true;
@@ -199,15 +219,36 @@ export class WorldScene extends Phaser.Scene {
 
   private refreshHud(force = false): void {
     const t = inputState.locked ? undefined : this.target();
-    const info: HudInfo = { canInteract: !!t, label: t ? LABEL[t.kind] : '調查' };
+    const info: HudInfo = { canInteract: !!t, label: t ? LABEL[t.kind] : '攻擊' };
     const key = `${info.canInteract}|${info.label}`;
     if (!force && key === this.lastHud) return;
     this.lastHud = key;
     this.game.events.emit(EV.hud, info);
   }
 
-  update(): void {
-    this.player.move(inputState.locked ? { x: 0, y: 0 } : inputState.move);
+  update(_time: number, dt: number): void {
+    const actions = inputState.actions.splice(0);
+    if (!inputState.locked && !this.transitioning) {
+      for (const a of actions) {
+        if (a === 'attackDown') {
+          const t = this.target();
+          if (t) { this.combat.cancelAttackPress(); this.interact(t); break; }
+        }
+        this.combat.handle(a);
+      }
+    } else if (actions.includes('attackUp')) this.combat.cancelAttackPress();
+
+    const locked = inputState.locked || this.transitioning;
+    this.combat.update(dt, locked ? { x: 0, y: 0 } : inputState.move);
+
+    const target = this.player.center;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      if (locked) { e.setVelocity(0, 0); continue; }
+      e.update(this.time.now, dt / 1000, target);
+      const ec = e.center;
+      if (Math.abs(ec.x - target.x) < 11 && Math.abs(ec.y - target.y) < 10) this.combat.touchedBy(e);
+    }
     this.refreshHud();
   }
 }
