@@ -450,7 +450,7 @@ const maps = {};
   npcAt(m, 'ume', 13, 21);
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
-  chest(m, 'village_chest', 36, 3, { money: 30 });
+  chest(m, 'village_chest', 36, 3, { money: 30, gearTier: 1 });
 
   maps.village = toTiled(m, { displayName: '狐火村' });
 }
@@ -541,9 +541,9 @@ interior('shrine', '狐火神社', [
 
   spawn(m, 'west', 2, 10);
   exit(m, tileRect(0, 9, 1, 3), 'village', 'east', 'left');
-  chest(m, 'forest_chest_south', 4, 17, { money: 80 });
-  chest(m, 'forest_chest_secret', 3, 3, { item: '回復丸', count: 2, money: 120 });
-  chest(m, 'forest_chest_well', 31, 17, { item: '靈水', count: 1 });
+  chest(m, 'forest_chest_south', 4, 17, { money: 80, gearTier: 1 });
+  chest(m, 'forest_chest_secret', 3, 3, { item: '回復丸', count: 2, money: 120, gearTier: 2, minRarity: 2 });
+  chest(m, 'forest_chest_well', 31, 17, { item: '靈水', count: 1, gearTier: 1, minRarity: 1 });
   obj(m, 'foxfire', 'foxfire_secret', tilePoint(9, 3));
   obj(m, 'foxfire', 'foxfire_path', tilePoint(14, 6));
   obj(m, 'well', 'old_well', tilePoint(28, 15), { dialogue: 'well' });

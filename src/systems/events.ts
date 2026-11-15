@@ -12,6 +12,8 @@ export const EV = {
   area: 'area',
   /** World → UI：大標題（序章完、力盡了） */
   banner: 'banner',
+  /** World → UI：打開商店（資料是商店 id） */
+  shop: 'shop',
 } as const;
 
 export interface DialogueRequest { lines: Line[]; onDone: () => void }

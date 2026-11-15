@@ -7,11 +7,11 @@ export interface DamageResult { amount: number; crit: boolean }
 export const CRIT_CHANCE = 0.05;
 export const CRIT_MULT = 1.5;
 
-/** 傷害 = max(1, 攻擊 × 倍率 − 防禦 × 0.5) × 亂數(0.9~1.1)，5% 爆擊 ×1.5，四捨五入。 */
-export function calcDamage(atk: number, mult: number, def: number, rng: Rng = Math.random): DamageResult {
+/** 傷害 = max(1, 攻擊 × 倍率 − 防禦 × 0.5) × 亂數(0.9~1.1)，爆擊（預設 5%）×1.5，四捨五入。 */
+export function calcDamage(atk: number, mult: number, def: number, rng: Rng = Math.random, critChance = CRIT_CHANCE): DamageResult {
   const base = Math.max(1, atk * mult - def * 0.5);
   const variance = 0.9 + rng() * 0.2;
-  const crit = rng() < CRIT_CHANCE;
+  const crit = rng() < critChance;
   return { amount: Math.max(1, Math.round(base * variance * (crit ? CRIT_MULT : 1))), crit };
 }
 
@@ -65,6 +65,7 @@ export const ITEMS: Record<string, ItemEffect> = {
   '靈水': { mp: 30 },
   '解毒草': { cure: ['poison', 'burn'] },
   '萬能符': { cure: ['poison', 'burn', 'paralyze'] },
+  '擴充布袋': {},
 };
 
 export interface Vitals { hp: number; maxHp: number; mp: number; maxMp: number; statuses: Statuses }

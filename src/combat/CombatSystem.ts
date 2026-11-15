@@ -4,7 +4,7 @@ import { Player } from '../entities/Player';
 import { Enemy, type HitOptions } from '../entities/Enemy';
 import { applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, COMBO_MULT, hasStatus, nextComboStep, pickAimTarget, tickStatuses } from '../systems/combat';
 import { facingFromVector } from '../systems/movement';
-import { classStats, gameState } from '../systems/gameState';
+import { classStats, gainExp, gameState, gearLabel, giveRandomGear, statsOf } from '../systems/gameState';
 import { hudState } from '../systems/hudState';
 import type { Action } from '../systems/inputState';
 import type { Vec2 } from '../systems/movement';
@@ -16,7 +16,8 @@ const DODGE = { duration: 400, iframes: 250, cooldown: 800, speed: 230 };
 const HURT_IFRAMES = 900;
 /** 自動瞄準範圍（px）：近戰、遠程 */
 const AIM_RANGE = { melee: 56, ranged: 170 };
-const MP_REGEN = 1; // 每秒
+/** 打倒怪物掉落裝備的機率 */
+const GEAR_DROP = 0.1;
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Sprite;
@@ -62,14 +63,20 @@ export class CombatSystem {
     private readonly obstacles: Phaser.Tilemaps.TilemapLayer,
     private readonly cb: { onDeath: () => void; onHudChange: () => void; toast: (m: string) => void },
   ) {
-    player.speed = this.cls.spd;
     this.chargeRing = scene.add.circle(0, 0, 10).setStrokeStyle(1.5, 0x9fd8ff, 1).setVisible(false).setDepth(130000);
     this.marker = scene.add.graphics().setDepth(125000);
-    hudState.maxHp = this.cls.hp;
-    hudState.maxMp = this.cls.mp;
+    this.syncStats();
   }
 
   private get now(): number { return this.scene.time.now; }
+  /** 目前能力值（等級＋裝備），換裝或升級後立即生效 */
+  private get st() { return statsOf(gameState); }
+  private syncStats(): void {
+    const st = this.st;
+    this.player.speed = st.spd;
+    hudState.maxHp = st.maxHp;
+    hudState.maxMp = st.maxMp;
+  }
   private get busy(): boolean { return this.dead || this.now < this.lockUntil || this.now < this.dodgeUntil || this.now < this.thrustUntil || hasStatus(gameState.statuses, 'paralyze'); }
   get isInvulnerable(): boolean { return this.now < this.invulnUntil || this.now < this.barrierUntil || this.now < this.thrustUntil; }
 
@@ -212,13 +219,13 @@ export class CombatSystem {
     this.cb.onHudChange();
   }
 
-  private vitals() { return { hp: gameState.hp, maxHp: this.cls.hp, mp: gameState.mp, maxMp: this.cls.mp, statuses: gameState.statuses }; }
+  private vitals() { const st = this.st; return { hp: gameState.hp, maxHp: st.maxHp, mp: gameState.mp, maxMp: st.maxMp, statuses: gameState.statuses }; }
 
   // ---------- 命中判定 ----------
-  private playerAtk(): number { return this.cls.atk * atkModifier(gameState.statuses); }
+  private playerAtk(): number { return this.st.atk * atkModifier(gameState.statuses); }
 
   private hitEnemy(e: Enemy, mult: number, from: Vec2, opts: HitOptions): void {
-    const d = calcDamage(this.playerAtk(), mult, e.info.def);
+    const d = calcDamage(this.playerAtk(), mult, e.info.def, Math.random, this.st.crit / 100);
     if (e.hit(d.amount, d.crit, from, opts)) this.onKill(e);
   }
 
@@ -236,7 +243,13 @@ export class CombatSystem {
     const [lo, hi] = e.info.money;
     const money = Phaser.Math.Between(lo, hi);
     gameState.money += money;
-    gameState.exp += e.info.exp;
+    const levels = gainExp(gameState, e.info.exp);
+    if (e.info.exp) floatText(this.scene, e.x, e.y - 22, `+${e.info.exp} EXP`, '#9fd8ff', 7);
+    if (levels > 0) this.onLevelUp();
+    if (e.kind !== 'dummy' && Math.random() < GEAR_DROP) {
+      const g = giveRandomGear(gameState, Math.random, 1);
+      this.cb.toast(g ? `獲得 ${gearLabel(g)}` : '背包滿了，裝備撿不起來');
+    }
     if (money) {
       const coin = this.scene.add.sprite(e.x, e.y, 'fx', 3).setDepth(e.y);
       this.scene.tweens.add({ targets: coin, y: e.y - 10, duration: 250, yoyo: true, onComplete: () => this.scene.tweens.add({ targets: coin, alpha: 0, x: this.player.x, y: this.player.y, duration: 250, onComplete: () => coin.destroy() }) });
@@ -244,6 +257,18 @@ export class CombatSystem {
     }
     this.cb.onHudChange();
   }
+
+  private onLevelUp(): void {
+    this.syncStats();
+    const p = this.player;
+    ring(this.scene, p.x, p.y, 20, 0xffd84a, 500);
+    ring(this.scene, p.x, p.y, 12, 0xffffff, 350);
+    floatText(this.scene, p.x, p.y - 14, `升級！Lv.${gameState.level}`, '#ffd84a', 11);
+    this.cb.toast(`升到 Lv.${gameState.level}！HP 和 MP 全滿`);
+  }
+
+  /** 換裝備後呼叫 */
+  refreshStats(): void { this.syncStats(); }
 
   private fire(frame: number, dir: Vec2, speed: number, mult: number, range: number,
     o: { pierce?: boolean; opts?: HitOptions; tint?: number; spin?: boolean }): void {
@@ -268,7 +293,7 @@ export class CombatSystem {
     if (this.dead || e.info.atk <= 0) return;
     if (this.now < this.barrierUntil) { e.hit(1, false, this.player.center, { knock: 200 }); if (!e.alive) this.onKill(e); return; }
     if (this.isInvulnerable) return;
-    const d = calcDamage(e.info.atk, 1, this.cls.def);
+    const d = calcDamage(e.info.atk, 1, this.st.def);
     gameState.hp = Math.max(0, gameState.hp - d.amount);
     floatText(this.scene, this.player.x, this.player.y - 10, String(d.amount), '#ff6a6a', 10);
     this.invulnUntil = this.now + HURT_IFRAMES;
@@ -293,9 +318,11 @@ export class CombatSystem {
   // ---------- 每幀 ----------
   update(dt: number, move: Vec2): void {
     const now = this.now, sec = dt / 1000;
+    this.syncStats();
     if (!this.dead) {
-      gameState.mp = Math.min(this.cls.mp, gameState.mp + MP_REGEN * sec);
-      const dot = tickStatuses(gameState.statuses, sec, this.cls.hp);
+      const st = this.st;
+      gameState.mp = Math.min(st.maxMp, gameState.mp + st.mpRegen * sec);
+      const dot = tickStatuses(gameState.statuses, sec, st.maxHp);
       if (dot > 0) {
         this.dotAccum += dot;
         if (this.dotAccum >= 1) {

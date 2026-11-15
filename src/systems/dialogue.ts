@@ -8,6 +8,8 @@ export interface DialogueVariant {
   ifNot?: string[];
   /** 對話結束後設定的旗標 */
   set?: string[];
+  /** 對話結束後打開的介面，例如 'shop' */
+  open?: string;
   lines: Line[];
 }
 

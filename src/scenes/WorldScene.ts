@@ -7,7 +7,7 @@ import npcs from '../data/npcs.json';
 import dialogues from '../data/dialogues.json';
 import { inputState, resetInput } from '../systems/inputState';
 import { pickVariant, type DialogueVariant, type Line } from '../systems/dialogue';
-import { classStats, gameState, openChest, type Reward } from '../systems/gameState';
+import { gameState, openChest, statsOf, type Reward } from '../systems/gameState';
 import { findInFront } from '../systems/interaction';
 import { EV, type DialogueRequest, type HudInfo } from '../systems/events';
 import type { Facing } from '../systems/movement';
@@ -48,8 +48,8 @@ export class WorldScene extends Phaser.Scene {
     const spawnName = data.spawn ?? 'start';
     gameState.checkpoint = { map: mapKey, spawn: spawnName };
     if (data.respawn) {
-      const c = classStats(gameState.classId);
-      gameState.hp = c.hp; gameState.mp = c.mp; gameState.statuses = {};
+      const st = statsOf(gameState);
+      gameState.hp = st.maxHp; gameState.mp = st.maxMp; gameState.statuses = {};
     }
 
     const map = this.make.tilemap({ key: mapKey });
@@ -181,14 +181,16 @@ export class WorldScene extends Phaser.Scene {
 
   private target(): Thing | undefined {
     const candidates = this.things.map((t) => ({ id: t.id, x: t.x, y: t.y + 4, thing: t }));
-    return findInFront(this.player.center, this.player.facing, candidates)?.thing;
+    // 先找正前方；找不到再往前多看一格，讓人能隔著櫃台和店員說話
+    return findInFront(this.player.center, this.player.facing, candidates)?.thing
+      ?? findInFront(this.player.center, this.player.facing, candidates.filter((c) => c.thing.kind === 'npc'), 30, 12)?.thing;
   }
 
   private interact(t: Thing): void {
     if (t.kind === 'chest') {
-      const msg = openChest(gameState, t.id, t.props as Reward);
-      if (msg) { t.sprite.setFrame(FRAME.chestOpen); this.game.events.emit(EV.toast, msg); this.refreshHud(true); }
-      else this.game.events.emit(EV.toast, '寶箱已經打開了');
+      const r = openChest(gameState, t.id, t.props as Reward);
+      if (r.opened) { t.sprite.setFrame(FRAME.chestOpen); this.refreshHud(true); }
+      this.game.events.emit(EV.toast, r.message);
       return;
     }
     const id = String(t.props.dialogue ?? t.props.npc ?? t.id);
@@ -197,6 +199,7 @@ export class WorldScene extends Phaser.Scene {
     this.say(v.lines, () => {
       for (const f of v.set ?? []) gameState.flags.add(f);
       if (v.set?.length) this.onFlagsChanged(v.set);
+      if (v.open === 'shop') this.game.events.emit(EV.shop, String(t.props.npc ?? 'rin'));
     });
   }
 
