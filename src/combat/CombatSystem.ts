@@ -19,6 +19,11 @@ const AIM_RANGE = { melee: 56, ranged: 170 };
 /** 打倒怪物掉落裝備的機率 */
 const GEAR_DROP = 0.1;
 
+/** 可以被攻擊打破的東西（裂開的牆） */
+export interface Breakable { x: number; y: number; alive: boolean; onBreak: () => void }
+
+interface EnemyShot { sprite: Phaser.GameObjects.Sprite; dir: Vec2; speed: number; atk: number; poison: number; dieAt: number }
+
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Sprite;
   mult: number; dieAt: number; pierce: boolean; hit: Set<Enemy>; opts: HitOptions;
@@ -54,6 +59,8 @@ export class CombatSystem {
   private readonly marker: Phaser.GameObjects.Graphics;
   private dotAccum = 0;
   private projectiles: Projectile[] = [];
+  private shots: EnemyShot[] = [];
+  breakables: Breakable[] = [];
   private dead = false;
 
   constructor(
@@ -236,7 +243,15 @@ export class CombatSystem {
       const ec = e.center;
       if (Math.hypot(ec.x - c.x, ec.y - c.y) <= r + 5) { this.hitEnemy(e, mult, this.player.center, opts); n++; }
     }
+    for (const b of this.breakables) if (b.alive && Math.hypot(b.x - c.x, b.y - c.y) <= r + 8) this.breakIt(b);
     return n;
+  }
+
+  private breakIt(b: Breakable): void {
+    b.alive = false;
+    ring(this.scene, b.x, b.y, 14, 0xd8d0c0, 350);
+    this.scene.cameras.main.shake(120, 0.006);
+    b.onBreak();
   }
 
   private onKill(e: Enemy): void {
@@ -293,19 +308,46 @@ export class CombatSystem {
     if (this.dead || e.info.atk <= 0) return;
     if (this.now < this.barrierUntil) { e.hit(1, false, this.player.center, { knock: 200 }); if (!e.alive) this.onKill(e); return; }
     if (this.isInvulnerable) return;
-    const d = calcDamage(e.info.atk, 1, this.st.def);
+    const info = e.info as { burnChance?: number; poisonChance?: number };
+    if (this.damagePlayer(e.info.atk, e.center, { burn: info.burnChance })) e.recoil(this.player.center);
+  }
+
+  /** 主角受傷（碰撞、毒絲、重擊共用）。回傳是否真的受傷。 */
+  private damagePlayer(atk: number, from: Vec2, chance: { burn?: number; poison?: number } = {}, mult = 1): boolean {
+    if (this.dead || this.isInvulnerable) return false;
+    const d = calcDamage(atk, mult, this.st.def);
     gameState.hp = Math.max(0, gameState.hp - d.amount);
     floatText(this.scene, this.player.x, this.player.y - 10, String(d.amount), '#ff6a6a', 10);
     this.invulnUntil = this.now + HURT_IFRAMES;
-    const pc = this.player.center, ec = e.center, dx = pc.x - ec.x, dy = pc.y - ec.y, dist = Math.hypot(dx, dy) || 1;
+    const pc = this.player.center, dx = pc.x - from.x, dy = pc.y - from.y, dist = Math.hypot(dx, dy) || 1;
     this.knock = { x: (dx / dist) * 160, y: (dy / dist) * 160 };
     this.knockUntil = this.now + 90;
-    e.recoil(pc);
     this.scene.cameras.main.shake(90, 0.004);
-    const burn = (e.info as { burnChance?: number }).burnChance ?? 0;
-    if (burn && Math.random() < burn) { applyStatus(gameState.statuses, 'burn'); this.cb.toast('燒傷了！'); }
+    if (chance.burn && Math.random() < chance.burn) { applyStatus(gameState.statuses, 'burn'); this.cb.toast('燒傷了！'); }
+    if (chance.poison && Math.random() < chance.poison) { applyStatus(gameState.statuses, 'poison'); this.cb.toast('中毒了！'); }
     this.cb.onHudChange();
     if (gameState.hp <= 0) this.die();
+    return true;
+  }
+
+  /** 骨蜘蛛吐毒絲。 */
+  enemyShoot(e: Enemy, dir: Vec2): void {
+    const c = e.center;
+    const sprite = this.scene.add.sprite(c.x, c.y, 'fx', 4).setDepth(130000);
+    this.scene.tweens.add({ targets: sprite, angle: 360, duration: 500, repeat: -1 });
+    const info = e.info as { poisonChance?: number };
+    this.shots.push({ sprite, dir, speed: 105, atk: e.info.atk, poison: info.poisonChance ?? 0, dieAt: this.now + 2200 });
+  }
+
+  /** 提燈鬼的範圍重擊。 */
+  enemyAoe(e: Enemy, a: { x: number; y: number; r: number }): void {
+    ring(this.scene, a.x, a.y, a.r, 0xff6a3a, 300);
+    this.scene.cameras.main.shake(150, 0.008);
+    const pc = this.player.center;
+    if (Math.hypot(pc.x - a.x, pc.y - a.y) > a.r + 4) return;
+    if (this.now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); return; }
+    const info = e.info as { burnChance?: number };
+    this.damagePlayer(e.info.atk, a, { burn: info.burnChance }, 1.6);
   }
 
   private die(): void {
@@ -353,6 +395,8 @@ export class CombatSystem {
     // 投射物
     for (const pr of [...this.projectiles]) {
       if (!pr.sprite.active || now > pr.dieAt) { this.removeProjectile(pr.sprite); continue; }
+      const wall = this.breakables.find((b) => b.alive && Math.hypot(b.x - pr.sprite.x, b.y - pr.sprite.y) < 11);
+      if (wall) { this.breakIt(wall); this.removeProjectile(pr.sprite); continue; }
       for (const e of this.enemies) {
         if (!e.alive || pr.hit.has(e)) continue;
         const ec = e.center;
@@ -362,6 +406,20 @@ export class CombatSystem {
           if (!pr.pierce) { this.removeProjectile(pr.sprite); break; }
         }
       }
+    }
+
+    // 敵人的毒絲
+    for (const sh of [...this.shots]) {
+      const sp = sh.sprite;
+      sp.x += sh.dir.x * sh.speed * sec; sp.y += sh.dir.y * sh.speed * sec;
+      const tile = this.obstacles.getTileAtWorldXY(sp.x, sp.y);
+      const pc = this.player.center;
+      let gone = now > sh.dieAt || !!tile?.collides;
+      if (!gone && Math.hypot(pc.x - sp.x, pc.y - sp.y) < 9) {
+        if (now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); gone = true; }
+        else if (!this.isInvulnerable) { this.damagePlayer(sh.atk, { x: sp.x - sh.dir.x, y: sp.y - sh.dir.y }, { poison: sh.poison }, 0.9); gone = true; }
+      }
+      if (gone) { ring(this.scene, sp.x, sp.y, 4, 0xb04aff, 150); sp.destroy(); this.shots = this.shots.filter((x) => x !== sh); }
     }
 
     // 按住攻擊：劍士、陰陽師自動連打；弓術師顯示蓄力

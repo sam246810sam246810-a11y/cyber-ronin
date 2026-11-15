@@ -23,6 +23,10 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private ai: State = 'idle';
   private stateUntil = 0;
   private dashReadyAt = 0;
+  private shootReadyAt = 0;
+  private warn?: Phaser.GameObjects.Arc;
+  readonly elite: boolean;
+  readonly guard?: string;
   private dir: Vec2 = { x: 0, y: 0 };
   private hitstunUntil = 0;
   private dotAccum = 0;
@@ -30,17 +34,21 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private barUntil = 0;
   private readonly seed = Math.random() * 1000;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind, difficulty: Difficulty) {
+  constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind, difficulty: Difficulty, guard?: string) {
     super(scene, x, y, 'enemies', enemies[kind].frame);
     this.kind = kind;
     this.info = scaleEnemy(enemies[kind], difficulty);
     this.hp = this.maxHp = this.info.hp;
     this.home = { x, y };
+    this.elite = !!(enemies[kind] as { elite?: boolean }).elite;
+    this.guard = guard;
+    this.shootReadyAt = scene.time.now + 800 + Math.random() * 800;
     scene.add.existing(this);
     scene.physics.add.existing(this);
     const body = this.body as Phaser.Physics.Arcade.Body;
     body.setSize(12, 10).setOffset(2, 6);
     if (kind === 'dummy') body.setImmovable(true);
+    if (this.elite) this.setScale(1.4);
     this.bar = scene.add.graphics().setDepth(120000);
   }
 
@@ -115,6 +123,45 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         } else this.setVelocity(0, 0);
         break;
       }
+      case 'bonespider': {
+        // 保持距離，閃紫光後吐毒絲
+        if (this.ai === 'tele') {
+          this.setVelocity(0, 0);
+          this.setTint(Math.floor(time / 70) % 2 ? 0xffffff : 0xb04aff);
+          if (time >= this.stateUntil) { this.clearTint(); this.emit('shoot', this, toward); this.ai = 'rest'; this.stateUntil = time + 500; this.shootReadyAt = time + 2200; }
+        } else if (this.ai === 'rest') {
+          this.setVelocity(0, 0);
+          if (time >= this.stateUntil) this.ai = 'idle';
+        } else if (dist < SIGHT + 30) {
+          if (time >= this.shootReadyAt && dist < 140) { this.ai = 'tele'; this.stateUntil = time + 550; }
+          else if (dist < 50) this.setVelocity(-toward.x * this.info.speed * 1.3, -toward.y * this.info.speed * 1.3);
+          else if (dist > 95) this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
+          else { const side = this.seed % 2 < 1 ? 1 : -1; this.setVelocity(-toward.y * this.info.speed * side, toward.x * this.info.speed * side); }
+        } else this.setVelocity(0, 0);
+        break;
+      }
+      case 'chochin': {
+        // 精英：慢慢逼近，地上出現紅圈後重擊
+        if (this.ai === 'tele') {
+          this.setVelocity(0, 0);
+          const k = 1 - (this.stateUntil - time) / 750;
+          this.warn?.setPosition(this.center.x, this.center.y).setFillStyle(0xff3a3a, 0.15 + 0.3 * k);
+          if (time >= this.stateUntil) {
+            this.emit('aoe', this, { x: this.center.x, y: this.center.y, r: 30 });
+            this.warn?.destroy(); this.warn = undefined;
+            this.ai = 'rest'; this.stateUntil = time + 700; this.dashReadyAt = time + 2200;
+          }
+        } else if (this.ai === 'rest') {
+          this.setVelocity(0, 0);
+          if (time >= this.stateUntil) this.ai = 'idle';
+        } else if (dist < SIGHT + 20) {
+          if (dist < 36 && time >= this.dashReadyAt) {
+            this.ai = 'tele'; this.stateUntil = time + 750;
+            this.warn = this.scene.add.circle(me.x, me.y, 30, 0xff3a3a, 0.15).setStrokeStyle(1.5, 0xff3a3a, 0.9).setDepth(5);
+          } else this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
+        } else this.setVelocity(0, 0);
+        break;
+      }
     }
     if (this.body) this.setFlipX((this.body as Phaser.Physics.Arcade.Body).velocity.x > 5);
   }
@@ -124,7 +171,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     const me = this.center, dx = me.x - from.x, dy = me.y - from.y, d = Math.hypot(dx, dy) || 1;
     this.setVelocity((dx / d) * 120, (dy / d) * 120);
     this.hitstunUntil = this.scene.time.now + 250;
-    this.ai = 'rest'; this.stateUntil = this.scene.time.now + 900; this.setScale(1);
+    this.ai = 'rest'; this.stateUntil = this.scene.time.now + 900; this.setScale(this.elite ? 1.4 : 1);
+    this.warn?.destroy(); this.warn = undefined;
   }
 
   /** 被攻擊。回傳是否被打倒。 */
@@ -133,10 +181,11 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     if (opts.paralyze) applyStatus(this.statuses, 'paralyze');
     if (opts.burn) applyStatus(this.statuses, 'burn');
     if (this.kind !== 'dummy') {
-      const me = this.center, dx = me.x - from.x, dy = me.y - from.y, d = Math.hypot(dx, dy) || 1, k = opts.knock ?? 130;
+      const me = this.center, dx = me.x - from.x, dy = me.y - from.y, d = Math.hypot(dx, dy) || 1, k = (opts.knock ?? 130) * (this.elite ? 0.25 : 1);
       this.setVelocity((dx / d) * k, (dy / d) * k);
-      this.hitstunUntil = this.scene.time.now + 200;
-      if (this.ai === 'tele' || this.ai === 'dash') { this.ai = 'rest'; this.stateUntil = this.scene.time.now + 300; this.setScale(1); }
+      this.hitstunUntil = this.scene.time.now + (this.elite ? 60 : 200);
+      // 精英的重擊不會被普通攻擊打斷
+      if (!this.elite && (this.ai === 'tele' || this.ai === 'dash')) { this.ai = 'rest'; this.stateUntil = this.scene.time.now + 300; this.setScale(1); this.clearTint(); }
     }
     this.damage(amount, crit, crit ? '#ffd84a' : '#ffffff');
     return !this.alive;
@@ -155,6 +204,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private die(): void {
     this.alive = false;
     this.bar.destroy();
+    this.warn?.destroy();
     (this.body as Phaser.Physics.Arcade.Body).enable = false;
     this.scene.tweens.add({ targets: this, alpha: 0, scale: 1.6, duration: 280, onComplete: () => this.destroy() });
     this.emit('killed', this);
@@ -163,7 +213,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private drawBar(time: number): void {
     this.bar.clear();
     if (time > this.barUntil || this.kind === 'dummy') return;
-    const w = 14, x = this.x - w / 2, y = this.y - 11;
+    const w = this.elite ? 22 : 14, x = this.x - w / 2, y = this.y - (this.elite ? 15 : 11);
     this.bar.fillStyle(0x14121c, 0.8).fillRect(x - 1, y - 1, w + 2, 4);
     this.bar.fillStyle(0xe04848, 1).fillRect(x, y, Math.max(0, (this.hp / this.maxHp) * w), 2);
   }

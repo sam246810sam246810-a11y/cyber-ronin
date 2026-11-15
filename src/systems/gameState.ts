@@ -5,7 +5,7 @@ import { BASES, canUse, equipName, equipStats, generateEquip, RARITIES, type Bas
 import { BAG_START, canAddGear, canAddItem, type Bag } from './inventory';
 import { addExp, computeStats, type Stats } from './progression';
 
-export interface Reward { money?: number; item?: string; count?: number; gearTier?: number; minRarity?: number }
+export interface Reward { money?: number; item?: string; count?: number; gearTier?: number; minRarity?: number; key?: string }
 export type ClassId = keyof typeof classes;
 
 export interface GameState extends Bag {
@@ -101,11 +101,13 @@ export interface ChestResult { opened: boolean; message: string }
 /** 開寶箱。已開過不重複給獎勵；背包放不下就先不打開。 */
 export function openChest(s: GameState, chestId: string, reward: Reward, rng: Rng = Math.random): ChestResult {
   if (s.openedChests.has(chestId)) return { opened: false, message: '寶箱已經打開了' };
+  if (reward.key && (s.items[reward.key] ?? 0) <= 0) return { opened: false, message: `上鎖了。需要「${reward.key}」` };
   const needItem = reward.item ? !canAddItem(s, reward.item, reward.count ?? 1) : false;
   const needGear = reward.gearTier ? !canAddGear(s) : false;
   if (needItem || needGear) return { opened: false, message: '背包滿了，整理一下再來開吧' };
   s.openedChests.add(chestId);
   const parts: string[] = [];
+  if (reward.key) { s.items[reward.key]--; if (s.items[reward.key] <= 0) delete s.items[reward.key]; parts.push(`用掉${reward.key}`); }
   if (reward.item) {
     const n = reward.count ?? 1;
     s.items[reward.item] = (s.items[reward.item] ?? 0) + n;
@@ -144,7 +146,11 @@ export function currentObjective(flags: ReadonlySet<string>): string {
   if (!flags.has('talked_priest')) return '到北邊的神社找宮司爺爺';
   if (!flags.has('found_well')) return '調查東邊竹林深處的古井';
   if (!flags.has('prologue_done')) return '回神社向宮司爺爺報告';
-  return '序章完成！古井地城將在下一版開放';
+  if (!flags.has('visited:b1')) return '從竹林的古井進入古井地城';
+  if (!flags.has('visited:b2')) return '古井地城 B1：找到往下的路';
+  if (!flags.has('visited:b3')) return '古井地城 B2：找到往下的路';
+  if (!flags.has('reached_boss_door')) return '古井地城 B3：找到土蜘蛛的巢穴';
+  return '土蜘蛛就在門後（Boss 戰下一版開放）';
 }
 
 /** 全域唯一的進度。 */

@@ -10,14 +10,17 @@ import { BAG_EXPAND, BAG_MAX, canAddGear, canAddItem, equippedUids, slotsUsed } 
 import { expToNext, LEVEL_CAP, type Stats } from '../../systems/progression';
 import { equip, gameState, statsIfSwapped, statsOf, unequip, useItem } from '../../systems/gameState';
 import { OVERLAY_CSS } from './overlay.css';
+import { MAPS } from '../../data/maps';
+import { collectionReport } from '../../systems/collection';
 
-type MenuTab = 'status' | 'equip' | 'bag';
+type MenuTab = 'status' | 'equip' | 'bag' | 'map';
 type ShopTab = 'buy' | 'sell';
 type Selection = { kind: 'gear'; uid: number } | { kind: 'item'; name: string } | { kind: 'buyItem'; name: string } | { kind: 'buyGear'; base: BaseId } | null;
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 const ITEM_DESC: Record<string, string> = {
   '回復丸': 'HP 回復 50', '大回復丸': 'HP 回復 150', '靈水': 'MP 回復 30', '解毒草': '解除中毒、燒傷', '萬能符': '解除所有狀態異常',
+  '銅鑰匙': '可以打開上鎖的鐵箱。用一次就沒了。',
   '擴充布袋': `背包增加 ${BAG_EXPAND} 格（最多 ${BAG_MAX} 格）`,
 };
 const STAT_ROWS: [keyof Stats, string][] = [['maxHp', 'HP'], ['maxMp', 'MP'], ['atk', '攻擊'], ['def', '防禦'], ['spd', '速度'], ['crit', '爆擊率'], ['mpRegen', 'MP 回復']];
@@ -84,11 +87,11 @@ export class GameOverlay {
   private render(): void {
     const s = gameState;
     const tabs = this.mode === 'menu'
-      ? ([['status', '狀態'], ['equip', '裝備'], ['bag', '背包']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
+      ? ([['status', '狀態'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
       : ([['buy', '購買'], ['sell', '賣出']] as const).map(([k, t]) => `<button class="kf-tab" data-stab="${k}" aria-selected="${this.shopTab === k}">${t}</button>`).join('');
     const title = this.mode === 'menu' ? '選單' : '鈴屋';
     const body = this.mode === 'menu'
-      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.bagView())
+      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.bagView())
       : (this.shopTab === 'buy' ? this.buyView() : this.sellView());
     this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}">
       <div class="kf-head"><span class="kf-title">${title}</span>${tabs}<span class="kf-spacer"></span>
@@ -113,6 +116,24 @@ export class GameOverlay {
       <div class="kf-col"><div class="kf-sec">裝備中</div>
         ${SLOTS.map((sl) => { const g = this.worn(sl); return `<div class="kf-row" data-goslot="${sl}"><span class="k">${SLOT_NAME[sl]}</span><span class="n" style="color:${g ? RARITIES[g.rarity].color : '#6b6780'}">${g ? esc(BASES[g.base].name) : '（空）'}</span></div>`; }).join('')}
         <div class="kf-sec">難度</div><div>${DIFFICULTY[s.difficulty].name}</div></div>`;
+  }
+
+  private mapView(): string {
+    const s = gameState, r = collectionReport(MAPS, s.openedChests, s.flags);
+    const visited = r.areas.filter((a) => s.flags.has(`visited:${a.key}`));
+    const rows = visited.map((a) => {
+      const done = a.chests[0] + a.secrets[0] === a.chests[1] + a.secrets[1];
+      return `<div class="kf-row"><span class="n">${esc(a.name)}${done ? ' <span class="kf-up">✔</span>' : ''}</span>
+        <span class="q">寶箱 ${a.chests[0]}/${a.chests[1]}</span><span class="q">隱藏 ${a.secrets[0]}/${a.secrets[1]}</span></div>`;
+    }).join('');
+    const unknown = r.areas.length - visited.length;
+    return `<div class="kf-col"><div class="kf-sec">各區域</div>${rows || '<div class="kf-empty">還沒有去過任何地方。</div>'}
+        ${unknown ? `<div class="kf-empty">還有 ${unknown} 個沒去過的區域</div>` : ''}</div>
+      <div class="kf-col"><div class="kf-card"><h3>總收集度 ${r.percent}%</h3><div class="kf-bar"><i style="width:${r.percent}%"></i></div>
+        <div class="kf-tag">打開寶箱、找到隱藏的密道和房間都會增加收集度。牆上有裂縫的地方打打看；跟著狐火走也會有發現。</div>
+        <div class="kf-sec">小地圖標記</div>
+        <ul class="kf-stats"><li><span style="color:#4fd8ff">●</span> 自己</li><li><span style="color:#f2c94c">■</span> 沒開的寶箱</li><li><span style="color:#7fe08a">■</span> 出入口</li>
+        <li><span style="color:#ff4a4a">■</span> 妖怪</li><li><span style="color:#8a8aa0">■</span> 關著的門</li><li><span style="color:#ff5ae0">■</span> 古井／重要地點</li></ul></div></div>`;
   }
 
   private worn(slot: Slot): Equip | undefined { const u = gameState.equipped[slot]; return gameState.gear.find((g) => g.uid === u); }

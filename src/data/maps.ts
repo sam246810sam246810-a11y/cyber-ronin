@@ -7,4 +7,8 @@ import shrine from '../../assets/maps/shrine.json';
 import forest from '../../assets/maps/forest.json';
 
 /** 所有地圖（Tiled JSON）。key 就是出口物件 `map` 屬性用的名稱。 */
-export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest };
+import b1 from '../../assets/maps/b1.json';
+import b2 from '../../assets/maps/b2.json';
+import b3 from '../../assets/maps/b3.json';
+
+export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3 };

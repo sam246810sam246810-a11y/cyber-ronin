@@ -28,6 +28,10 @@ export class UIScene extends Phaser.Scene {
   private objective!: Phaser.GameObjects.Text;
   private toastY = 0;
   private overlay!: GameOverlay;
+  private mmStatic!: Phaser.GameObjects.Graphics;
+  private mmDyn!: Phaser.GameObjects.Graphics;
+  private mmVersion = -1;
+  private mmBox = { x: 0, y: 0, s: 1, w: 0, h: 0 };
   private menuBtn!: TouchButton;
   private label!: Phaser.GameObjects.Text;
 
@@ -50,6 +54,8 @@ export class UIScene extends Phaser.Scene {
     this.overlay = new GameOverlay();
     this.menuBtn = new TouchButton(this, { x: 458, y: 20, r: 14, label: '選單', fontSize: 8, onDown: () => this.openOverlay(() => this.overlay.openMenu(() => this.closeOverlay())) });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.overlay.close());
+    this.mmStatic = this.add.graphics().setDepth(850);
+    this.mmDyn = this.add.graphics().setDepth(851);
 
     // 左上：職業、HP、MP
     this.add.rectangle(8, 6, 128, 40, 0x14121c, 0.75).setOrigin(0).setStrokeStyle(1, 0xf2e6c9, 0.3);
@@ -63,7 +69,7 @@ export class UIScene extends Phaser.Scene {
     this.add.circle(17, 58, 3.5, 0xf2c94c).setStrokeStyle(1, 0x8a6a1a);
     this.money = this.add.text(24, 52, '', TXT(9)).setResolution(RENDER_SCALE);
     // 目標
-    this.objective = this.add.text(GAME_WIDTH / 2 + 30, 10, '', { ...TXT(9), backgroundColor: '#14121cb0', padding: { x: 8, y: 3 } })
+    this.objective = this.add.text(GAME_WIDTH / 2 - 4, 10, '', { ...TXT(9), backgroundColor: '#14121cb0', padding: { x: 8, y: 3 } })
       .setOrigin(0.5, 0).setResolution(RENDER_SCALE);
     this.refreshStatus();
 
@@ -90,6 +96,7 @@ export class UIScene extends Phaser.Scene {
   private showButtons(v: boolean): void {
     const b = this.buttons;
     [b.attack, b.dodge, b.item, ...b.skills, this.menuBtn].forEach((x) => x.setVisible(v));
+    this.mmStatic?.setVisible(v); this.mmDyn?.setVisible(v);
   }
 
   private openOverlay(open: () => void): void {
@@ -156,7 +163,28 @@ export class UIScene extends Phaser.Scene {
     this.time.delayedCall(duration, () => this.tweens.add({ targets: [shade, t1, t2], alpha: 0, duration: 500, onComplete: () => { shade.destroy(); t1.destroy(); t2.destroy(); } }));
   }
 
+  /** 右上角小地圖（PRD 6.4）：地形換地圖時重畫，標記每幀更新 */
+  private drawMinimap(time: number): void {
+    const mm = hudState.minimap;
+    if (mm.version !== this.mmVersion) {
+      this.mmVersion = mm.version;
+      const maxW = 76, maxH = 54, s = Math.min(maxW / mm.w, maxH / mm.h, 3);
+      const w = mm.w * s, h = mm.h * s, x = 474 - w, y = 38;
+      this.mmBox = { x, y, s, w, h };
+      const g = this.mmStatic; g.clear();
+      g.fillStyle(0x14121c, 0.75).fillRect(x - 2, y - 2, w + 4, h + 4).lineStyle(1, 0xf2e6c9, 0.35).strokeRect(x - 2, y - 2, w + 4, h + 4);
+      g.fillStyle(0x8a8478, 0.55);
+      for (let ty = 0; ty < mm.h; ty++) for (let tx = 0; tx < mm.w; tx++) if (!mm.walls[ty * mm.w + tx]) g.fillRect(x + tx * s, y + ty * s, Math.ceil(s), Math.ceil(s));
+    }
+    const { x, y, s } = this.mmBox, d = this.mmDyn; d.clear();
+    const r = Math.max(1, s * 0.8);
+    for (const m of mm.markers) d.fillStyle(m.color, 1).fillRect(x + m.x * s - r / 2, y + m.y * s - r / 2, r, r);
+    const blink = Math.floor(time / 300) % 2 ? 1 : 0.6;
+    d.fillStyle(0x4fd8ff, blink).fillCircle(x + mm.player.x * s, y + mm.player.y * s, Math.max(1.5, s * 0.9));
+  }
+
   update(_t: number, dt: number): void {
+    this.drawMinimap(_t);
     this.dialogue.update(dt);
     inputState.move = this.dialogue.isOpen ? { x: 0, y: 0 } : this.joystick.vector;
     this.drawBars();

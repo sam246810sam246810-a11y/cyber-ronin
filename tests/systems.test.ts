@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { pickVariant, type DialogueVariant } from '../src/systems/dialogue';
 import { currentObjective, equip, gainExp, newGameState, openChest, statsOf, unequip } from '../src/systems/gameState';
 import { findInFront } from '../src/systems/interaction';
+import { collectionReport } from '../src/systems/collection';
 import dialogues from '../src/data/dialogues.json';
 
 describe('pickVariant', () => {
@@ -50,6 +51,26 @@ describe('openChest', () => {
   });
 });
 
+describe('鑰匙寶箱', () => {
+  it('沒有鑰匙打不開，有鑰匙會用掉', () => {
+    const s = newGameState();
+    expect(openChest(s, 'k', { key: '銅鑰匙', money: 10 })).toEqual({ opened: false, message: '上鎖了。需要「銅鑰匙」' });
+    s.items['銅鑰匙'] = 1;
+    expect(openChest(s, 'k', { key: '銅鑰匙', money: 10 }).opened).toBe(true);
+    expect(s.items['銅鑰匙']).toBeUndefined();
+  });
+});
+
+describe('收集度', () => {
+  it('依寶箱與隱藏地點計算', () => {
+    const map = { properties: [{ name: 'displayName', value: '測試' }], layers: [{ name: 'objects', objects: [
+      { name: 'c1', type: 'chest' }, { name: 'c2', type: 'chest' }, { name: 'w', type: 'cracked' }, { name: 'n', type: 'npc' }] }] };
+    const r = collectionReport({ t: map }, new Set(['c1']), new Set(['secret:w']));
+    expect(r.areas[0]).toEqual({ key: 't', name: '測試', chests: [1, 2], secrets: [1, 1] });
+    expect(r.percent).toBe(66);
+  });
+});
+
 describe('裝備與升級（遊戲狀態）', () => {
   it('新遊戲穿著職業初始武器與麻衣', () => {
     const s = newGameState('onmyoji');
@@ -82,7 +103,8 @@ describe('currentObjective', () => {
     expect(currentObjective(new Set())).toContain('宮司爺爺');
     expect(currentObjective(new Set(['talked_priest']))).toContain('古井');
     expect(currentObjective(new Set(['talked_priest', 'found_well']))).toContain('報告');
-    expect(currentObjective(new Set(['talked_priest', 'found_well', 'prologue_done']))).toContain('序章完成');
+    expect(currentObjective(new Set(['talked_priest', 'found_well', 'prologue_done']))).toContain('古井');
+    expect(currentObjective(new Set(['talked_priest', 'found_well', 'prologue_done', 'visited:b1', 'visited:b2']))).toContain('B2');
   });
 });
 

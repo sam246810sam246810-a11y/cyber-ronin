@@ -51,6 +51,12 @@ const TILES = [
   { name: 'shelf', collides: true }, { name: 'counter', collides: true }, { name: 'futon', collides: true }, { name: 'anvil', collides: true },
   { name: 'altar', collides: true }, { name: 'chest_closed' }, { name: 'chest_open' }, { name: 'shimenawa' },
   { name: 'well' }, { name: 'sign' }, { name: 'irori', collides: true }, { name: 'bamboo_secret' },
+  // 32– 古井地城
+  { name: 'dfloor' }, { name: 'dwall', collides: true }, { name: 'dwall_torch', collides: true }, { name: 'web_floor' },
+  { name: 'stairs_down' }, { name: 'stairs_up' }, { name: 'plate_off' }, { name: 'plate_on' },
+  { name: 'push_block' }, { name: 'gate' }, { name: 'cracked' }, { name: 'stone_lantern_off' },
+  { name: 'stone_lantern_on' }, { name: 'iron_chest' }, { name: 'iron_chest_open' }, { name: 'gold_chest' },
+  { name: 'gold_chest_open' }, { name: 'boss_door' }, { name: 'bones' },
 ];
 const COLS = 8;
 const ts = new Canvas(COLS * T, Math.ceil(TILES.length / COLS) * T);
@@ -71,6 +77,16 @@ function woodFloor(ox, oy) {
   ts.rect(ox, oy, T, T, C.woodL);
   for (let y = 3; y < T; y += 4) ts.rect(ox, oy + y, T, 1, C.wood);
   ts.px(ox + 5, oy + 1, C.wood); ts.px(ox + 11, oy + 5, C.wood); ts.px(ox + 3, oy + 9, C.wood); ts.px(ox + 13, oy + 13, C.wood);
+}
+function dfloor(ox, oy) {
+  ts.rect(ox, oy, T, T, 0x4a4656);
+  ts.rect(ox, oy + 7, T, 1, 0x3e3a4a); ts.rect(ox + 7, oy, 1, 7, 0x3e3a4a); ts.rect(ox + 3, oy + 8, 1, 8, 0x3e3a4a); ts.rect(ox + 12, oy + 8, 1, 8, 0x3e3a4a);
+  for (let i = 0; i < 6; i++) ts.px(ox + Math.floor(rnd() * T), oy + Math.floor(rnd() * T), 0x55505f);
+}
+function dwall(ox, oy) {
+  ts.rect(ox, oy, T, T, 0x2a2634);
+  for (let y = 0; y < T; y += 4) { ts.rect(ox, oy + y, T, 1, 0x1c1924); const off = (y / 4) % 2 ? 4 : 0; for (let x = off; x < T; x += 8) ts.rect(ox + x, oy + y, 1, 4, 0x1c1924); }
+  ts.rect(ox, oy + 1, T, 1, 0x3a3546);
 }
 function bamboo(ox, oy) {
   grassBase(ox, oy);
@@ -213,6 +229,82 @@ const draw = {
     ts.rect(ox + 6, oy + 6, 4, 4, C.ember); ts.px(ox + 7, oy + 7, C.yellow);
   },
   bamboo_secret(ox, oy) { bamboo(ox, oy); ts.px(ox + 5, oy + 8, 0x9fd8ff); }, // 只差一顆藍色小點
+  dfloor: dfloor,
+  dwall: dwall,
+  dwall_torch(ox, oy) {
+    dwall(ox, oy);
+    ts.rect(ox + 7, oy + 8, 2, 6, C.wood); ts.rect(ox + 6, oy + 4, 4, 4, C.ember); ts.rect(ox + 7, oy + 3, 2, 3, C.yellow); ts.px(ox + 7, oy + 2, 0xfff2b0);
+  },
+  web_floor(ox, oy) {
+    dfloor(ox, oy);
+    const W = 0xcfcfd8;
+    for (let i = 0; i < 16; i++) { ts.px(ox + i, oy + i, W); ts.px(ox + 15 - i, oy + i, W); }
+    ts.rect(ox, oy + 8, T, 1, W); ts.rect(ox + 8, oy, 1, T, W);
+  },
+  stairs_down(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x14121c);
+    for (let i = 0; i < 4; i++) ts.rect(ox + 1 + i, oy + 2 + i * 3, 14 - i * 2, 2, [0x6a6478, 0x55505f, 0x403b4c, 0x2e2a38][i]);
+  },
+  stairs_up(ox, oy) {
+    dfloor(ox, oy);
+    ts.rect(ox + 4, oy, 2, T, C.straw); ts.rect(ox + 10, oy, 2, T, C.straw);
+    for (let y = 2; y < T; y += 4) ts.rect(ox + 4, oy + y, 8, 1, C.wood);
+  },
+  plate_off(ox, oy) {
+    ts.rect(ox + 1, oy + 1, 14, 14, 0x403b4c); ts.rect(ox + 2, oy + 2, 12, 12, 0x5e586c);
+    ts.rect(ox + 6, oy + 6, 4, 4, 0x2e2a38);
+  },
+  plate_on(ox, oy) {
+    ts.rect(ox + 1, oy + 1, 14, 14, 0x2a6a8a); ts.rect(ox + 2, oy + 2, 12, 12, 0x4fb8ff);
+    ts.rect(ox + 6, oy + 6, 4, 4, 0xbfe8ff);
+  },
+  push_block(ox, oy) {
+    ts.rect(ox + 1, oy + 2, 14, 14, 0x6a6a72); ts.rect(ox + 2, oy + 1, 12, 12, 0x9a9aa2); ts.rect(ox + 3, oy + 2, 10, 3, 0xb8b8c0);
+    ts.rect(ox + 6, oy + 6, 4, 4, 0x77777f); ts.px(ox + 7, oy + 7, C.yellow);
+  },
+  gate(ox, oy) {
+    for (const x of [1, 5, 9, 13]) { ts.rect(ox + x, oy, 2, T, 0x5a5a66); ts.px(ox + x, oy, 0x9a9aa8); }
+    ts.rect(ox, oy + 3, T, 2, 0x44444e); ts.rect(ox, oy + 11, T, 2, 0x44444e);
+  },
+  cracked(ox, oy) {
+    dwall(ox, oy);
+    const K = 0x14121c;
+    for (const [x, y] of [[7, 1], [8, 2], [7, 3], [6, 4], [7, 5], [9, 5], [10, 6], [5, 6], [4, 7], [7, 8], [8, 9], [7, 10], [6, 11], [8, 12]]) ts.px(ox + x, oy + y, K);
+  },
+  stone_lantern_off(ox, oy) {
+    ts.rect(ox + 6, oy + 9, 4, 6, 0x77776f); ts.rect(ox + 3, oy + 2, 10, 2, 0x5e5e58);
+    ts.rect(ox + 5, oy + 4, 6, 5, 0x77776f); ts.rect(ox + 7, oy + 5, 2, 3, 0x2a2634); ts.rect(ox + 4, oy + 14, 8, 2, 0x5e5e58);
+  },
+  stone_lantern_on(ox, oy) {
+    ts.rect(ox + 6, oy + 9, 4, 6, 0x9a9a92); ts.rect(ox + 3, oy + 2, 10, 2, 0x77776f);
+    ts.rect(ox + 5, oy + 4, 6, 5, 0x9a9a92); ts.rect(ox + 7, oy + 5, 2, 3, 0x7fd8ff); ts.px(ox + 7, oy + 5, 0xffffff); ts.rect(ox + 4, oy + 14, 8, 2, 0x77776f);
+  },
+  iron_chest(ox, oy) {
+    ts.rect(ox + 2, oy + 5, 12, 10, 0x5a5a66); ts.rect(ox + 2, oy + 5, 12, 3, 0x7a7a88); ts.rect(ox + 2, oy + 8, 12, 1, 0x3a3a44);
+    ts.rect(ox + 6, oy + 8, 4, 4, 0xb87333); ts.rect(ox + 7, oy + 9, 2, 2, 0x1a1a1a);
+  },
+  iron_chest_open(ox, oy) {
+    ts.rect(ox + 2, oy + 2, 12, 4, 0x7a7a88); ts.rect(ox + 2, oy + 6, 12, 3, C.dark); ts.rect(ox + 2, oy + 9, 12, 6, 0x5a5a66);
+  },
+  gold_chest(ox, oy) {
+    ts.rect(ox + 1, oy + 4, 14, 11, 0xc23b2f); ts.rect(ox + 1, oy + 4, 14, 3, 0xe04848);
+    ts.rect(ox + 1, oy + 4, 1, 11, C.yellow); ts.rect(ox + 14, oy + 4, 1, 11, C.yellow); ts.rect(ox + 1, oy + 8, 14, 1, C.yellow);
+    ts.rect(ox + 6, oy + 7, 4, 4, C.yellow); ts.px(ox + 7, oy + 8, 0xfff2b0);
+  },
+  gold_chest_open(ox, oy) {
+    ts.rect(ox + 1, oy + 1, 14, 4, 0xe04848); ts.rect(ox + 1, oy + 5, 14, 3, C.dark); ts.rect(ox + 1, oy + 8, 14, 7, 0xc23b2f);
+    ts.rect(ox + 1, oy + 1, 1, 14, C.yellow); ts.rect(ox + 14, oy + 1, 1, 14, C.yellow);
+  },
+  boss_door(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x2a1e1e); ts.rect(ox + 1, oy + 1, 14, 15, 0x4a2a2a); ts.rect(ox + 7, oy + 1, 2, 15, 0x2a1e1e);
+    for (let i = 0; i < 16; i += 2) { ts.px(ox + 2 + (i % 12), oy + i, 0xdddddd); ts.px(ox + 13 - (i % 10), oy + i + 1, 0xdddddd); }
+    ts.rect(ox + 5, oy + 7, 6, 3, 0xc23b2f);
+  },
+  bones(ox, oy) {
+    dfloor(ox, oy);
+    ts.rect(ox + 3, oy + 9, 7, 1, 0xe8e4d8); ts.rect(ox + 2, oy + 8, 2, 3, 0xe8e4d8); ts.rect(ox + 9, oy + 8, 2, 3, 0xe8e4d8);
+    ts.rect(ox + 10, oy + 3, 3, 3, 0xe8e4d8); ts.px(ox + 11, oy + 4, C.dark);
+  },
 };
 TILES.forEach((t, i) => draw[t.name]((i % COLS) * T, Math.floor(i / COLS) * T));
 
@@ -281,7 +373,7 @@ NPCS.forEach(([, pal], r) => {
 
 // ---------- 怪物：每列一種，2 欄動畫 ----------
 // 順序要和 src/data/enemies.json 的 frame 對應：kitsunebi 0、karakasa 2、nogitsune 4、dummy 6
-const en = new Canvas(2 * T, 4 * T);
+const en = new Canvas(2 * T, 6 * T);
 function kitsunebi(ox, oy, f) {
   const B = 0x4fb8ff, L = 0xbfe8ff, W = 0xffffff, D = 0x1f6fbf;
   const s = f ? 1 : 0;
@@ -312,14 +404,37 @@ function dummy(ox, oy) {
   en.rect(ox + 4, oy + 5, 8, 7, S); en.rect(ox + 5, oy + 1, 6, 5, S); en.rect(ox + 4, oy + 0, 8, 2, 0x8a6a3a);
   en.px(ox + 6, oy + 3, 0x1a1a1a); en.px(ox + 9, oy + 3, 0x1a1a1a); en.rect(ox + 7, oy + 8, 2, 2, 0xc23b2f);
 }
-for (let f = 0; f < 2; f++) { kitsunebi(f * T, 0, f); karakasa(f * T, T, f); nogitsune(f * T, 2 * T, f); dummy(f * T, 3 * T); }
+function bonespider(ox, oy, f) {
+  const B = 0xe8e4d8, D = 0x9a968a, R = 0xb04aff;
+  const s = f ? 1 : 0;
+  en.rect(ox + 5, oy + 6, 6, 5, B); en.rect(ox + 6, oy + 4, 4, 3, B); en.px(ox + 6, oy + 5, R); en.px(ox + 9, oy + 5, R);
+  for (const [x, dir] of [[4, -1], [11, 1]]) for (let i = 0; i < 3; i++) {
+    en.rect(ox + x + dir * (i === 1 ? 2 : 1), oy + 6 + i * 2 + (i === 1 ? s : 0), 2, 1, D);
+    en.px(ox + x + dir * 3, oy + 7 + i * 2 + (i === 1 ? s : -s), D);
+  }
+  en.rect(ox + 7, oy + 8, 2, 2, D);
+}
+function chochin(ox, oy, f) {
+  const P = 0xf2e0b0, L = 0xe8823a, R = 0xc23b2f, K = 0x2a1e1e;
+  const s = f ? 1 : 0;
+  en.rect(ox + 4, oy + 1 + s, 8, 2, K); en.rect(ox + 3, oy + 3 + s, 10, 10, P); en.rect(ox + 4, oy + 13 + s, 8, 2, K);
+  for (let y = 5; y < 13; y += 3) en.rect(ox + 3, oy + y + s, 10, 1, 0xd8c690);
+  en.rect(ox + 5, oy + 6 + s, 2, 2, K); en.rect(ox + 9, oy + 6 + s, 2, 2, K); en.px(ox + 6, oy + 6 + s, L);
+  en.rect(ox + 6, oy + 9 + s, 4, 3, R); en.rect(ox + 7, oy + 11 + s, 2, 3, 0xff6a6a); // 舌頭
+  en.px(ox + 3, oy + 4 + s, L); en.px(ox + 12, oy + 4 + s, L);
+}
+for (let f = 0; f < 2; f++) {
+  kitsunebi(f * T, 0, f); karakasa(f * T, T, f); nogitsune(f * T, 2 * T, f); dummy(f * T, 3 * T);
+  bonespider(f * T, 4 * T, f); chochin(f * T, 5 * T, f);
+}
 
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
-const fx = new Canvas(4 * T, T);
+const fx = new Canvas(5 * T, T);
 fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
 fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
 fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
 fx.rect(3 * T + 5, 5, 6, 6, 0xf2c94c); fx.rect(3 * T + 4, 6, 8, 4, 0xf2c94c); fx.rect(3 * T + 7, 7, 2, 2, 0x8a6a1a); fx.px(3 * T + 6, 6, 0xfff2b0);
+fx.rect(4 * T + 5, 5, 6, 6, 0xb04aff); fx.rect(4 * T + 4, 6, 8, 4, 0xb04aff); fx.rect(4 * T + 6, 6, 4, 4, 0xe8d8ff); fx.px(4 * T + 3, 8, 0xe8d8ff); fx.px(4 * T + 12, 8, 0xe8d8ff);
 
 // ---------- 地圖工具 ----------
 const gid = Object.fromEntries(TILES.map((t, i) => [t.name, i + 1]));
@@ -547,6 +662,8 @@ interior('shrine', '狐火神社', [
   obj(m, 'foxfire', 'foxfire_secret', tilePoint(9, 3));
   obj(m, 'foxfire', 'foxfire_path', tilePoint(14, 6));
   obj(m, 'well', 'old_well', tilePoint(28, 15), { dialogue: 'well' });
+  spawn(m, 'well', 28, 16);
+  obj(m, 'secret', 'forest_pocket', tileRect(2, 2, 5, 4));
   sign(m, 'sign_forest', 25, 13, 'sign_forest');
   const enemies = [
     ['kitsunebi', 9, 10], ['karakasa', 15, 4], ['kitsunebi', 17, 5], ['nogitsune', 22, 4], ['nogitsune', 23, 3],
@@ -555,6 +672,98 @@ interior('shrine', '狐火神社', [
   enemies.forEach(([kind, x, y], i) => obj(m, 'enemy', `${kind}_${i}`, tilePoint(x, y), { kind }));
 
   maps.forest = toTiled(m, { displayName: '迷霧竹林', fog: true });
+}
+
+
+// ---------- 古井地城 ----------
+function dungeon(W, H) {
+  const m = newMap(W, H, 'dfloor');
+  m.fill('obst', 0, 0, W, H, gid.dwall);
+  m.carve = (x, y, w, h) => m.fill('obst', x, y, w, h, 0);
+  m.torch = (x, y) => { m.set('obst', x, y, gid.dwall_torch); obj(m, 'light', `light_${x}_${y}`, tilePoint(x, y + 1)); };
+  return m;
+}
+const block = (m, id, x, y, group, dir) => obj(m, 'block', id, tilePoint(x, y), { group, dir });
+const plate = (m, id, x, y, group) => obj(m, 'plate', id, tilePoint(x, y), { group });
+const gateAt = (m, id, x, y, group) => { m.set('obst', x, y, 0); obj(m, 'gate', id, tilePoint(x, y), { group }); };
+const cracked = (m, id, x, y) => { m.set('obst', x, y, 0); obj(m, 'cracked', id, tilePoint(x, y)); };
+const enemy = (m, kind, x, y, extra = {}) => obj(m, 'enemy', `${kind}_${x}_${y}`, tilePoint(x, y), { kind, ...extra });
+const lantern = (m, id, x, y, group, label, order) => obj(m, 'lantern', id, tilePoint(x, y), { group, label, order });
+const stairs = (m, x, y, up, toMap, toSpawn, face) => { m.set('ground', x, y, gid[up ? 'stairs_up' : 'stairs_down']); exit(m, tileRect(x, y), toMap, toSpawn, face); };
+function webs(m, list) { for (const [x, y] of list) m.set('ground', x, y, gid.web_floor); }
+function bones(m, list) { for (const [x, y] of list) m.set('ground', x, y, gid.bones); }
+
+// B1：推石頭開門＋裂牆密室拿鑰匙＋鐵箱
+{
+  const m = dungeon(30, 18);
+  m.carve(1, 1, 5, 6);  m.carve(6, 4, 1, 1);        // 入口
+  m.carve(7, 1, 14, 10);                             // 大廳
+  m.carve(21, 5, 1, 1); m.carve(22, 1, 7, 10);       // 機關房
+  m.carve(7, 12, 5, 4);                              // 密室
+  m.carve(22, 12, 7, 5);                             // 樓梯間
+  cracked(m, 'b1_crack', 9, 11);
+  gateAt(m, 'b1_gate', 25, 11, 'b1');
+  stairs(m, 2, 2, true, 'forest', 'well', 'down'); spawn(m, 'up', 2, 3);
+  stairs(m, 25, 14, false, 'b2', 'up', 'down'); spawn(m, 'down', 25, 13);
+  block(m, 'b1_block', 24, 5, 'b1', 'right'); plate(m, 'b1_plate', 27, 5, 'b1');
+  sign(m, 'b1_sign', 23, 2, 'sign_b1');
+  chest(m, 'b1_chest', 8, 9, { item: '回復丸', count: 2 });
+  chest(m, 'b1_secret_chest', 9, 14, { item: '銅鑰匙', count: 1, money: 60 });
+  chest(m, 'b1_iron_chest', 19, 2, { key: '銅鑰匙', gearTier: 1, minRarity: 2 });
+  enemy(m, 'kitsunebi', 12, 3); enemy(m, 'bonespider', 15, 7); enemy(m, 'bonespider', 10, 8); enemy(m, 'kitsunebi', 26, 8);
+  m.torch(3, 0); m.torch(13, 0); m.torch(25, 0);
+  webs(m, [[7, 1], [20, 10], [28, 1], [1, 6]]); bones(m, [[16, 9], [11, 2], [27, 15]]);
+  maps.b1 = toTiled(m, { displayName: '古井地城 B1', dark: true });
+}
+
+// B2：石燈籠順序謎題＋提燈鬼守衛寶箱＋裂牆密室
+{
+  const m = dungeon(32, 20);
+  m.carve(1, 1, 6, 6); m.carve(7, 3, 6, 1);          // 入口＋走廊
+  m.carve(13, 1, 10, 12);                            // 大廳
+  m.carve(23, 4, 1, 1); m.carve(24, 1, 7, 8);        // 燈籠房
+  m.carve(24, 10, 7, 5);                             // 樓梯間
+  m.carve(17, 13, 1, 1); m.carve(13, 14, 10, 5);     // 提燈鬼的房間
+  m.carve(1, 8, 4, 3);                               // 密室
+  cracked(m, 'b2_crack', 3, 7);
+  gateAt(m, 'b2_gate', 27, 9, 'b2');
+  stairs(m, 2, 2, true, 'b1', 'down', 'down'); spawn(m, 'up', 2, 3);
+  stairs(m, 27, 12, false, 'b3', 'up', 'down'); spawn(m, 'down', 27, 11);
+  lantern(m, 'b2_l_sun', 25, 2, 'b2', '日', 2);
+  lantern(m, 'b2_l_star', 27, 2, 'b2', '星', 3);
+  lantern(m, 'b2_l_moon', 29, 2, 'b2', '月', 1);
+  sign(m, 'b2_mural', 18, 1 + 1, 'mural_b2');
+  sign(m, 'b2_hairpin', 15, 10, 'hairpin');
+  chest(m, 'b2_chest', 5, 5, { item: '靈水', count: 1, money: 40 });
+  chest(m, 'b2_secret_chest', 2, 9, { gearTier: 1, minRarity: 1, money: 80 });
+  chest(m, 'b2_guard_chest', 20, 17, { guard: 'b2_elite', gearTier: 2, minRarity: 2, money: 150 });
+  enemy(m, 'chochin', 16, 16, { guard: 'b2_elite' }); enemy(m, 'kitsunebi', 14, 15);
+  enemy(m, 'bonespider', 15, 4); enemy(m, 'bonespider', 21, 9); enemy(m, 'kitsunebi', 19, 6);
+  m.torch(4, 0); m.torch(17, 0); m.torch(27, 0); m.torch(15, 13); m.torch(20, 13);
+  webs(m, [[13, 1], [22, 12], [30, 1], [1, 1]]); bones(m, [[18, 11], [6, 1], [21, 15]]);
+  maps.b2 = toTiled(m, { displayName: '古井地城 B2', dark: true });
+}
+
+// B3：兩顆石頭兩塊踏板＋裂牆密室＋土蜘蛛的門
+{
+  const m = dungeon(30, 20);
+  m.carve(1, 14, 6, 5); m.carve(7, 16, 4, 1);        // 入口＋走廊
+  m.carve(11, 9, 12, 10);                            // 機關大廳
+  m.carve(13, 2, 9, 6);                              // 門前廳
+  m.carve(24, 11, 4, 5);                             // 密室
+  cracked(m, 'b3_crack', 23, 13);
+  gateAt(m, 'b3_gate', 17, 8, 'b3');
+  stairs(m, 2, 15, true, 'b2', 'down', 'down'); spawn(m, 'up', 2, 16);
+  block(m, 'b3_block_a', 14, 15, 'b3', 'up'); plate(m, 'b3_plate_a', 14, 11, 'b3');
+  block(m, 'b3_block_b', 20, 12, 'b3', 'down'); plate(m, 'b3_plate_b', 20, 16, 'b3');
+  sign(m, 'b3_sign', 12, 9, 'sign_b3');
+  m.set('obst', 17, 1, 0); obj(m, 'bossdoor', 'b3_boss_door', tilePoint(17, 1), { dialogue: 'boss_door' });
+  chest(m, 'b3_chest', 14, 3, { item: '大回復丸', count: 1, money: 100 });
+  chest(m, 'b3_secret_chest', 26, 13, { gearTier: 2, minRarity: 1 });
+  enemy(m, 'bonespider', 12, 17); enemy(m, 'bonespider', 22, 10); enemy(m, 'kitsunebi', 17, 17); enemy(m, 'nogitsune', 17, 13);
+  m.torch(3, 13); m.torch(14, 8); m.torch(20, 8); m.torch(15, 1); m.torch(19, 1);
+  webs(m, [[13, 2], [21, 2], [11, 18], [22, 18], [21, 7], [13, 7]]); bones(m, [[16, 4], [19, 5], [4, 17]]);
+  maps.b3 = toTiled(m, { displayName: '古井地城 B3', dark: true });
 }
 
 mkdirSync('assets/tiles', { recursive: true }); mkdirSync('assets/sprites', { recursive: true }); mkdirSync('assets/maps', { recursive: true });

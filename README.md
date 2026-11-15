@@ -13,10 +13,19 @@ npm run build:artifact # 另外產生可發佈成 Claude Artifact 的 dist-artif
 npm run assets         # 重新產生佔位素材（tileset、主角、狐火村地圖）
 ```
 
-## 目前進度：M3 成長與裝備（含 M2 戰鬥、序章劇情）
+## 目前進度：M4 探險與古井地城（含 M2 戰鬥、M3 成長與裝備、序章）
 
-開新遊戲先選職業與難度，接著可以從頭玩到「序章 完」：
-燈的家 → 狐火村 → 神社找宮司爺爺 → 注連繩解開 → 迷霧竹林（有怪物）→ 古井 → 回神社報告。
+開新遊戲先選職業與難度，接著：
+燈的家 → 狐火村 → 神社找宮司爺爺 → 迷霧竹林 → 古井 → 回神社報告（序章完）→ 從古井下到地城 B1 → B2 → B3 → 土蜘蛛的門前。
+
+**探險（M4）**
+- 古井地城三層，地城很暗，火把與主角身上有光
+- 謎題：推石塊到踏板開門（B1 一顆、B3 兩顆，石塊上了踏板就卡住）、照壁畫順序點亮石燈籠（B2，點錯會全部熄滅）
+- 裂開的牆打得破，後面有密室；狐火會提示竹林的密道
+- 鐵箱要用「銅鑰匙」；提燈鬼（精英）守著的金箱要打倒它才能開
+- 新怪物：骨蜘蛛（保持距離、閃紫光後吐毒絲）、提燈鬼（地上出現紅圈後重擊）
+- 右上角小地圖（寶箱、出入口、妖怪、門），選單「收集」分頁顯示各區域寶箱與隱藏地點的收集度
+- `tests/maps.test.ts` 自動檢查每張地圖：寶箱、出口都走得到，推石塊的路線可以推到踏板
 
 **成長與裝備（M3）**
 - 等級與經驗：升級所需 `floor(20 × L^1.6)`，第一版上限 Lv10，升級時 HP／MP 全滿，依職業成長
@@ -36,8 +45,8 @@ npm run assets         # 重新產生佔位素材（tileset、主角、狐火村
 - 村子西邊有打不壞的練習用稻草人
 
 **探索與劇情**
-- 7 張地圖、6 位 NPC（對話依劇情進度改變）、6 個寶箱、狐火提示的隱藏密道
-- 尚未做：古井地城與謎題（M4）、存檔（M6）、打造（M7）——重新整理頁面會從頭開始
+- 10 張地圖、6 位 NPC（對話依劇情進度改變）、14 個寶箱、4 個隱藏地點
+- 尚未做：土蜘蛛 Boss 戰與存檔（M6）、打造（M7）——重新整理頁面會從頭開始
 
 ## 結構
 
@@ -48,7 +57,7 @@ src/
   scenes/          Boot、Title、World、UI
   entities/        Player、Enemy（AI）
   combat/          CombatSystem（攻擊、技能、閃避、受傷）、特效
-  systems/         純邏輯（combat、progression、equipment、inventory、movement、dialogue、gameState、interaction），有單元測試
+  systems/         純邏輯（combat、progression、equipment、inventory、collection、movement、dialogue、gameState、interaction），有單元測試
   data/            職業、技能、怪物、裝備、商店、對話、NPC、地圖清單
   ui/              VirtualJoystick、TouchButton、DialogueBox、camera 工具
   ui/dom/          選單與商店（HTML 疊加層）

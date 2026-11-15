@@ -51,5 +51,34 @@
       0
     ],
     "frame": 6
+  },
+  "bonespider": {
+    "name": "骨蜘蛛",
+    "hp": 35,
+    "atk": 9,
+    "def": 3,
+    "speed": 34,
+    "exp": 9,
+    "money": [
+      3,
+      8
+    ],
+    "frame": 8,
+    "poisonChance": 0.4
+  },
+  "chochin": {
+    "name": "提燈鬼",
+    "hp": 120,
+    "atk": 12,
+    "def": 4,
+    "speed": 32,
+    "exp": 40,
+    "money": [
+      20,
+      35
+    ],
+    "frame": 10,
+    "elite": true,
+    "burnChance": 0.5
   }
 }
