@@ -43,6 +43,15 @@ class AudioManager {
     this.music.play();
   }
 
+  /** 大廳音樂跟著目前選的關卡（沒有該關的就用預設大廳音樂） */
+  lobbyStage = '';
+  playLobby(stageId?: string) {
+    if (stageId !== undefined) this.lobbyStage = stageId;
+    if (!this.lobbyStage) this.lobbyStage = loadSave().lastStage ?? 'slums';
+    const k = `bgm-lobby-${this.lobbyStage}`;
+    this.playMusic(this.has(k) ? k : 'bgm-menu');
+  }
+
   stopMusic() {
     this.music?.stop();
     this.music?.destroy();

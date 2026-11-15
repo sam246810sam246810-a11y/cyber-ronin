@@ -28,7 +28,7 @@ export class ArmoryScene extends Phaser.Scene {
 
   create() {
     setupLogicalCamera(this);
-    Audio.playMusic('bgm-menu');
+    Audio.playLobby();
     this.page = 0;
     this.selected = null;
     this.charIdx = Math.max(0, CHAR_ORDER.indexOf(loadSave().lastChar));

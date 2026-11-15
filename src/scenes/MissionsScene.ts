@@ -43,7 +43,7 @@ export class MissionsScene extends Phaser.Scene {
   create(data?: { tab?: Tab }) {
     this.tab = data?.tab ?? 'daily';
     setupLogicalCamera(this);
-    Audio.playMusic('bgm-menu');
+    Audio.playLobby();
     this.page = 0;
     this.draw();
     enter(this);

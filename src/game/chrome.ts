@@ -180,7 +180,7 @@ export function openSettings(scene: Phaser.Scene) {
   const rows: [string, () => boolean, (v: boolean) => void][] = [
     ['音樂', () => Audio.musicOn, (v) => {
       Audio.setMusic(v);
-      if (v) Audio.playMusic('bgm-menu');
+      if (v) Audio.playLobby();
     }],
     ['音效', () => Audio.sfxOn, (v) => Audio.setSfx(v)],
     ['震動', () => vibrateEnabled(), (v) => {

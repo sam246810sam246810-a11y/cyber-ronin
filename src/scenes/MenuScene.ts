@@ -30,11 +30,11 @@ export class MenuScene extends Phaser.Scene {
 
   create() {
     setupLogicalCamera(this);
-    Audio.playMusic('bgm-menu');
     const s = loadSave();
     this.charIdx = Math.max(0, CHAR_ORDER.indexOf(s.lastChar));
     this.stageIdx = Math.max(0, STAGES.findIndex((x) => x.id === s.lastStage));
     this.wanted = Math.min(this.wanted, stageWantedMax(s, STAGES[this.stageIdx].id));
+    Audio.playLobby(STAGES[this.stageIdx].id);
     this.draw();
     enter(this);
     this.time.delayedCall(450, () => showLoginBonus(this, () => this.draw()));
@@ -232,6 +232,7 @@ export class MenuScene extends Phaser.Scene {
     const stArrow = (dx: number) =>
       makeButton(this, W / 2 + dx * 214, cardY, 40, 56, dx < 0 ? '<' : '>', stage.color, () => {
         this.stageIdx = (this.stageIdx + dx + STAGES.length) % STAGES.length;
+        Audio.playLobby(STAGES[this.stageIdx].id);
         this.draw();
       }, 22);
     stArrow(-1);

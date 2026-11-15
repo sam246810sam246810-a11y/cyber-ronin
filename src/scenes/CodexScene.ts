@@ -50,7 +50,7 @@ export class CodexScene extends Phaser.Scene {
 
   create() {
     setupLogicalCamera(this);
-    Audio.playMusic('bgm-menu');
+    Audio.playLobby();
     this.selected = 0;
     this.draw();
     enter(this);

@@ -26,7 +26,7 @@ export class GachaScene extends Phaser.Scene {
 
   create(data?: { pool?: PoolId }) {
     setupLogicalCamera(this);
-    Audio.playMusic('bgm-menu');
+    Audio.playLobby();
     this.busy = false;
     if (data?.pool) this.pool = data.pool;
     this.draw();

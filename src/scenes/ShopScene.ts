@@ -26,7 +26,7 @@ export class ShopScene extends Phaser.Scene {
 
   create() {
     setupLogicalCamera(this);
-    Audio.playMusic('bgm-menu');
+    Audio.playLobby();
     this.draw();
     enter(this);
   }
