@@ -34,6 +34,27 @@ import { SpatialGrid } from '../game/SpatialGrid';
 import { TEX } from '../game/textures';
 import { SaveData, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
+import { vibrate } from '../game/haptics';
+import {
+  AFFIXES,
+  Affix,
+  CRIT,
+  EVENT_TIMES,
+  MAX_RELICS,
+  MERCHANT_TIMES,
+  RARITY,
+  RELICS,
+  Rarity,
+  RelicDef,
+  RelicId,
+  SHOP_ITEMS,
+  Tag,
+  TAGS,
+  WEAPON_TAG,
+  WantedMods,
+  rollRarity,
+  wantedMods,
+} from '../config/expansion';
 import type { UIScene } from './UIScene';
 
 // ---------- 型別 ----------
@@ -42,6 +63,12 @@ interface Enemy {
   def: EnemyDef;
   img: Phaser.GameObjects.Sprite;
   animBase: string;
+  affixes: Affix[];
+  shield: number;
+  stun: number;
+  hackT: number;
+  affixT: number;
+  label: Phaser.GameObjects.Text | null;
   x: number;
   y: number;
   hp: number;
@@ -153,23 +180,51 @@ interface DmgText {
 export interface WeaponInst {
   id: WeaponId;
   level: number;
+  /** 稀有度累積的額外傷害倍率 */
+  bonus: number;
   timer: number;
   timer2: number;
   stats: WeaponStats;
   angle: number;
 }
 
-export type Choice =
+export type Choice = (
   | { kind: 'weapon'; id: WeaponId }
   | { kind: 'passive'; id: PassiveId }
   | { kind: 'heal' }
-  | { kind: 'credits' };
+  | { kind: 'credits' }
+) & { rarity?: Rarity };
+
+/** 被動道具每「1 點強度」的效果（稀有度會讓一次升級給更多點） */
+export function passiveDesc(id: PassiveId, mult = 1): string {
+  const f = (v: number, d = 0) => (Math.round(v * mult * 10 ** d) / 10 ** d).toString();
+  switch (id) {
+    case 'might':
+      return `攻擊力 +${f(10)}%`;
+    case 'haste':
+      return `武器冷卻 -${f(7)}%`;
+    case 'armor':
+      return `受到的傷害 -${f(1, 1)}，最大生命 +${f(10)}`;
+    case 'magnet':
+      return `拾取範圍 +${f(30)}%`;
+    case 'camo':
+      return `移動速度 +${f(8)}%`;
+    case 'nano':
+      return `每秒回復 ${f(0.4, 1)} 生命`;
+    case 'overclock':
+      return `武器範圍 +${f(10)}%`;
+    case 'intent':
+      return `殺意累積 +${f(15)}%`;
+  }
+}
 
 export function choiceKey(c: Choice): string {
   return c.kind === 'weapon' || c.kind === 'passive' ? `${c.kind}:${c.id}` : c.kind;
 }
 
 export interface RunResult {
+  wanted: number;
+  wantedUnlocked: number | null;
   victory: boolean;
   time: number;
   kills: number;
@@ -179,6 +234,34 @@ export interface RunResult {
   newBest: boolean;
   unlocked: string[];
 }
+
+type InteractKind = 'merchant' | 'altar' | 'terminal' | 'airdrop';
+interface Interactable {
+  kind: InteractKind;
+  x: number;
+  y: number;
+  img: Phaser.GameObjects.Image;
+  life: number;
+  progress: number;
+  used: boolean;
+  drop: number;
+}
+
+interface Hazard {
+  x: number;
+  y: number;
+  r: number;
+  t: number;
+  damage: number;
+  g: Phaser.GameObjects.Graphics;
+}
+
+const PROP_TEX: Record<InteractKind, string> = {
+  merchant: 'prop-merchant',
+  altar: 'prop-altar',
+  terminal: 'prop-terminal',
+  airdrop: 'prop-airdrop',
+};
 
 const tmp: Enemy[] = [];
 const tmp2: Enemy[] = [];
@@ -227,6 +310,40 @@ export class GameScene extends Phaser.Scene {
   regen = 0;
   intentMult = 1;
   xpMult = 1;
+
+  // M2.5：暴擊、幸運、遺物、羈絆、通緝等級
+  luck = 0;
+  critChance = CRIT.base;
+  critDmg = CRIT.mult;
+  healMult = 1;
+  dmgTakenMult = 1;
+  spawnMult = 1;
+  lootMult = 1;
+  creditMult = 1;
+  relics: RelicId[] = [];
+  passivePower = new Map<PassiveId, number>();
+  mirrorT = 0;
+  leechCount = 0;
+  combo = 0;
+  comboT = 0;
+  hitStop = 0;
+  lastHitStop = -9;
+  curTag: Tag | null = null;
+  tagCounts: Record<Tag, number> = { blade: 0, volt: 0, hack: 0, fire: 0 };
+  stunChance = 0;
+  bladeBonus = 0;
+  voltBonus = 0;
+  hackMark = false;
+  hackGem = 0;
+  fireArea = 1;
+  fireDmg = 1;
+  wanted = 0;
+  wmods: WantedMods = wantedMods(0);
+  iaiBossMult = 1;
+  interactables: Interactable[] = [];
+  hazards: Hazard[] = [];
+  nextMerchant = 0;
+  nextEvent = 0;
 
   // 局內狀態
   t = 0;
@@ -303,9 +420,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------- 初始化 ----------
-  create(data: { char?: CharId }) {
+  create(data: { char?: CharId; wanted?: number }) {
     this.resetState();
     this.save = loadSave();
+    this.wanted = Math.max(0, Math.min(data?.wanted ?? 0, this.save.wantedUnlocked ?? 0));
+    this.wmods = wantedMods(this.wanted);
     const charId = data?.char && this.save.chars.includes(data.char) ? data.char : this.save.lastChar;
     this.char = CHARACTERS[this.save.chars.includes(charId) ? charId : 'jin'];
 
@@ -376,6 +495,28 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resetState() {
+    this.luck = 0;
+    this.critChance = CRIT.base;
+    this.critDmg = CRIT.mult;
+    this.healMult = 1;
+    this.dmgTakenMult = 1;
+    this.spawnMult = 1;
+    this.lootMult = 1;
+    this.creditMult = 1;
+    this.relics = [];
+    this.passivePower = new Map();
+    this.mirrorT = 0;
+    this.leechCount = 0;
+    this.combo = 0;
+    this.comboT = 0;
+    this.hitStop = 0;
+    this.lastHitStop = -9;
+    this.curTag = null;
+    this.interactables = [];
+    this.hazards = [];
+    this.nextMerchant = 0;
+    this.nextEvent = 0;
+    this.iaiBossMult = 1;
     this.px = 0;
     this.py = 0;
     this.faceX = 0;
@@ -441,21 +582,55 @@ export class GameScene extends Phaser.Scene {
     return this.passives.get(id) ?? 0;
   }
 
+  /** 被動道具的強度（每次升級加 1×稀有度倍率） */
+  pp(id: PassiveId): number {
+    return this.passivePower.get(id) ?? 0;
+  }
+
+  hasRelic(id: RelicId): boolean {
+    return this.relics.includes(id);
+  }
+
   recalc() {
     const up = this.save.upgrades;
-    this.might = 1 + 0.1 * this.passiveLevel('might') + 0.05 * (up.might ?? 0);
-    this.cdMult = 1 - 0.07 * this.passiveLevel('haste');
-    this.armor = PLAYER.armor + this.char.armor + this.passiveLevel('armor');
-    const newMax = this.char.maxHp + 10 * this.passiveLevel('armor') + 10 * (up.hp ?? 0);
+    const has = (id: RelicId) => this.hasRelic(id);
+    // 羈絆
+    const counts: Record<Tag, number> = { blade: 0, volt: 0, hack: 0, fire: 0 };
+    for (const w of this.weapons) {
+      const tg = WEAPON_TAG[w.id];
+      if (tg) counts[tg]++;
+    }
+    this.tagCounts = counts;
+    this.bladeBonus = counts.blade >= 3 ? 0.25 : 0;
+    this.voltBonus = counts.volt >= 3 ? 0.2 : 0;
+    this.stunChance = counts.volt >= 3 ? 0.25 : counts.volt >= 2 ? 0.15 : 0;
+    this.hackGem = counts.hack >= 2 ? 0.15 : 0;
+    this.hackMark = counts.hack >= 3;
+    this.fireArea = counts.fire >= 2 ? 1.25 : 1;
+    this.fireDmg = counts.fire >= 3 ? 1.3 : 1;
+
+    this.might = (1 + 0.1 * this.pp('might') + 0.05 * (up.might ?? 0)) * (has('blood') ? 1.6 : 1);
+    this.cdMult = Math.max(0.35, (1 - 0.07 * this.pp('haste')) * (has('battery') ? 0.88 : 1) * (has('berserk') ? 0.75 : 1));
+    this.armor = PLAYER.armor + this.char.armor + this.pp('armor');
+    let newMax = this.char.maxHp + 10 * this.pp('armor') + 10 * (up.hp ?? 0) + (has('heart') ? 40 : 0);
+    if (has('blood')) newMax = Math.round(newMax * 0.5);
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
-    this.maxHp = newMax;
+    this.maxHp = Math.round(newMax);
     this.hp = Math.min(this.hp, this.maxHp);
-    this.pickupR = PLAYER.pickupRadius * (1 + 0.3 * this.passiveLevel('magnet') + 0.1 * (up.pickup ?? 0));
-    this.speed = PLAYER.speed * this.char.speedMult * (1 + 0.08 * this.passiveLevel('camo') + 0.03 * (up.speed ?? 0));
-    this.areaMult = 1 + 0.1 * this.passiveLevel('overclock');
-    this.regen = 0.4 * this.passiveLevel('nano');
-    this.intentMult = this.char.intentMult * (1 + 0.15 * this.passiveLevel('intent'));
-    this.xpMult = 1 + 0.05 * (up.growth ?? 0);
+    this.pickupR = PLAYER.pickupRadius * (1 + 0.3 * this.pp('magnet') + 0.1 * (up.pickup ?? 0)) * (has('magstorm') ? 1.5 : 1);
+    this.speed = PLAYER.speed * this.char.speedMult * (1 + 0.08 * this.pp('camo') + 0.03 * (up.speed ?? 0)) * (has('legs') ? 1.15 : 1);
+    this.areaMult = 1 + 0.1 * this.pp('overclock');
+    this.healMult = this.wmods.heal * (has('berserk') ? 0 : 1);
+    this.regen = 0.4 * this.pp('nano');
+    this.intentMult = this.char.intentMult * (1 + 0.15 * this.pp('intent')) * (has('soul') ? 1.4 : 1);
+    this.xpMult = (1 + 0.05 * (up.growth ?? 0)) * (has('xpmod') ? 1.25 : 1) * (has('bounty') ? 1.5 : 1) * (has('devil') ? 0.7 : 1);
+    this.luck = (has('coin') ? 3 : 0);
+    this.critChance = CRIT.base + (has('scope') ? 0.1 : 0) + (counts.blade >= 2 ? 0.08 : 0);
+    this.critDmg = CRIT.mult + (has('glass') ? 1 : 0) + (counts.blade >= 3 ? 0.5 : 0);
+    this.dmgTakenMult = has('glass') ? 2 : 1;
+    this.spawnMult = has('bounty') ? 1.5 : 1;
+    this.creditMult = (has('goldhack') ? 2 : 1) * (has('bounty') ? 1.5 : 1);
+    this.iaiBossMult = has('finaliai') ? 2 : 1;
     for (const w of this.weapons) w.stats = this.computeStats(w.id, w.level);
     this.inventoryVersion++;
   }
@@ -472,8 +647,8 @@ export class GameScene extends Phaser.Scene {
     return s;
   }
 
-  addWeapon(id: WeaponId) {
-    this.weapons.push({ id, level: 1, timer: 0.3, timer2: 1, stats: this.computeStats(id, 1), angle: 0 });
+  addWeapon(id: WeaponId, bonus = 0) {
+    this.weapons.push({ id, level: 1, bonus, timer: 0.3, timer2: 1, stats: this.computeStats(id, 1), angle: 0 });
     this.markSeenWeapon(id);
     this.inventoryVersion++;
   }
@@ -510,8 +685,19 @@ export class GameScene extends Phaser.Scene {
       this.render();
       return;
     }
+    if (this.hitStop > 0) {
+      // 命中停頓：畫面停一瞬間，增加打擊感
+      this.hitStop -= dt;
+      this.render();
+      return;
+    }
 
     this.t += dt;
+    if (this.comboT > 0) {
+      this.comboT -= dt;
+      if (this.comboT <= 0) this.combo = 0;
+    }
+    if (this.hasRelic('mirror') && this.mirrorT > 0) this.mirrorT -= dt;
     this.updateTimeline(dt);
     this.debugBot?.(this);
     this.updatePlayer(dt);
@@ -525,6 +711,8 @@ export class GameScene extends Phaser.Scene {
     this.updateHooks(dt);
     this.updateStrikes(dt);
     this.updateBullets(dt);
+    this.updateHazards(dt);
+    this.updateInteractables(dt);
     this.updatePickups(dt);
     this.updateIntent(dt);
     this.compactEnemies();
@@ -542,7 +730,7 @@ export class GameScene extends Phaser.Scene {
   private updateTimeline(dt: number) {
     const seg = currentWave(this.t);
     const alive = this.activeEnemies.length;
-    this.spawnAcc += seg.rate * dt;
+    this.spawnAcc += seg.rate * this.spawnMult * this.wmods.spawn * dt;
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
       if (alive < RUN.maxEnemies) this.spawnEnemy(pickWeighted(seg.weights));
@@ -551,6 +739,7 @@ export class GameScene extends Phaser.Scene {
     while (this.nextElite < ELITE_TIMES.length && this.t >= ELITE_TIMES[this.nextElite]) {
       this.nextElite++;
       this.spawnEnemy('elite');
+      if (this.wmods.eliteDouble) this.spawnEnemy('elite');
       this.ui.banner(T.eliteWarn, '#ffc83d');
     }
     while (this.nextSwarm < SWARMS.length && this.t >= SWARMS[this.nextSwarm]) {
@@ -565,6 +754,18 @@ export class GameScene extends Phaser.Scene {
       Audio.play('sfx-bosswarn', 0.6);
       Audio.playMusic('bgm-boss');
       if (b.final) this.finalSpawned = true;
+    }
+    while (this.nextMerchant < MERCHANT_TIMES.length && this.t >= MERCHANT_TIMES[this.nextMerchant]) {
+      this.nextMerchant++;
+      this.spawnInteractable('merchant', 34);
+      this.ui.banner('黑市商人出現了', '#ffd84d');
+    }
+    while (this.nextEvent < EVENT_TIMES.length && this.t >= EVENT_TIMES[this.nextEvent]) {
+      this.nextEvent++;
+      const kinds: InteractKind[] = ['altar', 'terminal', 'airdrop'];
+      const k = kinds[Math.floor(Math.random() * kinds.length)];
+      this.spawnInteractable(k, 40);
+      this.ui.banner(k === 'altar' ? '出現了賭命祭壇' : k === 'terminal' ? '發現駭入終端' : '補給空投降落中', '#7fd4ff');
     }
     if (!this.dawnAnnounced && this.t >= RUN.duration) {
       this.dawnAnnounced = true;
@@ -584,7 +785,7 @@ export class GameScene extends Phaser.Scene {
   private obtainEnemy(): Enemy {
     for (const e of this.enemies) if (!e.active && !e.img.visible) return e;
     const img = this.add.sprite(0, 0, 'e-drone').setDepth(5).setVisible(false);
-    const e = { img, active: false } as Enemy;
+    const e = { img, active: false, label: null } as unknown as Enemy;
     this.enemies.push(e);
     return e;
   }
@@ -593,7 +794,7 @@ export class GameScene extends Phaser.Scene {
     const def = ENEMIES[kind];
     const e = this.obtainEnemy();
     const [x, y] = at ?? this.spawnPoint(def.radius + 30);
-    const mult = kind === 'boss' ? 1 : enemyHpMult(this.t);
+    const mult = kind === 'boss' ? 1 : enemyHpMult(this.t) * this.wmods.hp;
     Object.assign(e, {
       active: true,
       def,
@@ -601,8 +802,8 @@ export class GameScene extends Phaser.Scene {
       y,
       hp: def.hp * mult,
       maxHp: def.hp * mult,
-      speed: def.speed * (0.92 + Math.random() * 0.16),
-      damage: def.damage * (1 + this.t / 600),
+      speed: def.speed * (0.92 + Math.random() * 0.16) * this.wmods.speed,
+      damage: def.damage * (1 + this.t / 600) * this.wmods.dmg,
       radius: def.radius,
       xp: def.xp,
       kx: 0,
@@ -628,13 +829,23 @@ export class GameScene extends Phaser.Scene {
       aimX: 0,
       aimY: 0,
       title: def.name,
+      affixes: [],
+      shield: 0,
+      stun: 0,
+      hackT: 0,
+      affixT: 3,
     });
+    if (e.label) {
+      e.label.destroy();
+      e.label = null;
+    }
     const tex = this.textures.exists(def.tex) ? def.tex : `e-${kind}`;
     e.baseScale = tex === def.tex ? 0.5 : 1 / TEX;
     e.img.anims.stop();
     e.img.setTexture(tex).setVisible(true).setPosition(x, y).clearTint().setAlpha(1).setScale(e.baseScale).setFlipX(false).setOrigin(0.5);
     this.applyEnemyAnim(e, def.tex);
     e.img.setDepth(kind === 'boss' ? 7 : kind === 'elite' ? 6 : 5);
+    if (kind === 'elite') this.rollAffixes(e);
     this.activeEnemies.push(e);
     return e;
   }
@@ -649,7 +860,7 @@ export class GameScene extends Phaser.Scene {
 
   private spawnBoss(b: BossDef) {
     const e = this.spawnEnemy('boss', [this.px, this.py - H / 2 - 90]);
-    e.maxHp = e.hp = b.hp;
+    e.maxHp = e.hp = b.hp * this.wmods.bossHp;
     e.boss = b;
     e.title = b.title;
     e.speed = b.speed;
@@ -662,6 +873,184 @@ export class GameScene extends Phaser.Scene {
       this.applyEnemyAnim(e, b.tex);
     }
     this.bosses.push(e);
+  }
+
+  private rollAffixes(e: Enemy) {
+    const all = Object.keys(AFFIXES) as Affix[];
+    Phaser.Utils.Array.Shuffle(all);
+    const n = this.wmods.twoAffixes || (this.t >= 300 && Math.random() < 0.5) ? 2 : 1;
+    e.affixes = all.slice(0, n);
+    if (e.affixes.includes('shield')) e.shield = e.maxHp * 0.4;
+    e.label = this.add
+      .text(e.x, e.y, e.affixes.map((a) => AFFIXES[a].name).join('・'), textStyle(11, AFFIXES[e.affixes[0]].css))
+      .setOrigin(0.5, 1)
+      .setDepth(13);
+    e.label.setStroke('#07060d', 3);
+  }
+
+  private spawnInteractable(kind: InteractKind, life: number) {
+    const a = Math.random() * Math.PI * 2;
+    const x = this.px + Math.cos(a) * 170;
+    const y = this.py + Math.sin(a) * 220;
+    const key = this.textures.exists(PROP_TEX[kind]) ? PROP_TEX[kind] : 'pickup-chest';
+    const img = this.add.image(x, y, key).setDepth(4).setOrigin(0.5, 0.8);
+    const src = img.texture.getSourceImage();
+    img.setScale((kind === 'merchant' ? 70 : 54) / Math.max(src.width, src.height));
+    this.interactables.push({ kind, x, y, img, life, progress: 0, used: false, drop: kind === 'airdrop' ? 260 : 0 });
+  }
+
+  private updateInteractables(dt: number) {
+    for (const it of this.interactables) {
+      if (it.used) continue;
+      it.life -= dt;
+      if (it.drop > 0) {
+        it.drop = Math.max(0, it.drop - 260 * dt);
+        it.img.setPosition(it.x, it.y - it.drop);
+        continue;
+      }
+      it.img.setPosition(it.x, it.y + Math.sin(this.t * 3) * 2).setAlpha(it.life < 5 ? 0.4 + 0.6 * Math.abs(Math.sin(this.t * 8)) : 1);
+      const d = Math.hypot(this.px - it.x, this.py - it.y);
+      if (it.kind === 'terminal') {
+        if (d < 60) {
+          it.progress += dt;
+          if (it.progress >= 3) this.useInteractable(it);
+        } else it.progress = Math.max(0, it.progress - dt);
+      } else if (d < 42 && !this.modal) {
+        this.useInteractable(it);
+      }
+      if (it.life <= 0 && !it.used) {
+        it.used = true;
+        it.img.destroy();
+      }
+    }
+    this.interactables = this.interactables.filter((it) => !it.used);
+  }
+
+  private useInteractable(it: Interactable) {
+    switch (it.kind) {
+      case 'merchant':
+        it.life = Math.min(it.life, 1.5);
+        this.openShop();
+        return;
+      case 'altar':
+        it.used = true;
+        it.img.destroy();
+        this.modal = true;
+        this.scene.pause();
+        this.ui.showConfirm('賭命祭壇', '犧牲 30% 目前生命，換一次「必定傳說」的升級？', '獻祭', '離開', (ok) => {
+          if (ok) {
+            this.hp = Math.max(1, Math.round(this.hp * 0.7));
+            this.ui.showLevelUp(this.level, this.rollChoices([], 3), () => this.closeModal());
+          } else this.closeModal();
+        });
+        return;
+      case 'terminal': {
+        it.used = true;
+        it.img.destroy();
+        const up = this.weapons.filter((w) => w.level < this.maxLevel(w.id));
+        if (up.length) {
+          const w = up[Math.floor(Math.random() * up.length)];
+          w.level++;
+          w.stats = this.computeStats(w.id, w.level);
+          this.inventoryVersion++;
+          this.ui.banner(`駭入成功：${WEAPONS[w.id].name} 升到 Lv ${w.level}`, '#3df5ff');
+        } else {
+          this.credits += 40;
+          this.ui.banner('駭入成功：信用點 +40', '#ffd84d');
+        }
+        Audio.play('sfx-levelup', 0.5);
+        return;
+      }
+      case 'airdrop':
+        it.used = true;
+        it.img.destroy();
+        this.credits += Math.round(30 * this.creditMult);
+        this.heal(20);
+        for (const q of this.pickups)
+          if (q.active && q.kind === 'gem' && !q.flying) {
+            q.flying = true;
+            q.speed = 200;
+          }
+        this.ui.banner('補給：信用點、生命、吸取全場經驗', '#7fd4ff');
+        Audio.play('sfx-chest', 0.5);
+        return;
+    }
+  }
+
+  private openShop() {
+    this.modal = true;
+    this.scene.pause();
+    this.ui.showShop(SHOP_ITEMS, () => this.credits, (id) => {
+      const item = SHOP_ITEMS.find((s) => s.id === id)!;
+      if (this.credits < item.cost) return false;
+      this.credits -= item.cost;
+      if (id === 'heal') this.heal(this.maxHp * 0.5);
+      if (id === 'reroll') this.rerolls++;
+      if (id === 'card') {
+        this.ui.showLevelUp(this.level, this.rollChoices([], 1), () => this.closeModal());
+        return 'close';
+      }
+      if (id === 'relic') {
+        if (!this.offerRelics(() => this.closeModal())) {
+          this.credits += item.cost;
+          return false;
+        }
+        return 'close';
+      }
+      return true;
+    }, () => this.closeModal());
+  }
+
+  /** 三選一遺物；回傳是否有遺物可選 */
+  offerRelics(done: () => void): boolean {
+    if (this.relics.length >= MAX_RELICS) return false;
+    const pool = RELICS.filter((r) => !this.hasRelic(r.id));
+    Phaser.Utils.Array.Shuffle(pool);
+    // 至少有一個不是詛咒的選項
+    const options: RelicDef[] = pool.filter((r) => !r.curse).slice(0, 2);
+    const rest = pool.filter((r) => !options.includes(r));
+    if (rest.length) options.push(rest[0]);
+    if (options.length === 0) return false;
+    Phaser.Utils.Array.Shuffle(options);
+    this.ui.showRelics(options, (id) => {
+      if (id) this.addRelic(id);
+      else this.credits += 20;
+      done();
+    });
+    return true;
+  }
+
+  addRelic(id: RelicId) {
+    if (this.hasRelic(id)) return;
+    this.relics.push(id);
+    if (id === 'devil') this.pendingLevels += 3;
+    if (id === 'mirror') this.mirrorT = 0;
+    this.recalc();
+    Audio.play('sfx-levelup', 0.5);
+  }
+
+  heal(v: number) {
+    if (this.hp <= 0) return;
+    this.hp = Math.min(this.maxHp, this.hp + v * this.healMult);
+  }
+
+  private updateHazards(dt: number) {
+    for (const h of this.hazards) {
+      h.t -= dt;
+      h.g.clear();
+      const k = 1 - Math.max(0, h.t) / 0.7;
+      h.g.lineStyle(2, 0xff8a3d, 0.9);
+      h.g.strokeCircle(h.x, h.y, h.r);
+      h.g.fillStyle(0xff8a3d, 0.15 + 0.25 * k);
+      h.g.fillCircle(h.x, h.y, h.r * k);
+      if (h.t <= 0) {
+        if ((this.px - h.x) ** 2 + (this.py - h.y) ** 2 < h.r * h.r) this.hurt(h.damage);
+        this.playFx('explode', h.x, h.y, h.r * 2.6, 0, 0xffffff, 22);
+        Audio.play('sfx-orbital', 0.3, 100);
+        h.g.destroy();
+      }
+    }
+    this.hazards = this.hazards.filter((h) => h.t > 0);
   }
 
   /** 有生成的移動動畫就播放（影格畫布：腳底在 90% 高度，身體中心約在 57%） */
@@ -698,16 +1087,24 @@ export class GameScene extends Phaser.Scene {
     this.py += my * this.speed * dt;
     if (this.invuln > 0) this.invuln -= dt;
     if (this.hurtFlash > 0) this.hurtFlash -= dt;
-    if (this.regen > 0 && this.hp > 0) this.hp = Math.min(this.maxHp, this.hp + this.regen * dt);
+    if (this.regen > 0 && this.hp > 0) this.hp = Math.min(this.maxHp, this.hp + this.regen * this.healMult * dt);
   }
 
   private hurt(amount: number) {
     if (this.invuln > 0 || this.ended || this.modal) return;
-    const dmg = Math.max(1, Math.round(amount - this.armor));
+    if (this.hasRelic('mirror') && this.mirrorT <= 0) {
+      // 鏡像護盾擋下這一擊
+      this.mirrorT = 15;
+      this.invuln = PLAYER.iframes;
+      this.playFx('hit', this.px, this.py, 70, 0, 0x7fd4ff, 30, 12);
+      return;
+    }
+    const dmg = Math.max(1, Math.round((amount - this.armor) * this.dmgTakenMult));
     this.invuln = PLAYER.iframes;
     this.hurtFlash = 0.15;
     this.cameras.main.shake(90, 0.004);
     Audio.play('sfx-hurt', 0.5, 120);
+    vibrate(30);
     if (this.invincible) return;
     this.hp -= dmg;
     if (this.hp <= 0) {
@@ -736,7 +1133,18 @@ export class GameScene extends Phaser.Scene {
         }
         dx /= d;
         dy /= d;
-        let sp = e.speed * (e.slow > 0 ? 0.6 : 1);
+        let sp = e.speed * (e.slow > 0 ? 0.6 : 1) * (e.stun > 0 ? 0 : 1);
+        if (e.affixes.length) {
+          if (e.affixes.includes('frenzy') && e.hp < e.maxHp * 0.5) sp *= 1.8;
+          if (e.affixes.includes('summon')) {
+            e.affixT -= dt;
+            if (e.affixT <= 0) {
+              e.affixT = 5;
+              for (let i = 0; i < 3; i++) this.spawnEnemy('drone', [e.x + (Math.random() - 0.5) * 60, e.y + (Math.random() - 0.5) * 60]);
+            }
+          }
+          e.label?.setPosition(e.x, e.y - e.radius - 14);
+        }
         if (kind === 'gunner') {
           // 保持距離：太近就後退，適中就側移
           if (d < 170) sp = -sp * 0.8;
@@ -762,12 +1170,15 @@ export class GameScene extends Phaser.Scene {
       e.kx *= 0.86;
       e.ky *= 0.86;
       if (e.slow > 0) e.slow -= dt;
+      if (e.stun > 0) e.stun -= dt;
+      if (e.hackT > 0) e.hackT -= dt;
       if (e.flash > 0) e.flash -= dt;
       if (e.virusT > 0) {
         e.virusT -= dt;
         e.virusTick -= dt;
         if (e.virusTick <= 0) {
           e.virusTick = 0.5;
+          this.curTag = 'hack';
           this.damageEnemy(e, e.virusDps * 0.5 * this.might, 0, 0, false, true);
           if (!e.active) continue;
         }
@@ -890,16 +1301,63 @@ export class GameScene extends Phaser.Scene {
 
   damageEnemy(e: Enemy, amount: number, kx = 0, ky = 0, fromIai = false, quiet = false) {
     if (!e.active) return;
-    const dmg = Math.max(1, Math.round(amount));
+    let raw = amount;
+    let crit = false;
+    if (!fromIai) {
+      const tag = this.curTag;
+      if (tag === 'blade') raw *= 1 + this.bladeBonus;
+      if (tag === 'volt') raw *= 1 + this.voltBonus;
+      if (this.hackMark && e.hackT > 0) raw *= 1.15;
+      if (this.hasRelic('executioner') && e.hp < e.maxHp * 0.3) raw *= 2;
+      if (Math.random() < this.critChance) {
+        crit = true;
+        raw *= this.critDmg;
+      }
+      if (tag === 'hack') e.hackT = 3;
+      if (tag === 'volt' && this.stunChance > 0 && e.def.kind !== 'boss' && Math.random() < this.stunChance) e.stun = 0.8;
+    }
+    let dmg = Math.max(1, Math.round(raw));
+    if (e.shield > 0) {
+      // 護盾詞綴：先扣護盾
+      const absorbed = Math.min(e.shield, dmg);
+      e.shield -= absorbed;
+      dmg -= absorbed;
+      if (e.shield <= 0) this.playFx('hit', e.x, e.y, 90, 0, 0x7fd4ff, 30, 12);
+      if (dmg <= 0) {
+        e.flash = 0.05;
+        this.showDamage(e.x, e.y - e.radius, absorbed, false, true);
+        return;
+      }
+    }
     e.hp -= dmg;
     e.flash = 0.08;
+    if (crit && (e.def.kind === 'boss' || e.def.kind === 'elite') && this.t - this.lastHitStop > 0.3) {
+      this.hitStop = 0.045;
+      this.lastHitStop = this.t;
+    }
+    if (crit && this.hasRelic('thunder') && !quiet) {
+      const near = this.grid.query(e.x, e.y, 110, tmp);
+      let n = 2;
+      for (const o of near) {
+        if (n <= 0) break;
+        if (o === e || !o.active) continue;
+        n--;
+        this.addSlash((g) => {
+          g.lineStyle(2, 0xbfd4ff, 1);
+          g.lineBetween(e.x, e.y, o.x, o.y);
+        }, 0.12);
+        o.hp -= Math.round(dmg * 0.5);
+        o.flash = 0.08;
+        if (o.hp <= 0) this.killEnemy(o, false);
+      }
+    }
     if (e.def.kind !== 'boss') {
       const res = e.def.kind === 'elite' ? 0.2 : 1;
       e.kx += kx * res;
       e.ky += ky * res;
     }
-    this.showDamage(e.x, e.y - e.radius, dmg);
-    if (!quiet) Audio.play('sfx-hit', 0.18, 70, 400);
+    this.showDamage(e.x, e.y - e.radius, dmg, crit);
+    if (!quiet) Audio.play('sfx-hit', crit ? 0.3 : 0.18, 70, 400);
     if (this.time.now - this.lastHitFx > 35) {
       this.lastHitFx = this.time.now;
       this.playFx('hit', e.x + (Math.random() - 0.5) * e.radius, e.y + (Math.random() - 0.5) * e.radius, 30 + e.radius, Math.random() * 6, 0xffffff, 30, 12);
@@ -911,6 +1369,41 @@ export class GameScene extends Phaser.Scene {
     e.active = false;
     e.img.setVisible(false);
     this.kills++;
+    this.combo = this.comboT > 0 ? this.combo + 1 : 1;
+    this.comboT = 1.6;
+    if (e.label) {
+      e.label.destroy();
+      e.label = null;
+    }
+    if (this.hasRelic('leech') && ++this.leechCount >= 30) {
+      this.leechCount = 0;
+      this.heal(5);
+    }
+    if (this.hackGem > 0 && Math.random() < this.hackGem) this.dropGem(e.x + 8, e.y + 4, e.xp);
+    if (this.hasRelic('warhead') && Math.random() < 0.12) {
+      const r = 55 * this.fireArea;
+      for (const o of this.grid.query(e.x, e.y, r + 20, tmp)) {
+        if (!o.active || o === e || (o.x - e.x) ** 2 + (o.y - e.y) ** 2 > r * r) continue;
+        o.hp -= Math.round(30 * this.might * this.fireDmg);
+        o.flash = 0.08;
+        if (o.hp <= 0) this.killEnemy(o, false);
+      }
+      this.playFx('explode', e.x, e.y, r * 2.4, 0, 0xffffff, 26);
+    }
+    if (e.affixes.length) {
+      this.credits += Math.round(15 * e.affixes.length * this.creditMult);
+      if (e.affixes.includes('explode')) {
+        const g = this.add.graphics().setDepth(3);
+        this.hazards.push({ x: e.x, y: e.y, r: 90, t: 0.7, damage: e.damage * 1.2, g });
+      }
+      if (e.affixes.includes('split')) {
+        for (let i = 0; i < 3; i++) {
+          const s2 = this.spawnEnemy('husk', [e.x + (Math.random() - 0.5) * 50, e.y + (Math.random() - 0.5) * 50]);
+          s2.maxHp = s2.hp = e.maxHp * 0.15;
+        }
+      }
+    }
+    if (e.def.kind === 'elite' || e.def.kind === 'boss') vibrate(e.def.kind === 'boss' ? 150 : 40);
     this.sparks.setParticleTint(e.def.color);
     const kind = e.def.kind;
     this.seenEnemies.add(e.boss ? `boss-${e.boss.variant}` : kind);
@@ -949,7 +1442,8 @@ export class GameScene extends Phaser.Scene {
       const r = Math.random();
       if (r < DROPS.heal) this.dropPickup('heal', e.x, e.y);
       else if (r < DROPS.heal + DROPS.magnet) this.dropPickup('magnet', e.x, e.y);
-      else if (r < DROPS.heal + DROPS.magnet + DROPS.credit) this.dropPickup('credit', e.x, e.y, 1 + Math.floor(Math.random() * 4));
+      else if (r < DROPS.heal + DROPS.magnet + DROPS.credit * this.creditMult)
+        this.dropPickup('credit', e.x, e.y, Math.round((1 + Math.floor(Math.random() * 4)) * this.creditMult));
     }
   }
 
@@ -967,7 +1461,8 @@ export class GameScene extends Phaser.Scene {
     let fieldOn = false;
     for (const w of this.weapons) {
       const s = w.stats;
-      const dmg = s.damage * this.might;
+      const dmg = s.damage * this.might * (1 + w.bonus);
+      this.curTag = WEAPON_TAG[w.id] ?? null;
       switch (w.id) {
         case 'katana':
         case 'sakura': {
@@ -1138,7 +1633,7 @@ export class GameScene extends Phaser.Scene {
                 x = this.px + (Math.random() - 0.5) * 300;
                 y = this.py + (Math.random() - 0.5) * 300;
               }
-              this.addStrike(x, y, 56 * s.area, dmg);
+              this.addStrike(x, y, 56 * s.area * this.fireArea, dmg * this.fireDmg);
             }
           }
           break;
@@ -1317,6 +1812,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateStrikes(dt: number) {
+    this.curTag = 'fire';
     for (const s of this.strikes) {
       if (!s.active) continue;
       s.t -= dt;
@@ -1363,6 +1859,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateHooks(dt: number) {
+    this.curTag = 'blade';
     for (const h of this.hooks) {
       if (!h.active) continue;
       h.life -= dt;
@@ -1458,6 +1955,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateProjectiles(dt: number) {
+    this.curTag = 'hack';
     for (const p of this.projectiles) {
       if (!p.active) continue;
       if (p.kind === 'fuma') {
@@ -1642,7 +2140,7 @@ export class GameScene extends Phaser.Scene {
         this.addXp(p.value * this.xpMult);
         break;
       case 'heal':
-        this.hp = Math.min(this.maxHp, this.hp + DROPS.healAmount);
+        this.heal(DROPS.healAmount);
         Audio.play('sfx-revive', 0.3);
         break;
       case 'magnet':
@@ -1691,6 +2189,12 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
+    // 沒有可進化的武器時：遺物三選一
+    this.modal = true;
+    this.scene.pause();
+    if (this.offerRelics(() => this.closeModal())) return;
+    this.modal = false;
+    this.scene.resume();
     const options: Choice[] = [];
     for (const w of this.weapons) if (w.level < this.maxLevel(w.id)) options.push({ kind: 'weapon', id: w.id });
     for (const [id, lv] of this.passives) if (lv < PASSIVES[id].maxLevel) options.push({ kind: 'passive', id });
@@ -1733,10 +2237,12 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.activeEnemies) {
       if (!e.active || e.x < x0 || e.x > x1 || e.y < y0 || e.y > y1) continue;
       const kind = e.def.kind;
-      const dmg = kind === 'boss' ? e.maxHp * INTENT.bossDamagePct : kind === 'elite' ? e.maxHp * INTENT.eliteDamagePct : e.hp + 1;
+      const dmg = kind === 'boss' ? e.maxHp * INTENT.bossDamagePct * this.iaiBossMult : kind === 'elite' ? e.maxHp * INTENT.eliteDamagePct : e.hp + 1;
       this.damageEnemy(e, dmg, 0, 0, true, true);
     }
     this.cameras.main.shake(260, 0.012);
+    vibrate(80);
+    if (this.hasRelic('finaliai')) this.invuln = Math.max(this.invuln, 3);
     for (const p of this.pickups) {
       if (!p.active || p.kind !== 'gem' || p.flying) continue;
       if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
@@ -1771,7 +2277,7 @@ export class GameScene extends Phaser.Scene {
     return list.filter((c) => !this.banished.has(choiceKey(c)));
   }
 
-  rollChoices(exclude: Choice[] = []): Choice[] {
+  rollChoices(exclude: Choice[] = [], minRarity: Rarity = 0): Choice[] {
     const ex = new Set(exclude.map(choiceKey));
     let pool = this.validChoices().filter((c) => !ex.has(choiceKey(c)));
     const out: Choice[] = [];
@@ -1783,7 +2289,7 @@ export class GameScene extends Phaser.Scene {
     while (out.length < 3 && pool.length) out.push(pool.pop()!);
     if (out.length < 3 && !ex.has('heal')) out.push({ kind: 'heal' });
     if (out.length < 3 && !ex.has('credits')) out.push({ kind: 'credits' });
-    return out;
+    return out.map((c) => (c === this.locked && c.rarity !== undefined && c.rarity >= minRarity ? c : { ...c, rarity: rollRarity(this.luck, minRarity) }));
   }
 
   banishChoice(c: Choice, shown: Choice[]): Choice | null {
@@ -1793,7 +2299,7 @@ export class GameScene extends Phaser.Scene {
     if (this.locked && choiceKey(this.locked) === choiceKey(c)) this.locked = null;
     const others = shown.filter((s) => s !== c);
     const pool = this.validChoices().filter((v) => !others.some((o) => choiceKey(o) === choiceKey(v)));
-    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+    if (pool.length) return { ...pool[Math.floor(Math.random() * pool.length)], rarity: rollRarity(this.luck) };
     return null;
   }
 
@@ -1811,52 +2317,61 @@ export class GameScene extends Phaser.Scene {
 
   applyChoice(c: Choice) {
     if (this.locked && choiceKey(this.locked) === choiceKey(c)) this.locked = null;
+    const r = RARITY[c.rarity ?? 0];
     switch (c.kind) {
       case 'weapon': {
         const w = this.weapons.find((x) => x.id === c.id);
         if (w) {
           w.level = Math.min(this.maxLevel(w.id), w.level + 1);
+          w.bonus += r.dmgBonus;
           w.stats = this.computeStats(w.id, w.level);
-        } else if (this.weapons.length < RUN.weaponSlots) this.addWeapon(c.id);
+        } else if (this.weapons.length < RUN.weaponSlots) this.addWeapon(c.id, r.dmgBonus);
         break;
       }
       case 'passive':
         if (!this.passives.has(c.id) && this.passives.size >= RUN.passiveSlots) break;
         this.passives.set(c.id, Math.min(PASSIVES[c.id].maxLevel, this.passiveLevel(c.id) + 1));
+        this.passivePower.set(c.id, this.pp(c.id) + r.mult);
         if (!this.save.seenPassives.includes(c.id)) this.save.seenPassives.push(c.id);
         break;
       case 'heal':
-        this.hp = Math.min(this.maxHp, this.hp + DROPS.healAmount);
+        this.heal(DROPS.healAmount * r.mult);
         break;
       case 'credits':
-        this.credits += 25;
+        this.credits += Math.round(25 * r.mult);
         break;
     }
     this.recalc();
   }
 
-  choiceInfo(c: Choice): { name: string; desc: string; tag: string; icon: string; color: number; isNew: boolean; evoHint: string } {
+  choiceInfo(c: Choice): { name: string; desc: string; tag: string; icon: string; color: number; isNew: boolean; evoHint: string; rarity: Rarity; synergy: string } {
+    const rarity = c.rarity ?? 0;
+    const r = RARITY[rarity];
+    const bonusLine = rarity > 0 ? `（${r.name}：額外傷害 +${Math.round(r.dmgBonus * 100)}%）` : '';
     switch (c.kind) {
       case 'weapon': {
         const def = WEAPONS[c.id];
         const w = this.weapons.find((x) => x.id === c.id);
         const evo = EVOLUTIONS.find((e) => e.weapon === c.id);
         const evoHint = evo ? T.evoHint(PASSIVES[evo.passive].name, WEAPONS[evo.result].name) : '';
-        if (!w) return { name: def.name, desc: def.desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint };
-        return { name: def.name, desc: def.levels[w.level - 1]?.desc ?? '', tag: T.lv(w.level, w.level + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint };
+        const tg = WEAPON_TAG[c.id];
+        const synergy = tg ? `${TAGS[tg].name}系` : '';
+        if (!w) return { name: def.name, desc: def.desc + bonusLine, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint, rarity, synergy };
+        return { name: def.name, desc: (def.levels[w.level - 1]?.desc ?? '') + bonusLine, tag: T.lv(w.level, w.level + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint, rarity, synergy };
       }
       case 'passive': {
         const def = PASSIVES[c.id];
         const lv = this.passives.get(c.id);
         const evo = EVOLUTIONS.find((e) => e.passive === c.id);
         const evoHint = evo ? T.evoHintP(WEAPONS[evo.weapon].name, WEAPONS[evo.result].name) : '';
-        if (lv === undefined) return { name: def.name, desc: def.desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint };
-        return { name: def.name, desc: def.desc, tag: T.lv(lv, lv + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint };
+        const desc = passiveDesc(c.id, r.mult);
+        if (lv === undefined) return { name: def.name, desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint, rarity, synergy: '' };
+        return { name: def.name, desc, tag: T.lv(lv, lv + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint, rarity, synergy: '' };
       }
       case 'heal':
-        return { name: T.heal, desc: T.healDesc, tag: '', icon: 'icon-heal', color: 0x5dff7a, isNew: false, evoHint: '' };
+        return { name: T.heal, desc: `回復 ${Math.round(DROPS.healAmount * r.mult)} 生命`, tag: '', icon: 'icon-heal', color: 0x5dff7a, isNew: false, evoHint: '', rarity, synergy: '' };
       case 'credits':
-        return { name: T.credits, desc: T.creditsDesc, tag: '', icon: 'icon-credits', color: 0xffd84d, isNew: false, evoHint: '' };
+        return { name: T.credits, desc: `信用點 +${Math.round(25 * r.mult)}`, tag: '', icon: 'icon-credits', color: 0xffd84d, isNew: false, evoHint: '', rarity, synergy: '' };
     }
   }
 
@@ -1923,7 +2438,16 @@ export class GameScene extends Phaser.Scene {
     const wasRunning = this.scene.isActive();
     const save = this.save;
     const newBest = this.t > save.bestTime || (victory && this.kills > save.bestKills);
-    const bonus = runReward({ time: this.t, kills: this.kills, bossKills: this.bossKills, victory });
+    const bonus = Math.round(runReward({ time: this.t, kills: this.kills, bossKills: this.bossKills, victory }) * this.wmods.reward);
+    let wantedUnlocked: number | null = null;
+    if (victory) {
+      save.bestWanted = Math.max(save.bestWanted ?? 0, this.wanted);
+      const next = Math.min(10, this.wanted + 1);
+      if (next > (save.wantedUnlocked ?? 0)) {
+        save.wantedUnlocked = next;
+        wantedUnlocked = next;
+      }
+    }
     save.bestTime = Math.max(save.bestTime, this.t);
     save.bestKills = Math.max(save.bestKills, this.kills);
     save.bestLevel = Math.max(save.bestLevel, this.level);
@@ -1947,7 +2471,7 @@ export class GameScene extends Phaser.Scene {
     if (wasRunning) this.scene.pause();
     Audio.stopMusic();
     Audio.play(victory ? 'sfx-victory' : 'sfx-defeat', 0.6);
-    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked };
+    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked };
     this.ui.showResults(result);
   }
 
@@ -1970,20 +2494,25 @@ export class GameScene extends Phaser.Scene {
     }
     this.recalc();
   }
+  debugRelic() {
+    this.modal = true;
+    this.scene.pause();
+    if (!this.offerRelics(() => this.closeModal())) this.closeModal();
+  }
   debugGive(id: WeaponId) {
     if (!this.weapons.some((w) => w.id === id)) this.addWeapon(id);
     this.recalc();
   }
 
   // ---------- 特效與繪製 ----------
-  showDamage(x: number, y: number, v: number) {
+  showDamage(x: number, y: number, v: number, crit = false, shield = false) {
     const d = this.dmgTexts.find((q) => q.life <= 0);
     if (!d) return;
-    const big = v >= 100;
-    d.life = 0.6;
-    d.t.setText(String(v)).setPosition(x + (Math.random() - 0.5) * 14, y).setVisible(true).setAlpha(1).setScale(1.7);
-    d.t.setColor(big ? '#ffe14d' : v >= 30 ? '#ffffff' : '#c9d6ff').setFontSize(snapFont(big ? 22 : 16.5));
-    d.t.setStroke(big ? '#a3002e' : '#07060d', big ? 5 : 4);
+    const big = v >= 100 || crit;
+    d.life = crit ? 0.75 : 0.6;
+    d.t.setText(crit ? `${v}!` : String(v)).setPosition(x + (Math.random() - 0.5) * 14, y).setVisible(true).setAlpha(1).setScale(crit ? 2.2 : 1.7);
+    d.t.setColor(shield ? '#7fd4ff' : crit ? '#ff9a3d' : big ? '#ffe14d' : v >= 30 ? '#ffffff' : '#c9d6ff').setFontSize(snapFont(crit ? 27.5 : big ? 22 : 16.5));
+    d.t.setStroke(crit ? '#6a0020' : big ? '#a3002e' : '#07060d', big ? 5 : 4);
   }
 
   /** 角色出招：前衝、壓扁拉伸、殘影 */

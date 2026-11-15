@@ -5,6 +5,7 @@ import { COLORS, H, W, textStyle } from '../game/layout';
 import { Button, makeButton, menuBackground, setupLogicalCamera } from '../game/ui';
 import { formatTime, loadSave } from '../game/storage';
 import { Audio } from '../game/audio';
+import { setVibrate, vibrate, vibrateEnabled } from '../game/haptics';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -66,6 +67,12 @@ export class MenuScene extends Phaser.Scene {
       Audio.setSfx(!Audio.sfxOn);
       refresh();
     }, 14);
+    const vibBtn = makeButton(this, W - 256, H - 26, 96, 36, '', COLORS.cyan, () => {
+      setVibrate(!vibrateEnabled());
+      vibBtn.setLabel(vibrateEnabled() ? '震動 開' : '震動 關').setActive2(vibrateEnabled());
+      if (vibrateEnabled()) vibrate(40);
+    }, 14);
+    vibBtn.setLabel(vibrateEnabled() ? '震動 開' : '震動 關').setActive2(vibrateEnabled());
     refresh();
 
     this.input.keyboard?.once('keydown-ENTER', () => this.scene.start('CharSelect'));

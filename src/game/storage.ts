@@ -18,6 +18,10 @@ export interface SaveData extends UnlockStats {
   seenEnemies: string[];
   music: boolean;
   sfx: boolean;
+  vibrate: boolean;
+  /** 已解鎖的最高通緝等級（0＝尚未通關） */
+  wantedUnlocked: number;
+  bestWanted: number;
 }
 
 const EMPTY: SaveData = {
@@ -40,6 +44,9 @@ const EMPTY: SaveData = {
   seenEnemies: [],
   music: true,
   sfx: true,
+  vibrate: true,
+  wantedUnlocked: 0,
+  bestWanted: 0,
 };
 
 export function loadSave(): SaveData {
