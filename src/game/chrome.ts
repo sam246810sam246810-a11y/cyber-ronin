@@ -243,31 +243,50 @@ export function panelBox(scene: Phaser.Scene, x: number, y: number, w: number, h
 }
 
 /** 大廳背景：生成的雨夜街景＋雨滴 */
-export function lobbyBackground(scene: Phaser.Scene, dim = 0) {
-  if (scene.textures.exists('ui-lobby-bg')) {
-    const bg = scene.add.image(W / 2, H / 2, 'ui-lobby-bg');
+/** 大廳天氣：雨、櫻花、資料塵、星光 */
+export type Weather = 'rain' | 'petals' | 'dust' | 'stars';
+
+export function lobbyBackground(scene: Phaser.Scene, dim = 0, key = 'ui-lobby-bg', weather: Weather = 'rain') {
+  const k = scene.textures.exists(key) ? key : 'ui-lobby-bg';
+  if (scene.textures.exists(k)) {
+    const bg = scene.add.image(W / 2, H / 2, k);
     const src = bg.texture.getSourceImage();
     bg.setScale(Math.max(W / src.width, H / src.height));
   }
   if (dim > 0) scene.add.rectangle(W / 2, H / 2, W, H, 0x07060d, dim);
-  // 雨
-  const rain = scene.add.graphics();
-  const drops = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 500 + Math.random() * 300, l: 10 + Math.random() * 14 }));
-  const fn = (_t: number, dt: number) => {
-    rain.clear();
-    rain.lineStyle(1, 0x9fd8ff, 0.35);
-    for (const d of drops) {
-      d.y += (d.v * dt) / 1000;
-      d.x -= (d.v * dt) / 6000;
-      if (d.y > H) {
-        d.y = -20;
-        d.x = Math.random() * W;
+  const fx = scene.add.graphics();
+  const n = weather === 'rain' ? 60 : weather === 'stars' ? 50 : 36;
+  const parts = Array.from({ length: n }, () => ({ x: Math.random() * W, y: Math.random() * H, v: Math.random(), p: Math.random() * 6.28 }));
+  const fn = (t: number, dt: number) => {
+    fx.clear();
+    for (const d of parts) {
+      if (weather === 'rain') {
+        const v = 500 + d.v * 300;
+        d.y += (v * dt) / 1000;
+        d.x -= (v * dt) / 6000;
+        if (d.y > H) ((d.y = -20), (d.x = Math.random() * W));
+        fx.lineStyle(1, 0x9fd8ff, 0.35).lineBetween(d.x, d.y, d.x - 2, d.y + 10 + d.v * 14);
+      } else if (weather === 'petals') {
+        // 櫻花：慢慢飄落並左右搖擺
+        d.y += ((40 + d.v * 40) * dt) / 1000;
+        d.x += Math.sin(t / 700 + d.p) * 0.4 - 0.15;
+        if (d.y > H) ((d.y = -10), (d.x = Math.random() * W));
+        fx.fillStyle(0xff9ad0, 0.75).fillEllipse(d.x, d.y, 6, 3.5);
+      } else if (weather === 'dust') {
+        // 資料塵：綠色光點往上飄
+        d.y -= ((18 + d.v * 30) * dt) / 1000;
+        d.x += Math.sin(t / 900 + d.p) * 0.2;
+        if (d.y < -10) ((d.y = H + 10), (d.x = Math.random() * W));
+        fx.fillStyle(0x5dff7a, 0.25 + 0.35 * Math.abs(Math.sin(t / 500 + d.p))).fillRect(d.x, d.y, 2, 2);
+      } else {
+        // 星光：閃爍
+        const a = 0.15 + 0.6 * Math.abs(Math.sin(t / (600 + d.v * 900) + d.p));
+        fx.fillStyle(0xffffff, a).fillRect(d.x, d.y * 0.6, 2, 2);
       }
-      rain.lineBetween(d.x, d.y, d.x - 2, d.y + d.l);
     }
   };
   scene.events.on('update', fn);
-  rain.once('destroy', () => scene.events.off('update', fn));
+  fx.once('destroy', () => scene.events.off('update', fn));
 }
 
 export interface RewardItem {

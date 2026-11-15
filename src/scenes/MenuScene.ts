@@ -91,7 +91,9 @@ export class MenuScene extends Phaser.Scene {
     this.children.removeAll(true);
     this.tweens.killAll();
     const s = loadSave();
-    lobbyBackground(this, 0.15);
+    // 大廳背景跟著選到的關卡換
+    const WEATHER = { slums: 'rain', tower: 'rain', shrine: 'petals', grave: 'dust', orbit: 'stars' } as const;
+    lobbyBackground(this, 0.15, `ui-lobby-${STAGES[this.stageIdx].id}`, WEATHER[STAGES[this.stageIdx].id]);
     topBar(this, s);
 
     // 標誌

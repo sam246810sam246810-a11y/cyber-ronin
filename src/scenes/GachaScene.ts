@@ -8,8 +8,10 @@ import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
 import { PullItem, canStarUp, canUnlock, unlockChar, unlockCost, feedJade, payMethod, pityLeft, pullPool, setComplete, spiritLv, spiritStats, starOf, starUp, starUpCost } from '../game/gacha';
 import { MOD_RARITY, MODULE_BASES, StatKey, fmtStat, mainValue } from '../config/meta';
-import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, UNLOCK_SHARDS, MAX_SPIRIT_LV, MAX_STAR, POOLS, POOL_ORDER, PoolId, SPIRITS, SPIRIT_SETS, STAR_PERKS, SpiritId, spiritNeed } from '../config/gacha';
-import { CHARACTERS, CharId } from '../config/balance';
+import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, SSR_UP_ROTATION, UNLOCK_SHARDS, currentUp, upEndsText, MAX_SPIRIT_LV, MAX_STAR, POOLS, POOL_ORDER, PoolId, SPIRITS, SPIRIT_SETS, STAR_PERKS, SpiritId, spiritNeed } from '../config/gacha';
+import { CHARACTERS, CharId, WEAPONS } from '../config/balance';
+import { ULTIMATES } from '../config/expansion';
+import { playUltPreview } from '../game/ultPreview';
 
 const RAR = ['N', 'R', 'SR', 'SSR'];
 
@@ -34,7 +36,9 @@ export class GachaScene extends Phaser.Scene {
   private draw() {
     this.children.removeAll(true);
     this.tweens.killAll();
-    lobbyBackground(this, 0.6);
+    // 每個卡池有自己的主視覺背景
+    const WEATHER = { equip: 'rain', char: 'petals', spirit: 'dust' } as const;
+    lobbyBackground(this, this.textures.exists(`ui-pool-${this.pool}`) ? 0.3 : 0.6, `ui-pool-${this.pool}`, WEATHER[this.pool]);
     const s = loadSave();
     topBar(this, s);
     tabBar(this, 'Gacha');
@@ -55,9 +59,19 @@ export class GachaScene extends Phaser.Scene {
     this.drawBanner(s, bannerY, by - 130 - top);
 
     // 持有券、保底
-    this.ticketBadge(W / 2 - 110, by - 98, this.pool, s.tickets[this.pool] ?? 0);
-    this.add.text(W / 2 + 10, by - 98, `距離保底 SSR：${pityLeft(s, this.pool)} 抽`, textStyle(16, '#ffd84d')).setOrigin(0, 0.5);
-    this.add.text(W / 2, by - 66, '十連抽保證至少一個 SR 以上', textStyle(13, COLORS.dim, false)).setOrigin(0.5);
+    this.ticketBadge(W / 2 - 160, by - 100, this.pool, s.tickets[this.pool] ?? 0);
+    // 保底進度條：越接近保底越亮
+    const left = pityLeft(s, this.pool);
+    const pct = 1 - left / P.pity;
+    const bx = W / 2 - 70;
+    const bw = 300;
+    const pg = this.add.graphics();
+    pg.fillStyle(0x07060d, 0.9).fillRoundedRect(bx, by - 112, bw, 24, 12);
+    pg.fillGradientStyle(0xff8a3d, 0xffd84d, 0xff8a3d, 0xffd84d, 1).fillRect(bx + 3, by - 109, Math.max(4, (bw - 6) * pct), 18);
+    pg.lineStyle(2, 0xffd84d, 0.6 + 0.4 * pct).strokeRoundedRect(bx, by - 112, bw, 24, 12);
+    const pt = this.add.text(bx + bw / 2, by - 100, `保底 SSR 還有 ${left} 抽`, textStyle(13, '#ffffff')).setOrigin(0.5).setStroke('#07060d', 3);
+    if (pct > 0.7) this.tweens.add({ targets: pt, scale: 1.08, yoyo: true, repeat: -1, duration: 500 });
+    this.add.text(W / 2, by - 70, `SSR ${(P.rates[3] * 100).toFixed(0)}%　SR ${(P.rates[2] * 100).toFixed(0)}%　十連必出 SR 以上`, textStyle(13, '#ffd84d', false)).setOrigin(0.5).setStroke('#07060d', 3);
 
     const label = (n: 1 | 10) => {
       const pay = payMethod(s, this.pool, n);
@@ -112,29 +126,55 @@ export class GachaScene extends Phaser.Scene {
       return;
     }
     if (this.pool === 'char') {
-      const glow = this.add.ellipse(W / 2, cy + h * 0.42, 420, 70, 0xff3d81, 0.18);
-      this.tweens.add({ targets: glow, alpha: 0.5, yoyo: true, repeat: -1, duration: 1400 });
-      const order: [CharId, number, number][] = [
-        ['hayabusa', -150, 0.8],
-        ['misora', 150, 0.8],
-      ];
-      for (const [id, dx, sc] of order) {
-        const key = this.textures.exists(`hd-${id}`) ? `hd-${id}` : `char-${id}`;
-        const img = this.fitImage(key, W / 2 + dx, cy + h * 0.05, 300 * sc, h * sc);
-        img.setTint(s.chars.includes(id) ? 0xb0a8d0 : 0x5a5478);
-        img.setName('machine');
-      }
-      // SSR 神樂在中間（有動態立繪就用動態）
-      const aura = this.add.ellipse(W / 2, cy, 260, h * 0.9, 0xffc83d, 0.12).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({ targets: aura, alpha: 0.28, yoyo: true, repeat: -1, duration: 1200 });
-      let star: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
-      if (this.anims.exists('live-kagura')) {
-        star = this.add.sprite(W / 2, cy + h / 2 - 20, 'live-kagura-0').setOrigin(0.5, 1);
-        (star as Phaser.GameObjects.Sprite).play('live-kagura');
-      } else star = this.add.image(W / 2, cy + h / 2 - 20, this.textures.exists('hd-kagura') ? 'hd-kagura' : 'char-kagura').setOrigin(0.5, 1);
-      star.setScale((h * 0.98) / star.texture.getSourceImage().height).setName('machine');
-      this.add.text(W / 2, cy - h / 2 + 10, 'SSR：神樂・美空 登場！', textStyle(18, '#ffd84d')).setOrigin(0.5).setStroke('#7a1a4a', 5);
-      this.add.text(W / 2, cy + h / 2 - 6, 'SR：刃・零・鐵・朧・隼　碎片集滿可以解鎖、升星', textStyle(13, '#ffffff', false)).setOrigin(0.5).setStroke('#07060d', 4);
+      // 本期 UP 的 SSR 放在中間最大，另一位 SSR 在旁邊；SR 頭像排在下方
+      const up = currentUp();
+      const other = SSR_UP_ROTATION.find((c) => c !== up)!;
+      const live = (id: CharId, x: number, yb: number, hgt: number) => {
+        let img: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+        if (this.anims.exists(`live-${id}`)) {
+          img = this.add.sprite(x, yb, `live-${id}-0`).setOrigin(0.5, 1);
+          (img as Phaser.GameObjects.Sprite).play(`live-${id}`);
+        } else img = this.add.image(x, yb, this.textures.exists(`hd-${id}`) ? `hd-${id}` : `char-${id}`).setOrigin(0.5, 1);
+        img.setScale(hgt / img.texture.getSourceImage().height).setName('machine');
+        img.setInteractive({ useHandCursor: true }).on('pointerup', () => this.showCharIntro(id));
+        return img;
+      };
+      const base = cy + h / 2 - 70;
+      const glow = this.add.ellipse(W / 2 - 40, base - h * 0.35, 320, h * 0.85, 0xffc83d, 0.14).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: glow, alpha: 0.3, yoyo: true, repeat: -1, duration: 1200 });
+      const o = live(other, W / 2 + 150, base - 10, h * 0.62);
+      o.setAlpha(0.85);
+      live(up, W / 2 - 50, base, h * 0.92);
+      // 本期 UP 角標與名牌
+      const rib = this.add.container(W / 2 - 170, cy - h / 2 + 64).setAngle(-8);
+      rib.add(this.add.rectangle(0, 0, 150, 40, 0xff2e6a, 1).setStrokeStyle(2, 0xffd84d));
+      rib.add(this.add.text(0, 0, '本期 UP', textStyle(20, '#ffffff')).setOrigin(0.5).setStroke('#7a1a3a', 4));
+      this.tweens.add({ targets: rib, scale: 1.06, yoyo: true, repeat: -1, duration: 600 });
+      const plate = (id: CharId, x: number, y: number, big: boolean) => {
+        const w2 = big ? 220 : 160;
+        this.add.rectangle(x, y, w2, big ? 52 : 40, 0x07060d, 0.85).setStrokeStyle(2, 0xffd84d, 0.9);
+        this.add.text(x - w2 / 2 + 10, y, 'SSR', textStyle(big ? 16 : 13, '#ffd84d')).setOrigin(0, 0.5);
+        this.add.text(x + 18, y - (big ? 8 : 6), CHARACTERS[id].name, textStyle(big ? 16 : 12, '#ffffff')).setOrigin(0.5);
+        this.add.text(x + 18, y + (big ? 12 : 9), CHARACTERS[id].role, textStyle(big ? 11 : 10, '#ffb0d8', false)).setOrigin(0.5);
+      };
+      plate(up, W / 2 - 50, base + 16, true);
+      plate(other, W / 2 + 150, base - 4, false);
+      this.add.text(W / 2 - 50, base + 50, `點角色看介紹與試看大招　本期至 ${upEndsText()}`, textStyle(11, '#c9c6e0', false)).setOrigin(0.5).setStroke('#07060d', 3);
+      // SR 頭像一排
+      const srs = (Object.keys(CHARACTERS) as CharId[]).filter((c) => CHAR_RARITY[c] === 2);
+      // SR 頭像：左側直排，不擋到主打角色
+      const sx = 34;
+      const sy0 = cy - h / 2 + 150;
+      this.add.text(sx, sy0 - 34, 'SR', textStyle(14, '#c48bff')).setOrigin(0.5).setStroke('#07060d', 3);
+      srs.forEach((c, i) => {
+        const y = sy0 + i * 54;
+        const key = this.textures.exists(`avatar-${c}`) ? `avatar-${c}` : `char-${c}`;
+        this.add.circle(sx, y, 23, 0x07060d, 0.85);
+        const im = this.add.image(sx, y, key);
+        im.setScale(42 / im.width);
+        this.add.circle(sx, y, 22).setStrokeStyle(2, 0xb46bff, 0.9);
+        im.setInteractive({ useHandCursor: true }).on('pointerup', () => this.showCharIntro(c));
+      });
       return;
     }
     // 靈物池
@@ -219,6 +259,29 @@ export class GachaScene extends Phaser.Scene {
         else this.showResults(res);
       });
     });
+  }
+
+  /** 角色介紹：立繪、能力、專屬武器、大招說明＋試看大招 */
+  private showCharIntro(id: CharId) {
+    const c = CHARACTERS[id];
+    const u = ULTIMATES[id];
+    const w = WEAPONS[c.weapon];
+    const r = CHAR_RARITY[id];
+    const layer = this.add.container(0, 0).setDepth(25);
+    layer.add(this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.92).setInteractive());
+    const top = CONTENT_TOP + 20;
+    const key = this.textures.exists(`hd-${id}`) ? `hd-${id}` : `char-${id}`;
+    const img = this.add.image(W / 2 - 120, top + 340, key).setOrigin(0.5, 1);
+    img.setScale(320 / img.height);
+    layer.add(img);
+    layer.add(this.add.text(W / 2 + 10, top + 40, MOD_RARITY[r].name, textStyle(24, MOD_RARITY[r].css)).setOrigin(0, 0).setStroke('#07060d', 4));
+    layer.add(this.add.text(W / 2 + 10, top + 76, c.name, textStyle(24, '#ffffff')).setOrigin(0, 0).setStroke('#07060d', 4));
+    layer.add(this.add.text(W / 2 + 10, top + 112, c.role, textStyle(15, '#ffb0d8')).setOrigin(0, 0));
+    layer.add(this.add.text(W / 2 + 10, top + 146, `生命 ${c.maxHp}\n移動 ${Math.round(c.speedMult * 100)}%${c.armor ? `\n護甲 ${c.armor}` : ''}`, { ...textStyle(14, '#c9c6e0', false), lineSpacing: 6 }).setOrigin(0, 0));
+    const lines = [`特性：${c.trait}`, '', `專屬武器「${w.name}」`, w.desc.replace('專屬武器：', ''), '', `大招「${u.name}」`];
+    layer.add(this.add.text(36, top + 360, lines.join('\n'), { ...textStyle(14, '#ffffff', false), wordWrap: { width: 470, useAdvancedWrap: true }, lineSpacing: 6 }).setOrigin(0, 0));
+    layer.add(makeButton(this, W / 2 - 110, CONTENT_BOTTOM - 40, 200, 58, '試看大招', u.color, () => playUltPreview(this, id), 20));
+    layer.add(makeButton(this, W / 2 + 110, CONTENT_BOTTOM - 40, 200, 58, '關閉', COLORS.cyan, () => layer.destroy(), 20));
   }
 
   /** SSR 角色登場演出：金色光柱 → 動態立繪登場 → 名字打字效果 */
@@ -421,6 +484,7 @@ export class GachaScene extends Phaser.Scene {
         `R：隨機一名角色的碎片 ×${CHAR_POOL.rShards}`,
         `SR：SR 角色本身（平均）；已擁有則換成碎片 ×${DUP_SHARDS[2]}`,
         `SSR：SSR 角色本身；已擁有則換成碎片 ×${DUP_SHARDS[3]}`,
+        `本期 UP：${CHARACTERS[currentUp()].name}（抽到 SSR 時有 70% 是 UP 角色，每週一輪替）`,
         `碎片集滿 ${UNLOCK_SHARDS[2]}（SSR ${UNLOCK_SHARDS[3]}）也能直接解鎖角色`,
       ],
       spirit: ['N：靈玉 ×1（可以餵給任何已擁有的式神）', 'R／SR／SSR：該稀有度的式神（同稀有度平均）', `重複抽到會升級，最高 Lv ${MAX_SPIRIT_LV}`],

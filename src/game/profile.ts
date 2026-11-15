@@ -86,7 +86,7 @@ export function openProfile(scene: Phaser.Scene, onChange: () => void) {
     const s = loadSave();
     layer.add(scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.92).setInteractive());
     const top = 110;
-    layer.add(scene.add.rectangle(W / 2, top + 340, 500, 700, 0x0d0a1c, 0.97).setStrokeStyle(2, COLORS.cyan, 0.7));
+    layer.add(scene.add.rectangle(W / 2, top + 380, 500, 780, 0x0d0a1c, 0.97).setStrokeStyle(2, COLORS.cyan, 0.7));
     layer.add(scene.add.text(W / 2, top + 20, '個人檔案', textStyle(26, '#ffffff')).setOrigin(0.5).setStroke('#ff3d81', 4));
     const curA = currentAvatar(s);
     const curF = currentFrame(s);
@@ -96,14 +96,18 @@ export function openProfile(scene: Phaser.Scene, onChange: () => void) {
     layer.add(scene.add.text(46, top + 220, '頭像', textStyle(18, '#3df5ff')).setOrigin(0, 0.5));
     layer.add(scene.add.text(W - 46, top + 220, '解鎖角色後就能使用', textStyle(12, COLORS.dim, false)).setOrigin(1, 0.5));
     const ids = Object.keys(CHARACTERS) as CharId[];
+    // 頭像：每排 4 個，超過就換行，不會超出視窗
     ids.forEach((id, i) => {
-      const x = W / 2 + (i - (ids.length - 1) / 2) * 130;
-      const y = top + 296;
+      const perRow = 4;
+      const row = Math.floor(i / perRow);
+      const inRow = Math.min(perRow, ids.length - row * perRow);
+      const x = W / 2 + ((i % perRow) - (inRow - 1) / 2) * 112;
+      const y = top + 280 + row * 112;
       const owned = s.chars.includes(id);
-      const av = drawAvatar(scene, x, y, 96, id, FRAMES[0], !owned);
+      const av = drawAvatar(scene, x, y, 80, id, FRAMES[0], !owned);
       layer.add(av);
-      if (id === curA) layer.add(scene.add.circle(x, y, 52).setStrokeStyle(3, 0x5dff7a));
-      layer.add(scene.add.text(x, y + 56, owned ? CHARACTERS[id].name.split('・')[1] ?? CHARACTERS[id].name : '未解鎖', textStyle(13, owned ? '#ffffff' : '#5a5678', false)).setOrigin(0.5, 0));
+      if (id === curA) layer.add(scene.add.circle(x, y, 44).setStrokeStyle(3, 0x5dff7a));
+      layer.add(scene.add.text(x, y + 44, owned ? CHARACTERS[id].name.split('・')[1] ?? CHARACTERS[id].name : '未解鎖', textStyle(13, owned ? '#ffffff' : '#5a5678', false)).setOrigin(0.5, 0));
       if (owned)
         av.setInteractive({ useHandCursor: true }).on('pointerup', () => {
           const sv = loadSave();
@@ -115,12 +119,12 @@ export function openProfile(scene: Phaser.Scene, onChange: () => void) {
         });
     });
 
-    layer.add(scene.add.text(46, top + 400, '頭像框', textStyle(18, '#3df5ff')).setOrigin(0, 0.5));
+    layer.add(scene.add.text(46, top + 490, '頭像框', textStyle(18, '#3df5ff')).setOrigin(0, 0.5));
     FRAMES.forEach((f, i) => {
       const col = i % 3;
       const row = Math.floor(i / 3);
       const x = W / 2 + (col - 1) * 150;
-      const y = top + 474 + row * 132;
+      const y = top + 550 + row * 124;
       const ok = f.unlocked(s);
       const av = drawAvatar(scene, x, y, 84, curA, f, !ok);
       if (!ok) av.setAlpha(0.6);
@@ -138,7 +142,7 @@ export function openProfile(scene: Phaser.Scene, onChange: () => void) {
           draw();
         });
     });
-    layer.add(makeButton(scene, W / 2, top + 744, 220, 58, '關閉', COLORS.cyan, () => layer.destroy(), 20));
+    layer.add(makeButton(scene, W / 2, top + 812, 220, 58, '關閉', COLORS.cyan, () => layer.destroy(), 20));
   };
   draw();
   layer.setAlpha(0);

@@ -1,6 +1,6 @@
 // 三池扭蛋的共用邏輯：付費、抽卡、角色升星、式神等級與加成。
 import { CHARACTERS, CharId } from '../config/balance';
-import { CHAR_POOL, CHAR_RARITY, CHAR_TALENTS, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, STARTER, SpiritId, UNLOCK_SHARDS, spiritLevel, starStats } from '../config/gacha';
+import { CHAR_POOL, CHAR_RARITY, CHAR_TALENTS, UP_RATE, currentUp, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, STARTER, SpiritId, UNLOCK_SHARDS, spiritLevel, starStats } from '../config/gacha';
 import { ModuleItem, StatKey, makeModule } from '../config/meta';
 import { SaveData } from './storage';
 
@@ -70,8 +70,9 @@ function grant(s: SaveData, pool: PoolId, r: Rar): PullItem {
       s.wildShards += CHAR_POOL.ssrShards;
       return { kind: 'shards', rarity: r, char: 'wild', amount: CHAR_POOL.ssrShards };
     }
-    // SR／SSR：抽到角色本身
-    const c = pick(tier);
+    // SR／SSR：抽到角色本身；SSR 有 70% 是本期 UP 角色
+    const up = currentUp();
+    const c = r === 3 && tier.includes(up) && Math.random() < UP_RATE ? up : pick(tier);
     if (!s.chars.includes(c)) {
       s.chars.push(c);
       s.stars[c] = 1;

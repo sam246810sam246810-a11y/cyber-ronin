@@ -127,3 +127,28 @@ export const CHAR_TALENTS: CharTalent[] = [
   { name: '戰鬥本能', desc: '攻擊力 +8%', shards: 20, credits: 1500 },
   { name: '奧義覺醒', desc: '大招傷害 +30%', shards: 30, credits: 2500 },
 ];
+
+// ---------- 本期 UP（每週輪流主打一位 SSR） ----------
+export const SSR_UP_ROTATION: CharId[] = ['kagura', 'misora'];
+/** 抽到 SSR 角色時，是本期 UP 角色的機率 */
+export const UP_RATE = 0.7;
+
+function weekIndex(d = new Date()): number {
+  // 以週一為一週的開始
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = (t.getDay() + 6) % 7;
+  t.setDate(t.getDate() - day);
+  return Math.floor(t.getTime() / (7 * 86400000));
+}
+
+export function currentUp(d = new Date()): CharId {
+  return SSR_UP_ROTATION[weekIndex(d) % SSR_UP_ROTATION.length];
+}
+
+/** 本期結束時間（本週日 23:59） */
+export function upEndsText(d = new Date()): string {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const left = (7 - ((t.getDay() + 6) % 7)) - 1;
+  t.setDate(t.getDate() + left);
+  return `${t.getMonth() + 1}/${t.getDate()}（日）23:59`;
+}
