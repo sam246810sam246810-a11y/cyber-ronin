@@ -13,14 +13,17 @@ npm run build:artifact # 另外產生可發佈成 Claude Artifact 的 dist-artif
 npm run assets         # 重新產生佔位素材（tileset、主角、狐火村地圖）
 ```
 
-## 目前進度：M1 骨架
+## 目前進度：序章試玩版（M1 骨架＋提前加入的探索與劇情）
 
-- 場景流程：Boot（載入）→ Title（點擊開始）→ World（地圖）＋ UI（疊加層）
-- 狐火村地圖：Tiled JSON 格式（`assets/maps/village.json`），可用 Tiled 開啟編輯；tile 屬性 `collides` 決定碰撞
-- 主角四方向走路動畫、碰撞、鏡頭跟隨並限制在地圖範圍
-- 浮動觸控搖桿（左半邊）；只做觸控，電腦上可用滑鼠拖曳
-- 直向持握時提示轉成橫向
-- 內部解析度 480×270，畫布以 3 倍渲染讓中文字清楚
+可以從頭玩到「序章 完」，約 5–10 分鐘：
+燈的家 → 狐火村 → 神社找宮司爺爺 → 注連繩解開 → 迷霧竹林 → 古井 → 回神社報告。
+
+- 7 張地圖：狐火村、迷霧竹林，以及 5 間可以進去的室內（燈的家、阿梅的家、道具屋、鍛冶屋、神社）
+- 6 位 NPC，對話會依主線進度改變（`src/data/dialogues.json`）
+- 6 個寶箱（只能開一次），竹林裡有狐火提示的隱藏密道
+- 劇情旗標控制區域解鎖（竹林入口的注連繩）
+- 介面：觸控搖桿、調查／對話鈕、對話框（逐字顯示）、金錢與目標、獲得道具提示
+- 尚未做：戰鬥（M2）、等級與裝備（M3）、存檔（M6）——重新整理頁面會從頭開始
 
 ## 結構
 
@@ -30,8 +33,9 @@ src/
   config.ts        解析度、速度、場景名稱
   scenes/          Boot、Title、World、UI
   entities/        Player
-  systems/         純邏輯（movement、inputState），有單元測試
-  ui/              VirtualJoystick、camera 工具
+  systems/         純邏輯（movement、dialogue、gameState、interaction），有單元測試
+  data/            對話、NPC、地圖清單
+  ui/              VirtualJoystick、ActionButton、DialogueBox、camera 工具
 assets/            佔位素材（由 scripts/gen-placeholder-assets.mjs 產生）
 scripts/           素材產生器、Artifact 打包
 tests/             Vitest

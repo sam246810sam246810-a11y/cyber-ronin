@@ -1,0 +1,20 @@
+{
+  "priest": {
+    "frame": 0
+  },
+  "kon": {
+    "frame": 2
+  },
+  "rin": {
+    "frame": 4
+  },
+  "tesshin": {
+    "frame": 6
+  },
+  "ume": {
+    "frame": 8
+  },
+  "taro": {
+    "frame": 10
+  }
+}

@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import { GAME_HEIGHT, GAME_WIDTH, SCENES, TILE_SIZE } from '../config';
-import { useLogicalCamera } from '../ui/camera';
 import { Player } from '../entities/Player';
+import { useLogicalCamera } from '../ui/camera';
+import { MAPS } from '../data/maps';
 import tilesUrl from '../../assets/tiles/tiles.png';
 import playerUrl from '../../assets/sprites/player.png';
-import villageMap from '../../assets/maps/village.json';
+import npcsUrl from '../../assets/sprites/npcs.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super(SCENES.boot); }
@@ -16,9 +17,12 @@ export class BootScene extends Phaser.Scene {
     const bar = this.add.rectangle(box.x - w / 2, box.y, 0, 6, 0xe8823a).setOrigin(0, 0.5);
     this.load.on('progress', (p: number) => { bar.width = w * p; });
 
+    const frame = { frameWidth: TILE_SIZE, frameHeight: TILE_SIZE };
     this.load.image('tiles', tilesUrl);
-    this.load.spritesheet('player', playerUrl, { frameWidth: TILE_SIZE, frameHeight: TILE_SIZE });
-    this.load.tilemapTiledJSON('village', villageMap);
+    this.load.spritesheet('tilesheet', tilesUrl, frame); // 寶箱、告示牌等物件用同一張圖
+    this.load.spritesheet('player', playerUrl, frame);
+    this.load.spritesheet('npcs', npcsUrl, frame);
+    for (const [key, data] of Object.entries(MAPS)) this.load.tilemapTiledJSON(key, data);
   }
 
   create(): void {
