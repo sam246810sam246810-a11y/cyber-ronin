@@ -40,7 +40,8 @@ import type { UIScene } from './UIScene';
 interface Enemy {
   active: boolean;
   def: EnemyDef;
-  img: Phaser.GameObjects.Image;
+  img: Phaser.GameObjects.Sprite;
+  animBase: string;
   x: number;
   y: number;
   hp: number;
@@ -212,7 +213,7 @@ export class GameScene extends Phaser.Scene {
   lastHitFx = 0;
   invuln = 0;
   hurtFlash = 0;
-  playerImg!: Phaser.GameObjects.Image;
+  playerImg!: Phaser.GameObjects.Sprite;
   facingImg!: Phaser.GameObjects.Image;
   shadowG!: Phaser.GameObjects.Graphics;
 
@@ -328,7 +329,7 @@ export class GameScene extends Phaser.Scene {
     this.hpBar = this.add.graphics().setDepth(11);
     const ringKey = this.textures.exists('field-ring') ? 'field-ring' : 'ring';
     this.fieldImg = this.add.image(0, 0, ringKey).setDepth(4).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
-    this.playerImg = this.add.image(0, 0, `char-${this.char.id}`).setScale(0.8).setDepth(10).setOrigin(0.5, 0.8);
+    this.playerImg = this.add.sprite(0, 0, `char-${this.char.id}`).setScale(0.8).setDepth(10).setOrigin(0.5, 0.8);
     this.facingImg = this.add.image(0, 0, 'facing').setScale(0.7 / TEX).setDepth(1).setAlpha(0.45).setTint(0x3df5ff);
     this.sparks = this.add.particles(0, 0, 'spark', {
       lifespan: 380,
@@ -582,7 +583,7 @@ export class GameScene extends Phaser.Scene {
 
   private obtainEnemy(): Enemy {
     for (const e of this.enemies) if (!e.active && !e.img.visible) return e;
-    const img = this.add.image(0, 0, 'e-drone').setDepth(5).setVisible(false);
+    const img = this.add.sprite(0, 0, 'e-drone').setDepth(5).setVisible(false);
     const e = { img, active: false } as Enemy;
     this.enemies.push(e);
     return e;
@@ -630,7 +631,9 @@ export class GameScene extends Phaser.Scene {
     });
     const tex = this.textures.exists(def.tex) ? def.tex : `e-${kind}`;
     e.baseScale = tex === def.tex ? 0.5 : 1 / TEX;
-    e.img.setTexture(tex).setVisible(true).setPosition(x, y).clearTint().setAlpha(1).setScale(e.baseScale).setFlipX(false);
+    e.img.anims.stop();
+    e.img.setTexture(tex).setVisible(true).setPosition(x, y).clearTint().setAlpha(1).setScale(e.baseScale).setFlipX(false).setOrigin(0.5);
+    this.applyEnemyAnim(e, def.tex);
     e.img.setDepth(kind === 'boss' ? 7 : kind === 'elite' ? 6 : 5);
     this.activeEnemies.push(e);
     return e;
@@ -652,11 +655,23 @@ export class GameScene extends Phaser.Scene {
     e.speed = b.speed;
     e.radius = b.radius;
     if (this.textures.exists(b.tex)) {
-      e.img.setTexture(b.tex);
+      e.img.anims.stop();
+      e.img.setTexture(b.tex).setOrigin(0.5);
       e.baseScale = 0.5;
       e.img.setScale(0.5);
+      this.applyEnemyAnim(e, b.tex);
     }
     this.bosses.push(e);
+  }
+
+  /** 有生成的移動動畫就播放（影格畫布：腳底在 90% 高度，身體中心約在 57%） */
+  private applyEnemyAnim(e: Enemy, tex: string) {
+    e.animBase = '';
+    if (!this.anims.exists(`${tex}-move`)) return;
+    e.animBase = tex;
+    e.img.setOrigin(0.5, 0.57);
+    const anim = this.anims.get(`${tex}-move`);
+    e.img.play({ key: `${tex}-move`, startFrame: Math.floor(Math.random() * anim.frames.length) });
   }
 
   // ---------- 玩家 ----------
@@ -1979,6 +1994,8 @@ export class GameScene extends Phaser.Scene {
     this.atkX = dx / l;
     this.atkY = dy / l;
     this.atkT = 0.26;
+    const atkAnim = `char-${this.char.id}-atk`;
+    if (this.anims.exists(atkAnim)) this.playerImg.play(atkAnim);
     // 殘影
     let gh = this.ghosts.find((g) => g.life <= 0);
     if (!gh) {
@@ -2071,22 +2088,36 @@ export class GameScene extends Phaser.Scene {
     const blink = this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0;
     const bob = this.moving ? Math.abs(Math.sin(this.t * 12)) * 3 : Math.sin(this.t * 3) * 0.8;
     const atk = this.atkT > 0 ? Math.sin((this.atkT / 0.26) * Math.PI) : 0;
-    const atkKey = `char-${this.char.id}-atk`;
-    const useAtk = this.atkT > 0 && this.textures.exists(atkKey);
-    const key = useAtk ? atkKey : `char-${this.char.id}`;
-    if (this.playerImg.texture.key !== key) {
-      this.playerImg.setTexture(key);
-      // 讓腳底對齊：待機圖高 96，原點在 80% 處
-      this.playerImg.setOrigin(0.5, 1 - 19.2 / (this.playerImg.frame.height || 96));
-    }
+    const cb = `char-${this.char.id}`;
     const flip = this.atkT > 0 ? this.atkX < 0 : this.faceX < -0.1;
     const base = 0.8;
-    this.playerImg
-      .setPosition(this.px + this.atkX * atk * 9, this.py + 6 - bob + this.atkY * atk * 6)
-      .setScale(base * (1 + atk * 0.14), base * (1 - atk * 0.1))
-      .setAngle(this.atkT > 0 ? (flip ? -1 : 1) * atk * 8 : 0)
-      .setAlpha(blink ? 0.45 : 1)
-      .setFlipX(flip);
+    if (this.anims.exists(`${cb}-idle`)) {
+      // 精靈圖動畫：待機／跑步／攻擊
+      const want = this.atkT > 0 && this.anims.exists(`${cb}-atk`) ? `${cb}-atk` : this.moving && this.anims.exists(`${cb}-run`) ? `${cb}-run` : `${cb}-idle`;
+      if (this.playerImg.anims.currentAnim?.key !== want) this.playerImg.play(want);
+      this.playerImg
+        .setOrigin(0.5, 0.9)
+        .setPosition(this.px + this.atkX * atk * 6, this.py + 16)
+        .setScale(base)
+        .setAngle(0)
+        .setAlpha(blink ? 0.45 : 1)
+        .setFlipX(flip);
+    } else {
+      const atkKey = `${cb}-atk`;
+      const useAtk = this.atkT > 0 && this.textures.exists(atkKey);
+      const key = useAtk ? atkKey : cb;
+      if (this.playerImg.texture.key !== key) {
+        this.playerImg.setTexture(key);
+        // 讓腳底對齊：待機圖高 96，原點在 80% 處
+        this.playerImg.setOrigin(0.5, 1 - 19.2 / (this.playerImg.frame.height || 96));
+      }
+      this.playerImg
+        .setPosition(this.px + this.atkX * atk * 9, this.py + 6 - bob + this.atkY * atk * 6)
+        .setScale(base * (1 + atk * 0.14), base * (1 - atk * 0.1))
+        .setAngle(this.atkT > 0 ? (flip ? -1 : 1) * atk * 8 : 0)
+        .setAlpha(blink ? 0.45 : 1)
+        .setFlipX(flip);
+    }
     if (this.hurtFlash > 0) this.playerImg.setTint(0xff7090);
     else this.playerImg.clearTint();
     this.facingImg.setPosition(this.px + this.faceX * 36, this.py + 8 + this.faceY * 22).setRotation(Math.atan2(this.faceY, this.faceX));
@@ -2094,9 +2125,18 @@ export class GameScene extends Phaser.Scene {
     // 敵人
     for (const e of this.activeEnemies) {
       if (!e.active) continue;
-      const wob = Math.sin(this.t * 8 + e.phase);
-      e.img.setPosition(e.x, e.y + wob * 1.5).setFlipX(e.x > this.px);
-      e.img.setScale(e.baseScale * (1 + wob * 0.03), e.baseScale * (1 - wob * 0.03));
+      if (e.animBase) {
+        e.img.setPosition(e.x, e.y).setFlipX(e.x > this.px);
+        if (e.boss) {
+          const attacking = e.bossState !== 'chase' && this.anims.exists(`${e.animBase}-atk`);
+          const want = attacking ? `${e.animBase}-atk` : `${e.animBase}-move`;
+          if (e.img.anims.currentAnim?.key !== want) e.img.play(want);
+        }
+      } else {
+        const wob = Math.sin(this.t * 8 + e.phase);
+        e.img.setPosition(e.x, e.y + wob * 1.5).setFlipX(e.x > this.px);
+        e.img.setScale(e.baseScale * (1 + wob * 0.03), e.baseScale * (1 - wob * 0.03));
+      }
       if (e.flash > 0) e.img.setTintFill(0xffffff);
       else if (e.virusT > 0) e.img.setTint(0x9dffb0);
       else if (e.slow > 0) e.img.setTint(0x9fb0ff);

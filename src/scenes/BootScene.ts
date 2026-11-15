@@ -37,6 +37,21 @@ export class BootScene extends Phaser.Scene {
       keys.sort((a, b) => +a.split('-').pop()! - +b.split('-').pop()!);
       if (!this.anims.exists(`fx-${name}`)) this.anims.create({ key: `fx-${name}`, frames: keys.map((key) => ({ key })), frameRate: 24 });
     }
+    // 角色／敵人動畫：<名稱>-<idle|run|atk|move>-<影格>
+    const rates: Record<string, number> = { idle: 6, run: 12, move: 10, atk: 16 };
+    const sets = new Map<string, string[]>();
+    for (const k of this.textures.getTextureKeys()) {
+      const m = /^(.+)-(idle|run|atk|move)-(\d+)$/.exec(k);
+      if (!m) continue;
+      const key = `${m[1]}-${m[2]}`;
+      if (!sets.has(key)) sets.set(key, []);
+      sets.get(key)!.push(k);
+    }
+    for (const [key, keys] of sets) {
+      keys.sort((a, b) => +a.split('-').pop()! - +b.split('-').pop()!);
+      const kind = key.split('-').pop()!;
+      if (!this.anims.exists(key)) this.anims.create({ key, frames: keys.map((k) => ({ key: k })), frameRate: rates[kind], repeat: kind === 'atk' ? 0 : -1 });
+    }
     try {
       createTextures(this);
     } catch (e) {

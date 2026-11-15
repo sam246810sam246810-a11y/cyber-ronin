@@ -28,9 +28,16 @@ export class MenuScene extends Phaser.Scene {
     const char = CHARACTERS[save.lastChar] ?? CHARACTERS.jin;
     const heroY = H * 0.43;
     const glow = this.add.ellipse(W / 2, heroY + 70, 180, 40, COLORS.cyan, 0.15);
-    const portraitKey = this.textures.exists(`portrait-${char.id}`) ? `portrait-${char.id}` : `char-${char.id}`;
-    const hero = this.add.image(W / 2, heroY, portraitKey).setDisplaySize(190, 190);
-    this.tweens.add({ targets: hero, y: heroY - 8, yoyo: true, repeat: -1, duration: 1600, ease: 'Sine.InOut' });
+    let hero: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+    if (this.anims.exists(`char-${char.id}-idle`)) {
+      // 主選單上的角色播放待機動畫
+      hero = this.add.sprite(W / 2, heroY + 80, `char-${char.id}-idle-0`).setOrigin(0.5, 0.9).setScale(1.9);
+      (hero as Phaser.GameObjects.Sprite).play(`char-${char.id}-idle`);
+    } else {
+      const portraitKey = this.textures.exists(`portrait-${char.id}`) ? `portrait-${char.id}` : `char-${char.id}`;
+      hero = this.add.image(W / 2, heroY, portraitKey).setDisplaySize(190, 190);
+    }
+    this.tweens.add({ targets: hero, y: hero.y - 6, yoyo: true, repeat: -1, duration: 1600, ease: 'Sine.InOut' });
     this.tweens.add({ targets: glow, alpha: 0.05, yoyo: true, repeat: -1, duration: 1600 });
 
     const by = H * 0.64;

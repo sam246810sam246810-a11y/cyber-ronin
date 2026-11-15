@@ -35,3 +35,14 @@ npm run build:artifact # 另外產生可發布成 Claude Artifact 的 artifact/c
 2. `art/tools/fetch.sh <名稱> <網址>` 下載到 `art/raw/`（不進版控）
 3. `python3 -I art/tools/process.py art/raw/<檔> <名稱> <最大邊長>`：裁切、縮小成 `src/assets/sprites/`；圖示表用 `--grid 4x4 --names ...` 切開
 4. `art/tools/audio.sh`：音樂與音效壓縮、統一音量，輸出到 `src/assets/audio/`
+
+### 動畫與圖示工具（需要裝了 numpy、scipy、pillow、fonttools 的 Python 環境）
+
+- `art/tools/sheet.py`：切角色精靈表（例如 4×3 的待機／跑步／攻擊），每格對齊腳底、統一縮放
+- `art/tools/gif.py`：把模型輸出的 GIF 動畫拆成影格（之後交給 sheet.py）
+- `art/tools/frames.py`：切特效影格表（不個別裁切，保持位置一致）
+- `art/tools/icons.py`：切圖示表，只保留每格中間那個圖示
+- `art/tools/quantize.py`：把影格壓成 256 色 PNG，減少檔案大小
+- `art/tools/font.py`：把 Cubic 11 字型裁成遊戲用到的字（新增文字後要重跑）
+
+動畫命名規則：`<名稱>-<idle|run|atk|move>-<影格>.png`，遊戲啟動時會自動建立動畫。
