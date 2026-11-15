@@ -13,6 +13,7 @@ const BEHAVIOUR: Record<string, Behaviour> = {
   bonespider: 'shooter', dorotabou: 'shooter', chochin: 'slam', suiko: 'slam', dummy: 'none',
   karasu: 'shooter', yamawaro: 'hop', kamaitachi: 'dash', oogarasu: 'slam',
   gaki: 'chase', aka_oni: 'slam', ao_oni: 'dash', onibi: 'shooter', ibaraki: 'slam',
+  crab: 'hop', isonna: 'shooter', umi_imp: 'chase', nureonna: 'slam',
 };
 
 const SIGHT = 100;   // 進入視野開始追擊

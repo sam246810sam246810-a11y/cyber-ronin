@@ -57,7 +57,7 @@ export function rollAffixes(rng: Rng, count: number, tier: number): Affix[] {
   for (let i = 0; i < count && keys.length; i++) {
     const k = keys.splice(Math.floor(rng() * keys.length), 1)[0];
     const [lo, hi, int] = AFFIX_POOL[k];
-    const raw = (lo + rng() * (hi - lo)) * ([1, 1, 1.6, 2.2, 2.8][tier] ?? 2.8);
+    const raw = (lo + rng() * (hi - lo)) * ([1, 1, 1.6, 2.2, 2.8, 3.4][tier] ?? 3.4);
     out.push({ stat: k as StatKey, value: int ? Math.round(raw) : Math.round(raw * 10) / 10 });
   }
   return out;

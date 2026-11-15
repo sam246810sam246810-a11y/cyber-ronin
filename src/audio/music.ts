@@ -52,6 +52,15 @@ export const TRACKS: Record<string, Track> = {
     ],
     drums: [2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 1, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 1, 0, 1, 0, 0, 0],
   },
+  // 海邊與龍宮：慢慢搖晃的波浪與琴聲
+  sea: {
+    bpm: 80,
+    voices: [
+      { wave: 'triangle', octave: 0, gain: 0.18, decay: 0.7, notes: [4, _, 5, _, 7, _, _, _, 6, _, 5, _, 4, _, _, _, 2, _, 4, _, 5, _, _, _, 4, _, 2, _, 1, _, _, _] },
+      { wave: 'sine', octave: -2, gain: 0.15, decay: 2.2, attack: 0.2, notes: [0, _, _, _, _, _, _, _, 3, _, _, _, _, _, _, _, 1, _, _, _, _, _, _, _, 0, _, _, _, _, _, _, _] },
+      { wave: 'sine', octave: 2, gain: 0.04, decay: 0.3, notes: [_, _, _, _, _, 7, _, _, _, _, _, _, _, 6, _, _, _, _, _, _, _, 7, _, _, _, _, _, _, _, 8, _, _] },
+    ],
+  },
   // 鬼之城：沉重的低音與不安的高音
   oni: {
     bpm: 76,
@@ -89,8 +98,9 @@ export function trackForMap(map: string): string {
   if (map === 'mountain' || map === 'tengu_temple') return 'mountain';
   if (map === 'oni_road' || /^oni_castle\d$/.test(map)) return 'oni';
   if (map === 'yomi') return 'final';
+  if (map === 'coast' || /^ryugu\d$/.test(map)) return 'sea';
   if (/^b\d$/.test(map) || /^suijin\d$/.test(map)) return 'dungeon';
-  if (map === 'lair' || map === 'kappa_lair' || map === 'tengu_lair' || map === 'shuten_lair') return 'boss';
+  if (map === 'lair' || map === 'kappa_lair' || map === 'tengu_lair' || map === 'shuten_lair' || map === 'umibozu_lair') return 'boss';
   return 'village';
 }
 

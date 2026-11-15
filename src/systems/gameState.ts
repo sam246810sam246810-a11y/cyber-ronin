@@ -213,7 +213,15 @@ export function className(s: GameState): string {
 /** 目前的主線目標（顯示在畫面上方）。 */
 export function currentObjective(flags: ReadonlySet<string>): string {
   // 先看章節：已經結束的章節不再回頭看裡面的旗標
-  if (flags.has('game_cleared')) return '全破！感謝遊玩《狐火行》';
+  if (flags.has('chapter5_done')) return '第五章完成！感謝遊玩《狐火行》';
+  if (flags.has('ch5_started')) {
+    if (!flags.has('visited:coast')) return '第五章：從河童沼澤南邊前往海邊';
+    if (!flags.has('visited:ryugu1')) return '海邊：請海龜帶你去龍宮';
+    if (!flags.has('visited:ryugu2')) return '龍宮一樓：找到往上的路';
+    if (!flags.has('reached_umibozu_door')) return '龍宮二樓：拉下拉桿，見乙姬';
+    return '平息海坊主的怒氣';
+  }
+  if (flags.has('game_cleared')) return '全破！感謝遊玩《狐火行》（神社的宮司爺爺好像有話要說）';
   if (flags.has('yomi_open')) return '黃泉之門：和夜叉丸一起打倒百鬼之主';
   if (flags.has('chapter3_done')) {
     if (!flags.has('ch4_started')) return '最終章：到神社找宮司爺爺';

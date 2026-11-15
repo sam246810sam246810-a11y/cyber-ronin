@@ -29,7 +29,7 @@ import { hudState, type MapMarker } from '../systems/hudState';
 import { EV, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
 import type { Facing } from '../systems/movement';
 
-type Chapter = 'ch1' | 'ch2' | 'ch3' | 'endA' | 'endB' | 'endTrue';
+type Chapter = 'ch1' | 'ch2' | 'ch3' | 'ch5' | 'endA' | 'endB' | 'endTrue';
 interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: Chapter | boolean; floor?: number }
 type BossLike = Boss | KappaKing | Daitengu | OmniBoss;
 /** 每個 Boss 的對話與旗標 */
@@ -45,6 +45,11 @@ const BOSSES: Record<string, { name: string; intro: string; retry: string; seen:
   hyakki: { name: '百鬼之主', intro: 'hyakki_intro', retry: 'hyakki_retry', seen: 'hyakki_seen', defeated: 'hyakki_defeated', flags: ['hyakki_defeated', 'game_cleared', 'ending_true'], outro: 'endTrue',
     tip: '打碎四個角落的結界石，百鬼之主會動不了！', reward: { money: 9999, item: '真・神器', tier: 4 } },
 };
+const BOSSES_CH5 = {
+  umibozu: { name: '海坊主', intro: 'umibozu_intro', retry: 'umibozu_retry', seen: 'umibozu_seen', defeated: 'umibozu_defeated', flags: ['umibozu_defeated', 'chapter5_done'], outro: 'ch5' as Chapter,
+    tip: '敲響四個角落的龍宮寶珠，海坊主會平靜下來！', reward: { money: 8000, item: '龍宮的寶珠', tier: 5 } },
+};
+Object.assign(BOSSES, BOSSES_CH5);
 /** 神器碎片放在這些寶箱裡（舊存檔開過的話，最終章開始時補發） */
 const SHARD_CHESTS = ['forest_chest_secret', 'swamp_chest_secret', 'mt_chest_secret', 'oni_chest_secret'];
 
@@ -298,10 +303,10 @@ export class WorldScene extends Phaser.Scene {
         (sg.body as Phaser.Physics.Arcade.StaticBody).setSize(16, 16).setOffset(0, 0);
         break;
       }
-      case 'barrel': case 'sealstone': {
-        const s3 = this.add.sprite(x, y, 'tilesheet', o.type === 'barrel' ? FRAME.barrel : FRAME.sealStone).setDepth(y);
+      case 'barrel': case 'sealstone': case 'pearlstone': {
+        const s3 = this.add.sprite(x, y, 'tilesheet', o.type === 'barrel' ? FRAME.barrel : o.type === 'pearlstone' ? FRAME.pearl : FRAME.sealStone).setDepth(y);
         solid(s3);
-        const br: Breakable = { x, y, alive: true, onBreak: () => this.breakStunObject(br, s3, o.type === 'barrel') };
+        const br: Breakable = { x, y, alive: true, onBreak: () => this.breakStunObject(br, s3, o.type === 'barrel', o.type === 'pearlstone') };
         this.breakables.push(br);
         break;
       }
@@ -496,7 +501,7 @@ export class WorldScene extends Phaser.Scene {
   // ---------- 百鬼塔 ----------
   private makeBoss(kind: string, x: number, y: number): BossLike {
     return kind === 'kappaking' ? new KappaKing(this, x, y, gameState.difficulty) : kind === 'daitengu' ? new Daitengu(this, x, y, gameState.difficulty)
-      : kind === 'shuten' || kind === 'hyakki' ? new OmniBoss(this, x, y, kind, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
+      : kind === 'shuten' || kind === 'hyakki' || kind === 'umibozu' ? new OmniBoss(this, x, y, kind, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
   }
 
   private buildTowerFloor(): void {
@@ -866,13 +871,13 @@ export class WorldScene extends Phaser.Scene {
   }
 
   /** 酒樽、結界石：打破後 Boss 動彈不得 */
-  private breakStunObject(br: Breakable, sprite: Phaser.GameObjects.Sprite, barrel: boolean): void {
+  private breakStunObject(br: Breakable, sprite: Phaser.GameObjects.Sprite, barrel: boolean, pearl = false): void {
     sound.sfx('break');
     ring(this, br.x, br.y - 4, 30, barrel ? 0xe8e4d8 : 0xb08aff, 500);
     sprite.setAlpha(0.35);
     if (this.boss?.alive && this.boss.started) {
       this.boss.stun(barrel ? 4000 : 3500);
-      this.game.events.emit(EV.toast, barrel ? '神便鬼毒酒灑了出來，酒吞童子醉倒了！' : '結界石的光包住了百鬼之主！');
+      this.game.events.emit(EV.toast, pearl ? '寶珠的光照亮了海底，海坊主平靜了下來！' : barrel ? '神便鬼毒酒灑了出來，酒吞童子醉倒了！' : '結界石的光包住了百鬼之主！');
     }
     this.time.delayedCall(12000, () => { if (sprite.active) { sprite.setAlpha(1); br.alive = true; } });
   }
@@ -968,7 +973,7 @@ export class WorldScene extends Phaser.Scene {
       const col = collectionReport(MAPS, gameState.openedChests, gameState.flags).percent;
       const m = Math.floor(gameState.playTime / 60);
       const path = gameState.bond >= gameState.anger ? '羈絆' : '怒火';
-      this.game.events.emit(EV.banner, { title: ({ ch1: '第一章　完', ch2: '第二章　完', ch3: '第三章　完' } as Record<string, string>)[ch], sub: `遊玩時間 ${m} 分・收集度 ${col}%・你走在「${path}」的路上`, duration: 6000 });
+      this.game.events.emit(EV.banner, { title: ({ ch1: '第一章　完', ch2: '第二章　完', ch3: '第三章　完', ch5: '第五章　完' } as Record<string, string>)[ch], sub: `遊玩時間 ${m} 分・收集度 ${col}%・你走在「${path}」的路上`, duration: 6000 });
       this.refreshHud(true);
     });
   }
@@ -1105,7 +1110,13 @@ export class WorldScene extends Phaser.Scene {
       this.syncQuests(); this.refreshHud(true);
       return;
     }
-    if (t.kind === 'npc' && this.npcQuest(t)) return;
+    if (t.kind === 'npc') {
+      // 會推進劇情的對話（會設定旗標）優先；沒有才輪到任務
+      const npcId = String(t.props.npc);
+      const story = pickVariant((dialogues as unknown as Record<string, DialogueVariant[]>)[String(t.props.dialogue ?? npcId)], gameState.flags);
+      const storyFirst = !!story?.set?.length && !readyFor(gameState, npcId).length;
+      if (!storyFirst && this.npcQuest(t)) return;
+    }
     if (t.kind === 'jizo') {
       const st = statsOf(gameState);
       gameState.hp = st.maxHp; gameState.mp = st.maxMp; gameState.statuses = {};
@@ -1130,6 +1141,10 @@ export class WorldScene extends Phaser.Scene {
       if (open === 'shop') this.game.events.emit(EV.shop, npc || 'rin');
       if (open === 'forge') this.game.events.emit(EV.forge);
       if (open?.startsWith('warp:')) { const [, map, spawn] = open.split(':'); this.goTo(map, spawn, 'up'); }
+      if (open === 'gift:tamatebako' || open === 'gift:kanzashi') {
+        const g = open === 'gift:tamatebako' ? giveRandomGear(gameState, Math.random, 5, 4) : (() => { const e = { uid: gameState.nextUid++, base: 'otohime_kanzashi' as const, rarity: 3, affixes: [] }; gameState.gear.push(e); return e; })();
+        if (g) this.game.events.emit(EV.toast, `獲得 ${gearLabel(g)}`);
+      }
       if (open?.startsWith('job:')) {
         const id = open.slice(4), j = (jobs as Record<string, { name: string; skills: string[] }>)[id];
         if (changeJob(gameState, id)) {

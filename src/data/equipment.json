@@ -392,5 +392,89 @@
       "mp": 20,
       "crit": 3
     }
+  },
+  "kusanagi": {
+    "name": "草薙劍",
+    "slot": "weapon",
+    "class": "swordsman",
+    "tier": 5,
+    "price": 2400,
+    "stats": {
+      "atk": 22,
+      "crit": 5
+    }
+  },
+  "amanokago_bow": {
+    "name": "天鹿兒弓",
+    "slot": "weapon",
+    "class": "archer",
+    "tier": 5,
+    "price": 2400,
+    "stats": {
+      "atk": 22,
+      "spd": 6
+    }
+  },
+  "ryugu_fan": {
+    "name": "龍宮扇",
+    "slot": "weapon",
+    "class": "onmyoji",
+    "tier": 5,
+    "price": 2400,
+    "stats": {
+      "atk": 21,
+      "mpRegen": 1.6
+    }
+  },
+  "dragon_helm": {
+    "name": "龍鱗兜",
+    "slot": "head",
+    "tier": 5,
+    "price": 1800,
+    "stats": {
+      "def": 9,
+      "hp": 35
+    }
+  },
+  "hagoromo": {
+    "name": "龍宮羽衣",
+    "slot": "body",
+    "tier": 5,
+    "price": 2200,
+    "stats": {
+      "def": 15,
+      "hp": 40
+    }
+  },
+  "coral_gloves": {
+    "name": "珊瑚籠手",
+    "slot": "hands",
+    "tier": 5,
+    "price": 1700,
+    "stats": {
+      "def": 8,
+      "atk": 4
+    }
+  },
+  "wave_zori": {
+    "name": "波乘草履",
+    "slot": "feet",
+    "tier": 5,
+    "price": 1700,
+    "stats": {
+      "spd": 12,
+      "def": 4
+    }
+  },
+  "otohime_kanzashi": {
+    "name": "乙姬的髮簪",
+    "slot": "accessory",
+    "tier": 5,
+    "price": 2500,
+    "stats": {
+      "hp": 40,
+      "mp": 30,
+      "crit": 4
+    }
   }
 }

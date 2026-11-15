@@ -503,5 +503,111 @@
       "frame": 4
     },
     "drops": []
+  },
+  "crab": {
+    "name": "蟹妖",
+    "hp": 420,
+    "atk": 80,
+    "def": 40,
+    "speed": 110,
+    "exp": 180,
+    "money": [
+      40,
+      70
+    ],
+    "frame": 28,
+    "drops": [
+      {
+        "item": "珊瑚碎片",
+        "chance": 0.5
+      }
+    ]
+  },
+  "isonna": {
+    "name": "磯女",
+    "hp": 300,
+    "atk": 82,
+    "def": 26,
+    "speed": 38,
+    "exp": 170,
+    "money": [
+      40,
+      70
+    ],
+    "frame": 30,
+    "shot": {
+      "frame": 4
+    },
+    "poisonChance": 0.3,
+    "drops": [
+      {
+        "item": "海坊主的墨",
+        "chance": 0.4
+      }
+    ]
+  },
+  "umi_imp": {
+    "name": "海小僧",
+    "hp": 220,
+    "atk": 76,
+    "def": 22,
+    "speed": 50,
+    "exp": 140,
+    "money": [
+      30,
+      60
+    ],
+    "frame": 26,
+    "tint": 8042751,
+    "drops": [
+      {
+        "item": "珊瑚碎片",
+        "chance": 0.3
+      }
+    ]
+  },
+  "nureonna": {
+    "name": "濡女",
+    "hp": 2200,
+    "atk": 96,
+    "def": 34,
+    "speed": 40,
+    "exp": 1200,
+    "money": [
+      300,
+      500
+    ],
+    "frame": 30,
+    "elite": true,
+    "tint": 9099519,
+    "drops": [
+      {
+        "item": "珊瑚碎片",
+        "chance": 1
+      },
+      {
+        "item": "海坊主的墨",
+        "chance": 1
+      }
+    ]
+  },
+  "umibozu": {
+    "name": "海坊主",
+    "hp": 6500,
+    "atk": 100,
+    "def": 32,
+    "speed": 40,
+    "exp": 5000,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 0,
+    "elite": true,
+    "shot": {
+      "frame": 4
+    },
+    "poisonChance": 0.3,
+    "drops": []
   }
 }

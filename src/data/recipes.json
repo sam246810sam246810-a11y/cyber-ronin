@@ -120,5 +120,30 @@
       "天狗的羽": 2,
       "河童的皿碎片": 2
     }
+  },
+  "class_weapon5": {
+    "name": "龍宮神器（依職業）",
+    "out": {
+      "swordsman": "kusanagi",
+      "archer": "amanokago_bow",
+      "onmyoji": "ryugu_fan"
+    },
+    "rarity": 3,
+    "money": 3000,
+    "mats": {
+      "玉鋼": 8,
+      "珊瑚碎片": 4,
+      "海坊主的墨": 2
+    }
+  },
+  "hagoromo": {
+    "name": "龍宮羽衣",
+    "out": "hagoromo",
+    "rarity": 3,
+    "money": 2000,
+    "mats": {
+      "珊瑚碎片": 5,
+      "海坊主的墨": 3
+    }
   }
 }

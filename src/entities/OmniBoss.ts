@@ -23,6 +23,8 @@ export const BOSS_CONFIGS: Record<string, BossConfig> = {
   // 酒吞童子：鐵棒重擊、火焰吐息 → 召喚餓鬼、衝撞 → 連續暴衝
   shuten: { texture: 'shuten', moves: [['slam', 'slam', 'breath'], ['summon', 'charge'], ['rampage', 'breath']], minions: ['gaki', 'gaki'], stunTint: 0xc8a8ff, slamRadius: 36 },
   // 百鬼之主：前三章 Boss 的招式全部都會
+  // 海坊主：墨汁扇射、大浪、拍擊 → 召喚海小僧、墨池、漩渦 → 狂暴的大浪與衝撞
+  umibozu: { texture: 'umibozu', moves: [['fan', 'band', 'slam'], ['summon', 'pool', 'tornado'], ['band', 'charge', 'gale']], minions: ['umi_imp', 'crab'], stunTint: 0xc8f0ff, slamRadius: 40, shotTint: 0x2a2a4a },
   hyakki: { texture: 'hyakki', moves: [['fan', 'slam', 'pool'], ['summon', 'tornado', 'band'], ['gale', 'line3', 'charge']], minions: ['onibi', 'gaki'], stunTint: 0xe8e8ff, slamRadius: 40, shotTint: 0xb08aff },
 };
 
@@ -44,7 +46,7 @@ export class OmniBoss extends Enemy {
   minionCount: () => number = () => 0;
   arena = { x: 0, y: 0, w: 0, h: 0 };
 
-  constructor(scene: Phaser.Scene, x: number, y: number, kind: 'shuten' | 'hyakki', difficulty: Difficulty) {
+  constructor(scene: Phaser.Scene, x: number, y: number, kind: 'shuten' | 'hyakki' | 'umibozu', difficulty: Difficulty) {
     super(scene, x, y, kind, difficulty);
     this.cfg = BOSS_CONFIGS[kind];
     this.setTexture(this.cfg.texture, 0).setScale(1);

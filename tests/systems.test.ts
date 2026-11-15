@@ -24,7 +24,8 @@ describe('pickVariant', () => {
       ['talked_priest', 'found_well', 'prologue_done', 'reached_boss_door'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done'],
       ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'visited:swamp'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'kappa_defeated'],
       ['chapter1_done', 'ch2_started', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'visited:mountain'], ['chapter1_done', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'tengu_defeated', 'chapter3_done'],
-      ['chapter3_done', 'tengu_defeated', 'ch4_started', 'visited:oni_road'], ['chapter3_done', 'ch4_started', 'shuten_defeated', 'game_cleared']];
+      ['chapter3_done', 'tengu_defeated', 'ch4_started', 'visited:oni_road'], ['chapter3_done', 'ch4_started', 'shuten_defeated', 'game_cleared'],
+      ['game_cleared', 'ch5_started', 'visited:coast'], ['game_cleared', 'ch5_started', 'umibozu_defeated', 'chapter5_done']];
     for (const [id, variants] of Object.entries(dialogues)) {
       for (const s of stages) expect(pickVariant(variants as DialogueVariant[], new Set(s)), `${id} @ ${s}`).toBeDefined();
     }
