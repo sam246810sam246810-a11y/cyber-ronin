@@ -431,8 +431,8 @@ export class UIScene extends Phaser.Scene {
       this.tweens.add({
         targets: dim,
         fillAlpha: 0,
-        duration: 500,
-        delay: 350,
+        duration: 400,
+        delay: 700,
         onComplete: () => {
           this.events.off('update', ticker);
           layer.removeAll(true);
@@ -441,83 +441,52 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  /** 生成的全螢幕大招特效圖（黑底，用發光疊加去掉黑色） */
-  private ultArt(layer: Phaser.GameObjects.Container, key: string, scale = 1) {
-    if (!this.textures.exists(key)) return null;
-    const img = this.add.image(W / 2, H / 2, key).setBlendMode(Phaser.BlendModes.ADD);
-    const src = img.texture.getSourceImage();
-    const base = Math.max(W / src.width, H / src.height) * scale;
-    img.setScale(base);
-    layer.add(img);
-    return { img, base };
+  /** 播放生成的全螢幕大招特效（影片切成的序列幀，黑底用發光疊加去掉） */
+  private ultAnim(layer: Phaser.GameObjects.Container, name: string, frameRate = 18) {
+    const key = `fx-${name}`;
+    if (!this.anims.exists(key)) return null;
+    const spr = this.add.sprite(W / 2, H / 2, `${key}-0`).setBlendMode(Phaser.BlendModes.ADD);
+    const src = spr.texture.getSourceImage();
+    const base = Math.max(W / src.width, H / src.height);
+    spr.setScale(base * 1.25).setAlpha(0.2);
+    layer.add(spr);
+    this.tweens.add({ targets: spr, scale: base, alpha: 1, duration: 120, ease: 'Cubic.Out' });
+    spr.play({ key, frameRate });
+    spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spr.destroy());
+    return spr;
   }
 
   private finisherSlash(layer: Phaser.GameObjects.Container) {
-    const a = this.ultArt(layer, 'ult-jin');
-    if (!a) return;
-    const { img, base } = a;
-    // 刀光由斜角猛力切入，再慢慢擴散淡出
-    img.setScale(base * 1.5).setAngle(-14).setAlpha(0);
-    this.tweens.add({ targets: img, scale: base * 1.02, angle: 0, alpha: 1, duration: 110, ease: 'Cubic.Out' });
-    this.tweens.add({ targets: img, scale: base * 1.12, delay: 110, duration: 750, ease: 'Sine.Out' });
-    this.tweens.add({ targets: img, alpha: 0, delay: 520, duration: 360 });
-    // 第二道：鏡像刀光晚 0.12 秒交錯切過
-    const b = this.ultArt(layer, 'ult-jin', 1.05);
-    if (b) {
-      b.img.setFlipX(true).setAlpha(0).setScale(b.base * 1.4).setAngle(12);
-      this.tweens.add({ targets: b.img, alpha: 0.45, scale: b.base, angle: 0, delay: 120, duration: 110, ease: 'Cubic.Out' });
-      this.tweens.add({ targets: b.img, alpha: 0, delay: 360, duration: 420 });
-    }
+    this.ultAnim(layer, 'ultjin');
   }
 
   private finisherCode(layer: Phaser.GameObjects.Container) {
-    const a = this.ultArt(layer, 'ult-zero');
-    if (a) {
-      const { img, base } = a;
-      // 從中心爆開，加上紅藍錯位與故障抖動
-      img.setScale(base * 0.5).setAlpha(0);
-      this.tweens.add({ targets: img, scale: base * 1.04, alpha: 1, duration: 160, ease: 'Back.Out' });
-      this.tweens.add({ targets: img, scale: base * 1.14, delay: 160, duration: 700 });
-      this.tweens.add({ targets: img, alpha: 0, delay: 560, duration: 340 });
-      for (const [tint, dx] of [[0xff3d81, -14], [0x3df5ff, 14]] as const) {
-        const c = this.ultArt(layer, 'ult-zero', 1.04);
-        if (!c) continue;
-        c.img.setTint(tint).setAlpha(0).setX(W / 2 + dx);
-        this.tweens.add({ targets: c.img, alpha: 0.45, delay: 120, duration: 60, yoyo: true, repeat: 3, onComplete: () => c.img.setAlpha(0) });
-      }
+    const spr = this.ultAnim(layer, 'ultzero');
+    // 故障抖動
+    if (spr) {
       let n = 0;
       this.time.addEvent({
-        delay: 55,
+        delay: 50,
         repeat: 6,
         callback: () => {
           n++;
-          img.x = W / 2 + (n % 2 ? 1 : -1) * (6 + Math.random() * 10);
-          if (n >= 7) img.x = W / 2;
+          spr.x = n >= 7 ? W / 2 : W / 2 + (n % 2 ? 1 : -1) * (5 + Math.random() * 8);
         },
       });
     }
-    // 故障橫條
-    for (let i = 0; i < 7; i++) {
-      const r = this.add.rectangle(W / 2 + (Math.random() - 0.5) * 60, Math.random() * H, W, 6 + Math.random() * 26, Math.random() < 0.6 ? 0x5dff7a : 0xff3d81, 0.3).setBlendMode(Phaser.BlendModes.ADD);
+    for (let i = 0; i < 6; i++) {
+      const r = this.add.rectangle(W / 2 + (Math.random() - 0.5) * 60, Math.random() * H, W, 6 + Math.random() * 22, Math.random() < 0.6 ? 0x5dff7a : 0xff3d81, 0.25).setBlendMode(Phaser.BlendModes.ADD);
       layer.add(r);
-      this.tweens.add({ targets: r, alpha: 0, x: r.x + (Math.random() - 0.5) * 140, delay: 80 + i * 55, duration: 180 });
+      this.tweens.add({ targets: r, alpha: 0, x: r.x + (Math.random() - 0.5) * 140, delay: 80 + i * 60, duration: 180 });
     }
   }
 
   private finisherThunder(layer: Phaser.GameObjects.Container) {
-    const a = this.ultArt(layer, 'ult-tetsu');
-    if (!a) return;
-    const { img, base } = a;
-    // 落雷從上方砸下，閃爍數次後擴散淡出
-    img.setY(H / 2 - 120).setAlpha(0).setScale(base * 1.06);
-    this.tweens.add({ targets: img, y: H / 2, alpha: 1, duration: 90, ease: 'Cubic.In' });
-    this.tweens.add({ targets: img, alpha: 0.55, delay: 120, duration: 50, yoyo: true, repeat: 3 });
-    this.tweens.add({ targets: img, scale: base * 1.14, delay: 100, duration: 760, ease: 'Sine.Out' });
-    this.tweens.add({ targets: img, alpha: 0, delay: 600, duration: 320 });
-    const glow = this.ultArt(layer, 'ult-tetsu', 1.3);
-    if (glow) {
-      glow.img.setAlpha(0.5);
-      this.tweens.add({ targets: glow.img, alpha: 0, scale: glow.base * 1.3, duration: 420, ease: 'Cubic.Out' });
+    const spr = this.ultAnim(layer, 'ulttetsu');
+    if (spr) {
+      // 落雷砸下的瞬間往下震
+      spr.y = H / 2 - 60;
+      this.tweens.add({ targets: spr, y: H / 2, duration: 90, ease: 'Cubic.In' });
     }
   }
 

@@ -379,6 +379,8 @@ export class GameScene extends Phaser.Scene {
   iaiCount = 0;
   lastKillT = -99;
   iaiFreeze = 0;
+  /** 大招發動後的特效時間（這段時間不跳升級視窗） */
+  ultAfter = 0;
   revivesLeft = RUN.revives;
   rerolls = RUN.rerolls;
   banishes = RUN.banishes;
@@ -584,6 +586,7 @@ export class GameScene extends Phaser.Scene {
     this.iaiCount = 0;
     this.lastKillT = -99;
     this.iaiFreeze = 0;
+    this.ultAfter = 0;
     this.revivesLeft = RUN.revives;
     this.banished = new Set();
     this.locked = null;
@@ -738,7 +741,10 @@ export class GameScene extends Phaser.Scene {
 
     if (this.iaiFreeze > 0) {
       this.iaiFreeze -= dt;
-      if (this.iaiFreeze <= 0) this.executeUltimate();
+      if (this.iaiFreeze <= 0) {
+        this.executeUltimate();
+        this.ultAfter = 0.9;
+      }
       this.render();
       return;
     }
@@ -780,7 +786,9 @@ export class GameScene extends Phaser.Scene {
       this.endRun(true);
       return;
     }
-    if (this.pendingLevels > 0) this.openLevelUp();
+    // 大招特效播完才跳升級視窗，避免蓋住特效
+    if (this.ultAfter > 0) this.ultAfter -= dt;
+    else if (this.pendingLevels > 0) this.openLevelUp();
   }
 
   // ---------- 時間軸 ----------
