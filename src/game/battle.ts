@@ -1,8 +1,9 @@
 import { MAP_ROWS, NodeKind } from '../data/chapters';
 import { ENEMIES, EnemyDef } from '../data/enemies';
-import { PARTNERS, starDmg } from '../data/partners';
+import { PARTNERS, awakenTier, starDmg } from '../data/partners';
+import { RARITIES } from '../data/equipment';
 import { xpNeed } from '../data/skills';
-import { getImage, sprite, whiteSprite } from '../core/assets';
+import { getImage, hasImage, sprite, whiteSprite } from '../core/assets';
 import { sfx, vibrate } from '../core/audio';
 import { Input } from '../core/input';
 import { track } from '../core/track';
@@ -15,13 +16,15 @@ export const VH = 960;
 const RX0 = 22, RX1 = 518, RY0 = 130, RY1 = 936;
 const TAU = Math.PI * 2;
 const SPACING = 40;          // 隊伍成員間距
-const ENEMY_HP_SCALE = 1.7;  // 車隊火力比單人高，敵人血量整體放大
+const ENEMY_HP_SCALE = 1.85; // 車隊火力比單人高，敵人血量整體放大
 
 interface Bullet {
   x: number; y: number; vx: number; vy: number; r: number; dmg: number;
   enemy: boolean; pierce: boolean; hits: Enemy[]; life: number; color: string; spin: number; src: string;
-  aoe: number; burn: number; slow: number; kind: 0 | 1 | 2 | 3; // 0 星 1 火球 2 紅蘿蔔 3 雪球
+  aoe: number; burn: number; slow: number; kind: BKind; // 0 星 1 火球 2 紅蘿蔔 3 雪球/墨汁 4 龜殼 5 羽毛 6 浪
+  owner: Member | null; homing: boolean; ret: boolean; age: number;
 }
+type BKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 interface Enemy {
   id: number; def: EnemyDef; x: number; y: number; r: number; hp: number; maxHp: number;
   vx: number; vy: number; kx: number; ky: number; flash: number; squash: number;
@@ -54,7 +57,7 @@ export class Battle {
   pos: Pos[] = [];      // 每幀計算的隊員位置
 
   enemies: Enemy[] = [];
-  bullets = new Pool<Bullet>(() => ({ x: 0, y: 0, vx: 0, vy: 0, r: 0, dmg: 0, enemy: false, pierce: false, hits: [], life: 0, color: '', spin: 0, src: '', aoe: 0, burn: 0, slow: 0, kind: 0 }));
+  bullets = new Pool<Bullet>(() => ({ x: 0, y: 0, vx: 0, vy: 0, r: 0, dmg: 0, enemy: false, pierce: false, hits: [], life: 0, color: '', spin: 0, src: '', aoe: 0, burn: 0, slow: 0, kind: 0, owner: null, homing: false, ret: false, age: 0 }));
   pickups = new Pool<Pickup>(() => ({ x: 0, y: 0, vx: 0, vy: 0, v: 0, xp: false, magnet: false, t: 0 }));
   parts = new Pool<Particle>(() => ({ x: 0, y: 0, vx: 0, vy: 0, t: 0, life: 0, size: 0, color: '', kind: 0, grav: 0 }));
   texts = new Pool<DmgText>(() => ({ x: 0, y: 0, vy: 0, t: 0, text: '', kind: 0 }));
@@ -87,6 +90,7 @@ export class Battle {
   bot = false;
   timeScale = 1;
   stopOnRelease = false;
+  regenT = 0;
   tutMove = false;
   tutT = 0;
   onTutDone: (() => void) | null = null;
@@ -209,6 +213,10 @@ export class Battle {
     if (this.freeze > 0) { this.freeze -= dt; return; }
 
     this.updateCaravan(dt);
+    if (this.run.forestRegen) {
+      this.regenT += dt;
+      if (this.regenT >= 5) { this.regenT = 0; for (const p of this.pos) this.healMember(p.m, p.m.maxHp * 0.03, p.x, p.y, true); }
+    }
     this.updateWeapons(dt);
     this.updateEnemies(dt);
     this.updateBullets(dt);
@@ -315,6 +323,19 @@ export class Battle {
         if (t) { this.shoot(p, t, dmg, 0, 520, '#f7d77c', 5); m.cdT = def.cd * 0.6; }
         continue;
       }
+      if (def.weapon === 'kungfu') {
+        const R = def.range + 6 * m.star;
+        const hit = this.enemies.filter((e) => e.alive && e.spawn <= 0 && dist2(e.x, e.y, p.x, p.y) < (R + e.r) ** 2);
+        if (!hit.length) continue;
+        for (const e of hit) {
+          const a = Math.atan2(e.y - p.y, e.x - p.x);
+          this.hitEnemy(e, dmg, Math.cos(a) * 1.2, Math.sin(a) * 1.2);
+          if (e.def.rank === 'normal') { e.slowT = Math.max(e.slowT, 0.35); e.slowAmt = 1; }
+          this.addPart(e.x, e.y, 0, 0, 0.18, e.r + 6, 'rgba(255,255,255,0.9)', 2, 0);
+        }
+        m.cdT = def.cd;
+        continue;
+      }
       if (def.weapon === 'slam') {
         const R = def.range + 10 * m.star;
         if (!this.enemies.some((e) => e.alive && e.spawn <= 0 && dist2(e.x, e.y, p.x, p.y) < (R + e.r) ** 2)) continue;
@@ -376,6 +397,73 @@ export class Battle {
           sfx.zap();
           break;
         }
+        case 'boomerang': {
+          const b = this.shoot(p, t, dmg, 4, 460, '#7cbf6a', 12 + m.star);
+          b.pierce = true; b.ret = true; b.owner = m; b.life = 2.6;
+          break;
+        }
+        case 'ink': {
+          const a = Math.atan2(t.y - p.y, t.x - p.x);
+          const n = m.star >= 3 ? 5 : 3;
+          for (let i = 0; i < n; i++) {
+            const b = this.shootAng(p, a + (i - (n - 1) / 2) * 0.28, dmg, 3, 420, '#7d4fb0', 8);
+            b.aoe = 34; b.slow = 0.35;
+          }
+          break;
+        }
+        case 'homing': {
+          const n = 3 + (m.star >= 3 ? 1 : 0) + (m.star >= 5 ? 1 : 0);
+          const a = Math.atan2(t.y - p.y, t.x - p.x);
+          for (let i = 0; i < n; i++) {
+            const b = this.shootAng(p, a + (i - (n - 1) / 2) * 0.7, dmg, 5, 420, '#5fd38a', 6);
+            b.homing = true; b.life = 2.2;
+          }
+          break;
+        }
+        case 'wave': {
+          const b = this.shoot(p, t, dmg, 6, 380, '#4fb3ff', 30 + m.star * 3);
+          b.pierce = true; b.life = 1.6;
+          this.shake = Math.max(this.shake, 2);
+          break;
+        }
+        case 'rainbow': {
+          const a = Math.atan2(t.y - p.y, t.x - p.x);
+          const L = def.range + 40;
+          const ex = p.x + Math.cos(a) * L, ey = p.y + Math.sin(a) * L;
+          const w = 18 + m.star * 2;
+          for (const e of this.enemies) {
+            if (!e.alive || e.spawn > 0) continue;
+            if (segDist2(p.x, p.y, ex, ey, e.x, e.y) < (w + e.r) ** 2) this.hitEnemy(e, dmg, Math.cos(a) * 0.6, Math.sin(a) * 0.6);
+          }
+          ['#ff6b6b', '#ffd23f', '#5ce07a', '#58c7ff', '#b48cf2'].forEach((c, i) => {
+            const o = (i - 2) * 4;
+            const ox = Math.cos(a + Math.PI / 2) * o, oy = Math.sin(a + Math.PI / 2) * o;
+            this.arcs.push({ pts: [p.x + ox, p.y + oy, ex + ox, ey + oy], t: 0.22, color: c });
+          });
+          for (const q of this.pos) this.healMember(q.m, q.m.maxHp * 0.015 * starDmg(m.star), q.x, q.y, true);
+          sfx.zap();
+          break;
+        }
+        case 'breath': {
+          const a = Math.atan2(t.y - p.y, t.x - p.x);
+          const R = def.range + 10 * m.star, half = 0.45;
+          for (const e of this.enemies) {
+            if (!e.alive || e.spawn > 0) continue;
+            const d = Math.sqrt(dist2(e.x, e.y, p.x, p.y));
+            if (d > R + e.r) continue;
+            let da = Math.atan2(e.y - p.y, e.x - p.x) - a;
+            while (da > Math.PI) da -= TAU;
+            while (da < -Math.PI) da += TAU;
+            if (Math.abs(da) > half + e.r / Math.max(d, 1)) continue;
+            this.hitEnemy(e, dmg, Math.cos(a) * 0.3, Math.sin(a) * 0.3);
+            e.burnT = 2; e.burnDps = Math.max(e.burnDps, run.atk * 0.3 * starDmg(m.star));
+          }
+          for (let i = 0; i < 6; i++) {
+            const aa = a + rand(-half, half), sp = rand(250, 420);
+            this.addPart(p.x, p.y, Math.cos(aa) * sp, Math.sin(aa) * sp, 0.45, rand(6, 11), i % 2 ? '#ff8a3d' : '#ffd23f', 0, 0);
+          }
+          break;
+        }
         case 'frost': {
           const b = this.shoot(p, t, dmg, 3, 460, '#e8f6ff', 9);
           b.aoe = run.combos.has('combo_blizzard') ? 120 : m.star >= 3 ? 75 : 55;
@@ -386,18 +474,19 @@ export class Battle {
     }
   }
 
-  shoot(from: { x: number; y: number }, t: Enemy, dmg: number, kind: 0 | 1 | 2 | 3, sp: number, color: string, r: number, jitter = 0): Bullet {
+  shoot(from: { x: number; y: number }, t: Enemy, dmg: number, kind: BKind, sp: number, color: string, r: number, jitter = 0): Bullet {
     const d = Math.sqrt(dist2(from.x, from.y, t.x, t.y)) / sp;
     const a = Math.atan2(t.y + t.vy * d * 0.5 - from.y, t.x + t.vx * d * 0.5 - from.x) + jitter;
     return this.shootAng(from, a, dmg, kind, sp, color, r);
   }
 
-  shootAng(from: { x: number; y: number }, a: number, dmg: number, kind: 0 | 1 | 2 | 3, sp: number, color: string, r: number): Bullet {
+  shootAng(from: { x: number; y: number }, a: number, dmg: number, kind: BKind, sp: number, color: string, r: number): Bullet {
     const b = this.bullets.obtain();
     b.x = from.x + Math.cos(a) * 14; b.y = from.y + Math.sin(a) * 14;
     b.vx = Math.cos(a) * sp; b.vy = Math.sin(a) * sp;
     b.r = r; b.dmg = dmg; b.enemy = false; b.pierce = false; b.hits.length = 0;
     b.life = 1.4; b.color = color; b.spin = rand(0, TAU); b.src = ''; b.aoe = 0; b.burn = 0; b.slow = 0; b.kind = kind;
+    b.owner = null; b.homing = false; b.ret = false; b.age = 0;
     return b;
   }
 
@@ -407,6 +496,7 @@ export class Battle {
     b.x = x; b.y = y; b.vx = Math.cos(a) * speed; b.vy = Math.sin(a) * speed;
     b.r = r; b.dmg = dmg; b.enemy = true; b.pierce = false; b.hits.length = 0;
     b.life = 6; b.color = color; b.spin = 0; b.aoe = 0; b.burn = 0; b.slow = 0; b.kind = 0;
+    b.owner = null; b.homing = false; b.ret = false; b.age = 0;
   }
 
   ring(e: Enemy, n: number, speed: number, offset = 0, r = 8) {
@@ -432,7 +522,7 @@ export class Battle {
         if (e.burnTick <= 0) { e.burnTick = 0.5; this.damage(e, e.burnDps * 0.5, 3); if (!e.alive) continue; }
         if (Math.random() < dt * 10) this.addPart(e.x + rand(-e.r, e.r) * 0.6, e.y - rand(0, e.r), rand(-10, 10), rand(-60, -30), 0.4, 5, '#ff8a3d', 0, 0);
       }
-      const slow = e.slowT > 0 ? 1 - e.slowAmt : 1;
+      const slow = (e.slowT > 0 ? 1 - e.slowAmt : 1) * (1 - this.run.enemySlow);
       e.vx = 0; e.vy = 0;
       this.curSrc = e.def.id;
       const tg = this.nearestMember(e.x, e.y);
@@ -657,8 +747,34 @@ export class Battle {
     const arr = this.bullets.active;
     for (let i = arr.length - 1; i >= 0; i--) {
       const b = arr[i];
+      b.age += dt;
+      if (b.homing && b.age > 0.12) {
+        const t = this.nearest(b.x, b.y, undefined, 360);
+        if (t) {
+          const sp = Math.hypot(b.vx, b.vy);
+          const want = Math.atan2(t.y - b.y, t.x - b.x);
+          let cur = Math.atan2(b.vy, b.vx), d = want - cur;
+          while (d > Math.PI) d -= TAU;
+          while (d < -Math.PI) d += TAU;
+          cur += clamp(d, -7 * dt, 7 * dt);
+          b.vx = Math.cos(cur) * sp; b.vy = Math.sin(cur) * sp;
+        }
+      }
+      if (b.ret && b.age > 0.55) {
+        const o = this.pos.find((q) => q.m === b.owner);
+        if (!o) b.life = 0;
+        else {
+          if (b.age - dt <= 0.55) b.hits.length = 0; // 回程可以再打一次
+          const sp = 560, a = Math.atan2(o.y - b.y, o.x - b.x);
+          b.vx += (Math.cos(a) * sp - b.vx) * Math.min(1, dt * 6);
+          b.vy += (Math.sin(a) * sp - b.vy) * Math.min(1, dt * 6);
+          if (dist2(b.x, b.y, o.x, o.y) < 24 * 24) b.life = 0;
+        }
+      }
       b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; b.spin += dt * 12;
+      if (b.ret && b.age <= 0.55 && (b.x < RX0 || b.x > RX1 || b.y < RY0 || b.y > RY1)) b.age = 0.56;
       let dead = b.life <= 0 || b.x < RX0 - 10 || b.x > RX1 + 10 || b.y < RY0 - 10 || b.y > RY1 + 10;
+      if (dead && b.ret && b.life > 0) dead = false;
       if (dead) { if (b.aoe) this.explode(b); else this.puff(b.x, b.y, b.enemy ? '#ff9db5' : '#fff2a8', 3); this.bullets.release(i); continue; }
       if (b.enemy) {
         for (const p of this.pos) {
@@ -1086,10 +1202,27 @@ export class Battle {
     const def = PARTNERS[m.pid];
     const leader = i === 0;
     const size = leader ? 46 : 38;
+    const aw = awakenTier(this.run.bonus.plv?.[m.pid] ?? 1);
+    const rc = def.rarity >= 0 ? RARITIES[def.rarity].color : '#ffd23f';
+    // 稀有度底圈 + 覺醒光環
+    g.save();
+    g.globalAlpha = 0.55;
+    g.strokeStyle = rc; g.lineWidth = aw ? 4 : 2.5;
+    g.beginPath(); g.ellipse(p.x, p.y + size * 0.34, size * 0.5, size * 0.18, 0, 0, TAU); g.stroke();
+    if (aw) {
+      const pulse = 0.5 + 0.5 * Math.sin(this.time * 5 + i);
+      const grd = g.createRadialGradient(p.x, p.y, 4, p.x, p.y, size * (0.75 + pulse * 0.1));
+      grd.addColorStop(0, rc + '00'); grd.addColorStop(0.6, rc + '55'); grd.addColorStop(1, rc + '00');
+      g.globalAlpha = 0.9; g.fillStyle = grd;
+      g.beginPath(); g.arc(p.x, p.y, size * 0.85, 0, TAU); g.fill();
+    }
+    g.restore();
+    if (aw === 2 && Math.random() < 0.25) this.addPart(p.x + rand(-16, 16), p.y + rand(-16, 10), 0, rand(-50, -20), 0.6, 3.5, rc, 1, 0);
     this.drawShadow(g, p.x, p.y, size * 0.4);
     const blink = m.invuln > 0 && m.invuln < 2 && Math.floor(this.time * 20) % 2 === 0;
     const bob = Math.abs(Math.sin(this.time * 12 + i * 0.9)) * 4;
-    const key = m.pid === 'shiba' ? 'hero' : `partner_${m.pid}`;
+    const baseKey = m.pid === 'shiba' ? 'hero' : `partner_${m.pid}`;
+    const key = aw && hasImage(`${baseKey}_awaken`) ? `${baseKey}_awaken` : baseKey;
     const flip = Math.cos(this.head.ang) < 0 ? -1 : 1;
     g.save();
     g.translate(p.x, p.y - bob);
@@ -1097,7 +1230,7 @@ export class Battle {
     if (!blink) g.drawImage(sprite(key, size, def.icon, def.color), -size / 2, -size / 2, size, size);
     if (m.flash > 0) { g.globalAlpha = 0.7; g.drawImage(whiteSprite(key, size, def.icon, def.color), -size / 2, -size / 2, size, size); }
     g.restore();
-    if (leader) { g.font = '18px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('👑', p.x, p.y - size / 2 - 6 - bob); }
+    if (leader || aw === 2) { g.font = leader ? '18px sans-serif' : '13px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(leader ? '👑' : '✨', p.x, p.y - size / 2 - 6 - bob); }
     const w = leader ? 46 : 36, bx = p.x - w / 2, by = p.y + size / 2 - 2;
     g.fillStyle = 'rgba(0,0,0,0.55)'; roundRect(g, bx - 1, by - 1, w + 2, 7, 3); g.fill();
     g.fillStyle = m.hp / m.maxHp < 0.3 ? '#ff5a5a' : '#59d65f';
@@ -1163,6 +1296,22 @@ export class Battle {
       if (b.kind === 0) {
         if (star) { g.save(); g.translate(b.x, b.y); g.rotate(b.spin); g.drawImage(star, -b.r * 1.6, -b.r * 1.6, b.r * 3.2, b.r * 3.2); g.restore(); }
         else { g.fillStyle = b.color; g.beginPath(); starPath(g, b.x, b.y, b.r * 1.5, b.r * 0.7, b.spin); g.fill(); }
+      } else if (b.kind === 4) {
+        g.save(); g.translate(b.x, b.y); g.rotate(b.spin * 1.5);
+        g.fillStyle = '#5c9a4c'; g.beginPath(); g.ellipse(0, 0, b.r, b.r * 0.8, 0, 0, TAU); g.fill();
+        g.strokeStyle = '#c8f0a8'; g.lineWidth = 2; g.beginPath(); g.moveTo(-b.r * 0.6, 0); g.lineTo(b.r * 0.6, 0); g.moveTo(0, -b.r * 0.5); g.lineTo(0, b.r * 0.5); g.stroke();
+        g.restore(); continue;
+      } else if (b.kind === 5) {
+        g.save(); g.translate(b.x, b.y); g.rotate(a);
+        g.fillStyle = b.color; g.beginPath(); g.ellipse(0, 0, b.r * 2, b.r * 0.7, 0, 0, TAU); g.fill();
+        g.restore(); continue;
+      } else if (b.kind === 6) {
+        g.save(); g.translate(b.x, b.y); g.rotate(a);
+        g.strokeStyle = 'rgba(120,200,255,0.9)'; g.lineWidth = 8; g.lineCap = 'round';
+        g.beginPath(); g.arc(-b.r * 0.4, 0, b.r, -1.1, 1.1); g.stroke();
+        g.strokeStyle = '#ffffff'; g.lineWidth = 3;
+        g.beginPath(); g.arc(-b.r * 0.3, 0, b.r * 0.85, -0.9, 0.9); g.stroke();
+        g.restore(); continue;
       } else if (b.kind === 2) {
         g.save(); g.translate(b.x, b.y); g.rotate(a);
         g.fillStyle = b.color; g.beginPath(); g.moveTo(b.r * 2.2, 0); g.lineTo(-b.r, -b.r); g.lineTo(-b.r, b.r); g.closePath(); g.fill();
@@ -1299,4 +1448,11 @@ function starPath(g: CanvasRenderingContext2D, x: number, y: number, R: number, 
     if (i) g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else g.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
   }
   g.closePath();
+}
+
+function segDist2(x1: number, y1: number, x2: number, y2: number, px: number, py: number): number {
+  const dx = x2 - x1, dy = y2 - y1;
+  const l = dx * dx + dy * dy || 1;
+  const t = clamp(((px - x1) * dx + (py - y1) * dy) / l, 0, 1);
+  return dist2(px, py, x1 + dx * t, y1 + dy * t);
 }

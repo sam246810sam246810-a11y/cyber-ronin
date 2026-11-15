@@ -7,7 +7,9 @@ import { getEvents, track } from '../core/track';
 import { CHAPTERS, MAP_ROWS, MapNode, NODE_INFO } from '../data/chapters';
 import { EQUIP_TPLS, Item, RARITIES, SLOTS, SLOT_NAME, TPL_MAP, itemStats, statLines, upgradeCost, MERGE_COUNT } from '../data/equipment';
 import { Card, cardInfo } from '../data/skills';
-import { ALL_PARTNERS, EGG, MAX_FOLLOWERS, MAX_PLV, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, plvGold, plvMul, shardCost } from '../data/partners';
+import { ALL_PARTNERS, AWAKEN_NAME, FACTIONS, FACTION_MAP, MAX_PLV, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, awakenTier, plvGold, plvMul, shardCost } from '../data/partners';
+import { DUPE_SHARDS, PULL_COST, STANDARD, partnerOdds } from '../data/gacha';
+import { DAILY_CHESTS, DAILY_QUESTS, PASS, PASS_FREE, PASS_PREMIUM, Reward } from '../data/daily';
 import { BREAKTHROUGH_OFFER, CHESTS, DAILY_AD_GEMS, GEM_PACKS, NTD_PER_GEM, REVIVE_GEMS, FIRST_PURCHASE_GIFT } from '../data/shop';
 import { CARNIVAL_CLAIM_DAYS, CARNIVAL_DAYS, CARNIVAL_PACK, MILESTONES, QUESTS, QUEST_TOTAL_POINTS } from '../data/quests';
 import { BUILDINGS, BuildingId, buildCost, buildSeconds, rushGems, AD_RUSH_SEC } from '../data/village';
@@ -15,7 +17,7 @@ import { ASSETS } from '../data/assets';
 import * as S from '../meta/state';
 import { fmtNum } from '../game/util';
 
-type Screen = 'home' | 'equip' | 'shop' | 'village' | 'carnival' | 'map' | 'battle';
+type Screen = 'home' | 'equip' | 'shop' | 'village' | 'carnival' | 'quests' | 'map' | 'battle';
 type Handler = (arg: string, el: HTMLElement) => void;
 
 const DAY = 86400000;
@@ -33,6 +35,7 @@ export class App {
   bot = params.has('bot');
   payCb: (() => void) | null = null;
   equipTab: 'gear' | 'partners' = 'gear';
+  questTab: 'daily' | 'pass' = 'daily';
 
   constructor(private canvas: HTMLCanvasElement) {
     this.root = document.getElementById('ui')!;
@@ -74,7 +77,7 @@ export class App {
   renderScreen() {
     const s = this.screen;
     const html = s === 'home' ? this.homeHtml() : s === 'equip' ? this.equipHtml() : s === 'shop' ? this.shopHtml()
-      : s === 'village' ? this.villageHtml() : s === 'carnival' ? this.carnivalHtml() : s === 'map' ? this.mapHtml() : this.battleHtml();
+      : s === 'village' ? this.villageHtml() : s === 'carnival' ? this.carnivalHtml() : s === 'quests' ? this.questsHtml() : s === 'map' ? this.mapHtml() : this.battleHtml();
     const bare = s === 'battle' || s === 'map';
     this.$('#screen').innerHTML = s === 'battle' ? html : (s === 'map' ? '' : this.topbarHtml()) + `<div class="page page-${s}">${html}</div>`;
     this.$('#tabs').innerHTML = bare ? '' : this.tabsHtml();
@@ -99,7 +102,7 @@ export class App {
     const t = (id: Screen, icon: string, name: string, d = false) =>
       `<button class="tab ${this.screen === id ? 'on' : ''}" data-a="tab" data-arg="${id}"><span>${icon}</span>${name}${dot(d)}</button>`;
     const v = S.save.village;
-    return t('shop', '🛒', '商店', !S.save.daily.freeChest || S.save.daily.adGems < DAILY_AD_GEMS.max)
+    return t('shop', '🛒', '商店', !S.save.daily.freeChest || !S.save.daily.adEgg || !S.save.gacha.firstTen || S.save.tickets > 0)
       + t('equip', '🎒', '隊伍', this.mergeableCount() > 0 || S.partnerUpgradable())
       + t('home', '⚔️', '冒險')
       + t('village', '🏘️', '村莊', !v.building && BUILDINGS.some((b) => S.bLevel(b.id) < b.maxLv && S.save.gold >= buildCost(b, S.bLevel(b.id))))
@@ -150,17 +153,34 @@ export class App {
   }
 
   teamHtml(run: Run, pickable = false) {
+    const chips = run.factionTiers().filter((x) => x.n > 0).map((x) => {
+      const d = FACTION_MAP[x.f as Exclude<typeof x.f, 'none'>];
+      return `<span class="fchip ${x.tier ? 'on' : ''}" style="--fc:${d.color}" title="${x.tier ? d.tiers[x.tier - 1][1] : '再 1 隻觸發'}">${d.icon}${d.name} ${x.n}${x.tier ? `・${d.tiers[x.tier - 1][1]}` : ''}</span>`;
+    }).join('');
     return `<div class="team">${run.team.map((m) => {
       const p = PARTNERS[m.pid];
       const pct = m.down ? 0 : (m.hp / m.maxHp) * 100;
       const can = pickable && m.star < MAX_STAR;
-      return `<div class="mem ${m.down ? 'down' : ''} ${pickable ? (can ? 'pick' : 'disabled') : ''}" ${pickable ? `data-a="campStar" data-arg="${m.uid}"` : ''}>
+      const rc = p.rarity >= 0 ? RARITIES[p.rarity].color : '#ffd23f';
+      return `<div class="mem ${m.down ? 'down' : ''} ${pickable ? (can ? 'pick' : 'disabled') : ''}" style="--rc:${rc}" ${pickable ? `data-a="campStar" data-arg="${m.uid}"` : ''}>
         <div class="mem-ico">${this.partnerIcon(m.pid)}</div>
         <div class="mem-star">${'★'.repeat(m.star)}</div>
         <div class="mem-hp"><i style="width:${pct}%"></i></div>
         <div class="mem-name">${m.down ? '倒下' : p.name.slice(-2)}</div>
       </div>`;
-    }).join('')}${Array.from({ length: MAX_FOLLOWERS + 1 - run.team.length }, () => '<div class="mem empty">＋</div>').join('')}</div>`;
+    }).join('')}${Array.from({ length: Math.max(0, run.maxFollowers + 1 - run.team.length) }, () => '<div class="mem empty">＋</div>').join('')}</div>
+    ${chips ? `<div class="fchips">${chips}</div>` : ''}`;
+  }
+
+  rarityTag(r: number) {
+    return r >= 0 ? `<span class="rtag" style="--rc:${RARITIES[r].color}">${RARITIES[r].name}</span>` : '<span class="rtag" style="--rc:#ffb02e">隊長</span>';
+  }
+
+  factionTag(pid: PartnerId) {
+    const f = PARTNERS[pid].faction;
+    if (f === 'none') return '';
+    const d = FACTION_MAP[f];
+    return `<span class="ftag" style="--fc:${d.color}">${d.icon}${d.name}</span>`;
   }
 
   tick() {
@@ -197,16 +217,17 @@ export class App {
     const best = S.save.best[ch.id] ?? 0;
     const offer = S.offerActive() ? `<button class="float-badge offer" data-a="offer">🎁<span>突破禮包</span><em data-cd="${S.save.offer.expiresAt}"></em></button>` : '';
     const carnival = S.carnivalEnded() ? '' : `<button class="float-badge carnival" data-a="tab" data-arg="carnival">🎉<span>7日嘉年華</span>${this.carnivalClaimable() ? '<i class="dot"></i>' : ''}</button>`;
-    const unlocked = S.unlockedPartners();
-    const roster = ['shiba' as PartnerId, ...RECRUITABLE].map((p) => {
-      const ok = p === 'shiba' || unlocked.includes(p);
-      return `<span class="ros ${ok ? '' : 'locked'}" title="${PARTNERS[p].name}">${this.partnerIcon(p)}${ok ? '' : '<i>🔒</i>'}</span>`;
+    const owned = ALL_PARTNERS.filter((p) => S.save.partners[p].owned);
+    const roster = owned.sort((a, b) => PARTNERS[b].rarity - PARTNERS[a].rarity).map((p) => {
+      const r = PARTNERS[p].rarity;
+      return `<span class="ros" style="--rc:${r >= 0 ? RARITIES[r].color : '#ffb02e'}" title="${PARTNERS[p].name}">${this.partnerIcon(p)}</span>`;
     }).join('');
     return `
-      <div class="badges">${carnival}${offer}</div>
+      <div class="badges">${carnival}<button class="float-badge" data-a="tab" data-arg="quests">📋<span>任務・戰令</span>${S.dailyClaimable() || S.passClaimable() ? '<i class="dot"></i>' : ''}</button>${offer}</div>
+      <div class="badges right"><button class="float-badge gacha" data-a="tab" data-arg="shop">🥚<span>${PARTNERS[S.currentLimited().featured!].icon} 限時召喚</span><em data-cd="${S.limitedEndsAt()}"></em></button></div>
       <div class="logo">${hasImage('logo') ? iconHtml('logo', '') : '<h1>萌爪突擊</h1><p>PAW STRIKE</p>'}</div>
       <div class="hero-stage"><div class="caravan-pic">${['shiba', 'cat', 'rabbit', 'bear'].map((p, i) => `<span style="animation-delay:${i * 0.15}s">${this.partnerIcon(p as PartnerId)}</span>`).join('')}</div></div>
-      <div class="roster"><span class="muted small">可招募夥伴</span><div>${roster}</div></div>
+      <div class="roster"><span class="muted small">已擁有夥伴 ${owned.length}/${RECRUITABLE.length + 1}・可在冒險中招募</span><div>${roster}</div></div>
       <div class="chapter-card ${locked ? 'locked' : ''}">
         <button class="arrow" data-a="chapter" data-arg="-1" ${ch.id === 1 ? 'disabled' : ''}>◀</button>
         <div class="ch-body">
@@ -260,54 +281,131 @@ export class App {
   }
 
   partnersHtml() {
-    const hall = S.bLevel('hall');
-    const cards = ALL_PARTNERS.map((p) => {
+    const list = [...ALL_PARTNERS].sort((a, b) => Number(S.save.partners[b].owned) - Number(S.save.partners[a].owned) || PARTNERS[b].rarity - PARTNERS[a].rarity);
+    const cards = list.map((p) => {
       const def = PARTNERS[p];
       const d = S.save.partners[p];
-      const locked = p !== 'shiba' && def.unlockHall > hall;
       const max = d.lv >= MAX_PLV;
       const need = shardCost(d.lv);
-      const can = !locked && S.canUpgradePartner(p);
-      return `<button class="pcard ${locked ? 'locked' : ''} ${can ? 'can' : ''}" data-a="partner" data-arg="${p}">
-        <span class="p-lv">Lv.${d.lv}</span>
+      const can = d.owned && S.canUpgradePartner(p);
+      const rc = def.rarity >= 0 ? RARITIES[def.rarity].color : '#ffb02e';
+      const aw = awakenTier(d.lv);
+      return `<button class="pcard r${def.rarity} ${d.owned ? '' : 'locked'} ${can ? 'can' : ''} ${aw ? 'aw' + aw : ''}" style="--rc:${rc}" data-a="partner" data-arg="${p}">
+        <span class="p-lv">${d.owned ? `Lv.${d.lv}` : '未擁有'}</span>
+        ${this.factionTag(p)}
         <div class="p-ico">${this.partnerIcon(p)}</div>
         <b>${def.name}</b>
-        <span class="small muted">${def.role}</span>
+        ${this.rarityTag(def.rarity)}${aw ? `<span class="awtag">${AWAKEN_NAME[aw]}</span>` : ''}
         <div class="p-bar"><i style="width:${max ? 100 : Math.min(100, (d.shards / need) * 100)}%"></i><span>${max ? 'MAX' : `${d.shards}/${need}`}</span></div>
-        ${locked ? `<span class="p-lock">🔒 招募所 Lv.${def.unlockHall}</span>` : ''}
       </button>`;
     }).join('');
-    return `<p class="hint small">夥伴的永久等級會讓牠在每次冒險中更強；碎片來自冒險、寶箱與夥伴蛋</p><div class="pgrid">${cards}</div>`;
+    const bonds = FACTIONS.map((f) => `<div class="bond"><span class="ftag" style="--fc:${f.color}">${f.icon}${f.name}</span><span class="small">${f.tiers.map(([n, t]) => `<b>${n} 隻</b> ${t}`).join('；')}</span></div>`).join('');
+    return `<p class="hint small">召喚取得夥伴・重複的夥伴轉成碎片・Lv5 覺醒Ⅰ、Lv10 覺醒Ⅱ（外觀改變＋額外加成）</p>
+      <div class="pgrid">${cards}</div>
+      <h3 class="sec">陣營羈絆</h3><div class="card bonds">${bonds}</div>`;
   }
 
   partnerModal(p: PartnerId) {
     const def = PARTNERS[p];
     const d = S.save.partners[p];
     const max = d.lv >= MAX_PLV;
-    const locked = p !== 'shiba' && def.unlockHall > S.bLevel('hall');
     const need = shardCost(d.lv), gold = plvGold(d.lv);
     const pct = (x: number) => Math.round((plvMul(x) - 1) * 100);
+    const aw = awakenTier(d.lv);
+    const rc = def.rarity >= 0 ? RARITIES[def.rarity].color : '#ffb02e';
+    const fac = def.faction !== 'none' ? FACTION_MAP[def.faction] : null;
     this.modal(`
       <button class="x" data-a="close">✕</button>
-      <div class="p-detail"><div class="p-ico big">${this.partnerIcon(p)}</div>
-        <div><h3>${def.name}</h3><div class="muted">${def.role}・永久 Lv.${d.lv}/${MAX_PLV}</div></div></div>
-      <p>${def.desc}</p>
-      <ul class="statlist"><li>冒險中傷害 +${pct(d.lv)}%${max ? '' : ` → <b>+${pct(d.lv + 1)}%</b>`}</li><li>冒險中生命 +${pct(d.lv)}%${max ? '' : ` → <b>+${pct(d.lv + 1)}%</b>`}</li></ul>
-      ${locked ? `<p class="muted">🔒 需要村莊招募所 Lv.${def.unlockHall} 才能在冒險中招募；碎片可以先存著。</p>` : ''}
-      ${max ? '<button class="btn disabled">已達最高等級</button>' : `<button class="btn ${!locked && S.canUpgradePartner(p) ? 'green' : 'disabled'}" data-a="upPartner" data-arg="${p}">升級：碎片 ${d.shards}/${need}・🪙 ${fmtNum(gold)}</button>`}`, 'partner-modal');
+      <div class="p-detail"><div class="p-ico big ${aw ? 'aw' + aw : ''}" style="--rc:${rc}">${this.partnerIcon(p)}</div>
+        <div><div>${this.rarityTag(def.rarity)} ${this.factionTag(p)}</div><h3>${def.name}</h3><div class="muted">${def.role}・${d.owned ? `永久 Lv.${d.lv}/${MAX_PLV}` : '尚未擁有'}${aw ? `・${AWAKEN_NAME[aw]}` : ''}</div></div></div>
+      <p>${def.desc}${def.limited ? '<br><b style="color:#ef4b4b">限定：只會出現在限時召喚</b>' : ''}</p>
+      <ul class="statlist"><li>冒險中傷害、生命 +${pct(d.lv)}%${max ? '' : ` → <b>+${pct(d.lv + 1)}%</b>`}</li>
+        <li>覺醒Ⅰ（Lv5）：腳下出現光環，能力再 +10%</li><li>覺醒Ⅱ（Lv10）：閃耀外觀，能力再 +20%</li>
+        ${fac ? `<li>${fac.icon}${fac.name}羈絆：${fac.tiers.map(([n, t]) => `${n} 隻 ${t}`).join('；')}</li>` : ''}</ul>
+      ${!d.owned ? `<button class="btn blue" data-a="tab" data-arg="shop">去召喚取得</button>` : max ? '<button class="btn disabled">已達最高等級</button>' : `<button class="btn ${S.canUpgradePartner(p) ? 'green' : 'disabled'}" data-a="upPartner" data-arg="${p}">升級：碎片 ${d.shards}/${need}・🪙 ${fmtNum(gold)}</button>`}`, 'partner-modal');
   }
 
-  eggReveal(got: PartnerId[]) {
+  summonHtml() {
+    const lim = S.currentLimited();
+    const f = lim.featured!;
+    const fd = PARTNERS[f];
+    const g = S.save.gacha;
+    const cost = (n: 1 | 10) => { const c = S.pullCost(n); return c.tickets ? `🎟️ ×${c.tickets}` : `💎 ${n === 1 ? PULL_COST.single : PULL_COST.ten}`; };
+    const ok = (n: 1 | 10) => { const c = S.pullCost(n); return S.save.gems >= c.gems && S.save.tickets >= c.tickets; };
+    const btns = (id: string) => `<div class="row">
+        <button class="btn ${ok(1) ? 'gold' : 'disabled'}" data-a="pull" data-arg="${id}:1">單抽<small>${cost(1)}</small></button>
+        <button class="btn ${ok(10) ? 'gold' : 'disabled'}" data-a="pull" data-arg="${id}:10">十連<small>${cost(10)}・必出稀有+</small></button></div>`;
+    return `<h2 class="sec">夥伴召喚 <span class="muted small">🎟️ 召喚券 ${S.save.tickets}</span></h2>
+      ${!g.firstTen ? `<button class="card banner-starter" data-a="starterPull"><b>🎁 新手免費十連召喚</b><span>保底一隻史詩以上夥伴！</span></button>` : ''}
+      <div class="card gbanner limited" style="--rc:${RARITIES[fd.rarity].color}">
+        <div class="gb-head"><span class="gb-tag">限時</span><b>${fd.name}</b>${this.rarityTag(fd.rarity)}<span class="muted small">剩 <span data-cd="${S.limitedEndsAt()}"></span></span></div>
+        <div class="gb-body"><div class="gb-ico">${this.partnerIcon(f)}</div><div class="small">${fd.desc}<br>主打機率提升・<b>${lim.pity} 抽內必得</b>（已 ${g.pityLim} 抽）</div></div>
+        ${btns('limited')}
+        <button class="link" data-a="gachaOdds" data-arg="limited">機率說明</button>
+      </div>
+      <div class="card gbanner">
+        <div class="gb-head"><b>常駐召喚</b><span class="muted small">${STANDARD.pity} 抽內必得傳說（已 ${g.pityStd} 抽）</span></div>
+        ${btns('standard')}
+        <div class="row"><button class="btn small ${S.save.daily.adEgg ? 'disabled' : 'green'}" data-a="adPull">${S.save.daily.adEgg ? '今日免費已領取' : '📺 每日免費單抽'}</button>
+        <button class="link" data-a="gachaOdds" data-arg="standard">機率說明</button></div>
+      </div>`;
+  }
+
+  pullReveal(res: S.PullResult[]) {
     this.refresh();
-    const m = this.modal(`<div class="chest-open">${iconHtml('egg', '🥚', 'shake')}</div>`, 'chest-wrap');
+    const best = Math.max(...res.map((r) => r.rarity));
     sfx.click();
-    setTimeout(() => {
-      m.remove();
-      sfx.buy(); vibrate(30);
-      this.modal(`<h2 class="win">孵化成功！</h2>
-        <div class="reveal">${got.map((p) => `<div class="reveal-item"><div class="item">${this.partnerIcon(p)}</div><span>${PARTNERS[p].name}<br>碎片 ×${EGG.shardsPerDraw}</span></div>`).join('')}</div>
-        <button class="btn big green" data-a="close">太棒了！</button>`, 'reward', () => this.refresh());
-    }, 800);
+    const eggs = res.map((r, i) => `<div class="egg-slot" style="--rc:${RARITIES[r.rarity].color};--d:${0.25 + i * 0.18}s">
+        <div class="egg-shell"><span class="ico emo">🥚</span></div>
+        <div class="egg-out r${r.rarity}">${this.partnerIcon(r.p)}<span class="eo-name">${PARTNERS[r.p].name}</span>
+          ${r.isNew ? '<span class="eo-new">NEW!</span>' : `<span class="eo-dupe">碎片 +${r.shards}</span>`}</div>
+      </div>`).join('');
+    const delay = 250 + res.length * 180;
+    setTimeout(() => { if (best >= 4) { sfx.evo(); vibrate([60, 40, 120]); } else sfx.buy(); }, delay);
+    this.modal(`
+      ${best >= 4 ? `<div class="gold-burst" style="--d:${delay / 1000}s"></div>` : ''}
+      <h2 class="win">${best >= 5 ? '神話降臨！' : best >= 4 ? '傳說降臨！' : '召喚結果'}</h2>
+      <div class="eggs n${res.length}">${eggs}</div>
+      <button class="btn big green" data-a="close">太棒了！</button>`, 'reward pull-modal', () => this.refresh());
+  }
+
+  questsHtml() {
+    const seg = `<div class="seg"><button class="${this.questTab === 'daily' ? 'on' : ''}" data-a="questTab" data-arg="daily">📋 每日任務${S.dailyClaimable() ? '<i class="dot"></i>' : ''}</button><button class="${this.questTab === 'pass' ? 'on' : ''}" data-a="questTab" data-arg="pass">🎫 戰令${S.passClaimable() ? '<i class="dot"></i>' : ''}</button></div>`;
+    if (this.questTab === 'daily') {
+      const pts = S.dailyPoints();
+      const tomorrow = startOfDay(S.now()) + DAY;
+      const qs = DAILY_QUESTS.map((q) => {
+        const v = S.dailyProgress(q.id), done = S.dailyDone(q.id), claimed = S.save.dailyQ.claimed.includes(q.id);
+        return `<div class="quest ${claimed ? 'claimed' : ''}"><div class="qinfo"><div>${q.text}</div><div class="qbar"><i style="width:${(v / q.target) * 100}%"></i><span>${v}/${q.target}</span></div></div>
+          <div class="qpts">+${q.pts}</div>${claimed ? '<button class="btn small disabled">已領取</button>' : done ? `<button class="btn small gold" data-a="claimDaily" data-arg="${q.id}">領取</button>` : `<button class="btn small blue" data-a="goQuest" data-arg="${q.key}">前往</button>`}</div>`;
+      }).join('');
+      const chests = DAILY_CHESTS.map((c, i) => {
+        const got = S.save.dailyQ.chests.includes(i), can = pts >= c.pts && !got;
+        return `<button class="dchest ${got ? 'got' : can ? 'can' : ''}" data-a="dailyChest" data-arg="${i}"><span>${got ? '✅' : '🎁'}</span><b>${c.pts}</b><small>${rewardText(c.reward)}</small></button>`;
+      }).join('');
+      return `${seg}<div class="card"><div class="small">今日活躍度 <b>${pts}</b>/100・重置倒數 <span data-cd="${tomorrow}"></span></div>
+        <div class="qbar big"><i style="width:${pts}%"></i></div><div class="dchests">${chests}</div></div>
+        <div class="quests">${qs}</div><p class="hint small">領取任務的活躍度也會累積戰令經驗</p>`;
+    }
+    const lv = S.passLevel();
+    const xpIn = S.save.pass.xp - lv * PASS.xpPer;
+    const rows = Array.from({ length: PASS.levels }, (_, i) => {
+      const reached = i < lv;
+      const fGot = S.save.pass.free.includes(i), pGot = S.save.pass.prem.includes(i);
+      const cell = (r: Reward, got: boolean, prem: boolean) => {
+        const can = reached && !got && (!prem || S.save.pass.premium);
+        return `<button class="pcell ${prem ? 'prem' : ''} ${got ? 'got' : can ? 'can' : ''} ${prem && !S.save.pass.premium ? 'lock' : ''}" data-a="claimPass" data-arg="${i}:${prem ? 1 : 0}">${rewardText(r)}${got ? ' ✅' : prem && !S.save.pass.premium ? ' 🔒' : ''}</button>`;
+      };
+      return `<div class="prow ${reached ? 'reached' : ''}">${cell(PASS_FREE[i], fGot, false)}<span class="plv">${i + 1}</span>${cell(PASS_PREMIUM[i], pGot, true)}</div>`;
+    }).join('');
+    return `${seg}<div class="card pass-head">
+        <div><b>第 ${S.save.pass.season + 1} 季戰令</b>・Lv.${lv}/${PASS.levels}<div class="muted small">本季剩 <span data-cd="${S.seasonEndsAt()}"></span></div></div>
+        <div class="qbar big"><i style="width:${lv >= PASS.levels ? 100 : (xpIn / PASS.xpPer) * 100}%"></i><span>${lv >= PASS.levels ? 'MAX' : `${xpIn}/${PASS.xpPer}`}</span></div>
+        ${S.save.pass.premium ? '<div class="small" style="color:var(--gold-d)"><b>✨ 已開通豪華戰令</b></div>' : `<button class="btn gold" data-a="buyPass">開通豪華戰令 NT$ ${PASS.ntd}<small>Lv10 傳說獨角獸碎片・Lv20 神話小火龍碎片</small></button>`}
+      </div>
+      <div class="prow head"><span>免費</span><span class="plv">Lv</span><span>豪華</span></div>
+      <div class="plist">${rows}</div>
+      <p class="hint small">戰令經驗：每日任務活躍度、每場戰鬥 +5、每次冒險 +10</p>`;
   }
 
   gearHtml() {
@@ -449,20 +547,7 @@ export class App {
           <button class="btn ${sv.daily.adGems >= DAILY_AD_GEMS.max ? 'disabled' : 'green'}" data-a="adGems">📺 +${DAILY_AD_GEMS.perAd}（${sv.daily.adGems}/${DAILY_AD_GEMS.max}）</button>
         </div>
       </div>
-      <h2 class="sec">夥伴蛋</h2>
-      <div class="grid2">
-        <div class="card chest">
-          <div class="chest-ico">${iconHtml('egg', '🥚')}</div><div class="cname">夥伴蛋</div>
-          <div class="muted small">${EGG.draws} 份夥伴碎片</div>
-          <button class="btn ${sv.gems >= EGG.gems ? 'gold' : 'disabled'}" data-a="egg">💎 ${EGG.gems}</button>
-          <button class="link" data-a="eggOdds">機率說明</button>
-        </div>
-        <div class="card chest">
-          <div class="chest-ico"><span class="ico emo">🐣</span></div><div class="cname">每日免費蛋</div>
-          <div class="muted small">看廣告孵一顆</div>
-          <button class="btn ${sv.daily.adEgg ? 'disabled' : 'green'}" data-a="adEgg">${sv.daily.adEgg ? '明天再來' : '📺 免費孵化'}</button>
-        </div>
-      </div>
+      ${this.summonHtml()}
       <h2 class="sec">寶箱</h2>
       <div class="grid2">${chests}</div>
       <h2 class="sec">鑽石</h2>
@@ -653,8 +738,10 @@ export class App {
       const lv = run.L(c.id);
       stars = lv ? `<span class="muted small">已有 ${lv} 級</span>` : '';
     }
-    return `<button class="skill k-${c.kind} ${info.gold ? 'evo' : ''}" data-a="pickCard" data-arg="${i}">
+    const pr = c.kind === 'recruit' || c.kind === 'star' ? PARTNERS[c.partner].rarity : -2;
+    return `<button class="skill k-${c.kind} ${info.gold ? 'evo' : ''}" ${pr >= 0 ? `style="--rc:${RARITIES[pr].color}"` : ''} data-a="pickCard" data-arg="${i}">
       <span class="evo-tag">${info.tag}</span>
+      ${c.kind === 'recruit' ? `<div class="sk-tags">${this.rarityTag(pr)}${this.factionTag(c.partner)}</div>` : ''}
       <div class="sk-ico">${ico}</div>
       <div class="sk-name">${info.name}</div>
       <div class="sk-desc">${info.desc}</div>
@@ -687,11 +774,12 @@ export class App {
     const run = this.run!;
     const pool = run.recruitable();
     let cards: Card[];
-    if (run.followers < MAX_FOLLOWERS && pool.length) {
-      const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, 2);
+    const n = run.bonus.rescueChoices ?? 2;
+    if (run.followers < run.maxFollowers && pool.length) {
+      const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, n);
       cards = shuffled.map((p) => ({ kind: 'recruit', partner: p }));
     } else {
-      cards = run.team.filter((m) => m.star < MAX_STAR).sort(() => Math.random() - 0.5).slice(0, 2).map((m) => ({ kind: 'star', partner: m.pid }));
+      cards = run.team.filter((m) => m.star < MAX_STAR).sort(() => Math.random() - 0.5).slice(0, n).map((m) => ({ kind: 'star', partner: m.pid }));
     }
     if (!cards.length) { const g = run.price(80); run.gold += g; this.toast(`隊伍已滿，獲得 🪙${g}`); this.refresh(); return; }
     this.showCards('🐾 救援！', '受困的動物想加入你的隊伍', 'rescue', cards, false);
@@ -723,7 +811,7 @@ export class App {
     if (this.bot) { this.refresh(); this.botMap(); return; }
     const items = [
       { id: 'heal', icon: '🧺', name: '野餐便當', desc: '全隊回復 40%，救回倒下的夥伴', price: run.price(70) },
-      { id: 'recruit', icon: '🐾', name: '招募券', desc: '隨機招募一隻新夥伴', price: run.price(130), ok: run.followers < MAX_FOLLOWERS && run.recruitable().length > 0 },
+      { id: 'recruit', icon: '🐾', name: '招募券', desc: '隨機招募一隻新夥伴', price: run.price(130), ok: run.followers < run.maxFollowers && run.recruitable().length > 0 },
       { id: 'star', icon: '⭐', name: '升星糖果', desc: '隨機一位夥伴升星', price: run.price(110), ok: run.team.some((m) => m.star < MAX_STAR) },
       { id: 'card', icon: '🃏', name: '技能卡包', desc: '三選一技能', price: run.price(150) },
     ];
@@ -1016,7 +1104,7 @@ export class App {
     goQuest: (arg) => {
       sfx.click();
       if (['upgrades', 'merges'].includes(arg)) this.go('equip');
-      else if (arg === 'chests') this.go('shop');
+      else if (arg === 'chests' || arg === 'pulls') this.go('shop');
       else if (arg === 'builds') this.go('village');
       else this.go('home');
     },
@@ -1058,13 +1146,39 @@ export class App {
       if (!S.upgradePartner(arg as PartnerId)) { this.toast('碎片或金幣不足'); return; }
       sfx.levelup(); vibrate(20); this.closeTop(); this.refresh(); this.partnerModal(arg as PartnerId);
     },
-    egg: () => { const got = S.openEgg(); if (!got) { this.toast('鑽石不足'); return; } this.eggReveal(got); },
-    adEgg: () => { if (S.save.daily.adEgg) return; this.fakeAd(() => { const got = S.openEgg(true); if (got) this.eggReveal(got); }); },
-    eggOdds: () => {
-      this.modal(`<button class="x" data-a="close">✕</button><h3>夥伴蛋 機率</h3>
-        <p>每顆蛋抽 ${EGG.draws} 次，每次獲得 ${EGG.shardsPerDraw} 片碎片</p>
-        <table class="odds">${ALL_PARTNERS.map((p) => `<tr><td>${PARTNERS[p].icon} ${PARTNERS[p].name}</td><td>${(100 / ALL_PARTNERS.length).toFixed(1)}%</td></tr>`).join('')}</table>
-        <p class="muted small">尚未在村莊解鎖的夥伴，碎片會先保留，解鎖後即可使用。</p>`, 'odds-modal');
+    pull: (arg) => {
+      const [id, n] = arg.split(':');
+      const res = S.pull(id as 'standard' | 'limited', Number(n) as 1 | 10);
+      if (!res) { this.toast('鑽石或召喚券不足'); return; }
+      this.pullReveal(res);
+    },
+    adPull: () => { if (S.save.daily.adEgg) return; this.fakeAd(() => { const r = S.pull('standard', 1, 'ad'); if (r) this.pullReveal(r); }); },
+    starterPull: () => { const r = S.pull('standard', 10, 'starter'); if (r) this.pullReveal(r); },
+    gachaOdds: (arg) => {
+      const b = arg === 'standard' ? STANDARD : S.currentLimited();
+      const rows = partnerOdds(b).map((o) => `<tr><td>${PARTNERS[o.p].icon} ${PARTNERS[o.p].name}${o.p === b.featured ? ' ⭐主打' : ''}</td><td style="color:${RARITIES[PARTNERS[o.p].rarity].color}">${RARITIES[PARTNERS[o.p].rarity].name}</td><td>${(o.odds * 100).toFixed(2)}%</td></tr>`).join('');
+      this.modal(`<button class="x" data-a="close">✕</button><h3>${b.name} 機率</h3>
+        <table class="odds">${b.odds.map((o, r) => o ? `<tr><td colspan="2" style="color:${RARITIES[r].color}">${RARITIES[r].name}</td><td>${(o * 100).toFixed(1)}%</td></tr>` : '').join('')}</table>
+        <p class="muted small">${b.featured ? `保底：${b.pity} 抽內必得主打 ${PARTNERS[b.featured].name}` : `保底：${b.pity} 抽內必得傳說以上`}；十連最後一抽保底稀有以上。重複夥伴轉為碎片：${DUPE_SHARDS.map((n, r) => `${RARITIES[r].name} ${n}`).join('、')}</p>
+        <table class="odds small">${rows}</table>`, 'odds-modal');
+    },
+    questTab: (arg) => { sfx.click(); this.questTab = arg as 'daily' | 'pass'; this.refresh(); },
+    claimDaily: (arg) => { if (S.claimDaily(arg)) { sfx.coin(); this.refresh(); } },
+    dailyChest: (arg) => {
+      const lines = S.claimDailyChest(Number(arg));
+      if (!lines) { this.toast(`活躍度達 ${DAILY_CHESTS[Number(arg)].pts} 可領取`); return; }
+      sfx.buy(); this.refresh(); this.toast(lines.join('  '));
+    },
+    claimPass: (arg) => {
+      const [i, prem] = arg.split(':');
+      const lines = S.claimPass(Number(i), prem === '1');
+      if (!lines) { if (prem === '1' && !S.save.pass.premium) this.toast('開通豪華戰令即可領取'); return; }
+      sfx.buy(); this.refresh(); this.toast(lines.join('  '));
+    },
+    buyPass: () => {
+      this.confirmPay(PASS.ntd, `第 ${S.save.pass.season + 1} 季豪華戰令（立即可領取已達等級的豪華獎勵）`, () => {
+        if (S.buyPass()) { sfx.evo(); this.refresh(); this.toast('✨ 豪華戰令已開通'); }
+      });
     },
     toggleVibe: (_a, el) => {
       S.save.settings.vibrate = !S.save.settings.vibrate; S.persist(); setVibrate(S.save.settings.vibrate);
@@ -1094,3 +1208,12 @@ function fmtTime(ms: number) {
 }
 
 function startOfDay(t: number) { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); }
+
+function rewardText(r: Reward): string {
+  const out: string[] = [];
+  if (r.gold) out.push(`🪙${fmtNum(r.gold)}`);
+  if (r.gems) out.push(`💎${r.gems}`);
+  if (r.tickets) out.push(`🎟️×${r.tickets}`);
+  if (r.shards) out.push(r.shards.p === 'random' ? `🧩隨機碎片×${r.shards.n}` : `${PARTNERS[r.shards.p].icon}碎片×${r.shards.n}`);
+  return out.join(' ');
+}

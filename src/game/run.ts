@@ -1,12 +1,12 @@
 import { CHAPTERS, ChapterDef, MapNode, buildMap } from '../data/chapters';
-import { MAX_FOLLOWERS, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, plvMul, starHp } from '../data/partners';
+import { FACTIONS, Faction, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, plvMul, starHp } from '../data/partners';
 import { BUFFS, BuffId, COMBOS, ComboId, Card } from '../data/skills';
 import type { BaseStats } from '../meta/state';
 import { track } from '../core/track';
 
 export interface Member { uid: number; pid: PartnerId; star: number; hp: number; maxHp: number; down: boolean; cdT: number; flash: number; invuln: number }
 
-export interface RunBonus { atkMul: number; hpMul: number; goldMul: number; rerolls: number; unlocked: PartnerId[]; startStar: number; startPartner: boolean; plv: Record<PartnerId, number> }
+export interface RunBonus { atkMul: number; hpMul: number; goldMul: number; rerolls: number; unlocked: PartnerId[]; startStar: number; startPartner: boolean; plv: Record<PartnerId, number>; rescueChoices: number; maxFollowers: number }
 
 /** 一次冒險（跨多場戰鬥）的狀態 */
 export class Run {
@@ -45,14 +45,25 @@ export class Run {
 
   // ---------- 隊伍數值 ----------
   L(id: BuffId) { return this.buffs[id] ?? 0; }
-  get atk() { return this.base.atk * this.bonus.atkMul * (1 + 0.15 * this.L('atk')) * (this.combos.has('combo_unity') ? 1.2 : 1); }
-  get aspdMul() { return (this.base.aspd / 1.6) * (1 + 0.12 * this.L('aspd')); }
-  get teamHp() { return this.base.maxHp * this.bonus.hpMul * (1 + 0.2 * this.L('maxhp')); }
-  get crit() { return Math.min(1, this.base.crit + 0.08 * this.L('crit')); }
+  // ---------- 陣營羈絆 ----------
+  fcount(f: Faction) { return this.team.filter((m) => PARTNERS[m.pid].faction === f).length; }
+  /** 目前生效的羈絆：[陣營, 已達成的段數(0~2)] */
+  factionTiers(): { f: Faction; n: number; tier: number }[] {
+    return FACTIONS.map((d) => { const n = this.fcount(d.id); return { f: d.id, n, tier: n >= 3 ? 2 : n >= 2 ? 1 : 0 }; });
+  }
+  ft(f: Faction) { const n = this.fcount(f); return n >= 3 ? 2 : n >= 2 ? 1 : 0; }
+  get enemySlow() { const t = this.ft('snow'); return t === 2 ? 0.25 : t === 1 ? 0.15 : 0; }
+  get forestRegen() { return this.ft('forest') === 2; }
+
+  get atk() { return this.base.atk * this.bonus.atkMul * (1 + 0.15 * this.L('atk')) * (this.combos.has('combo_unity') ? 1.2 : 1) * (this.ft('sky') === 2 ? 1.2 : 1); }
+  get aspdMul() { const o = this.ft('ocean'); return (this.base.aspd / 1.6) * (1 + 0.12 * this.L('aspd')) * (o === 2 ? 1.25 : o === 1 ? 1.12 : 1); }
+  get teamHp() { const f = this.ft('forest'); return this.base.maxHp * this.bonus.hpMul * (1 + 0.2 * this.L('maxhp')) * (f === 2 ? 1.3 : f === 1 ? 1.15 : 1); }
+  get crit() { return Math.min(1, this.base.crit + 0.08 * this.L('crit') + (this.ft('snow') === 2 ? 0.12 : 0)); }
+  get maxFollowers() { return this.bonus.maxFollowers ?? 6; }
   get critDmg() { return this.base.critDmg + 0.4 * this.L('critdmg'); }
   get dmgReduce() { return Math.min(0.7, this.base.dmgReduce + (this.combos.has('combo_hug') ? 0.3 : 0)); }
-  get speed() { return 185 * (1 + 0.1 * this.L('speed')); }
-  get pickupR() { return 70 * (1 + 0.6 * this.L('magnet')); }
+  get speed() { return 185 * (1 + 0.1 * this.L('speed')) * (this.ft('sky') >= 1 ? 1.1 : 1); }
+  get pickupR() { return 70 * (1 + 0.6 * this.L('magnet')) * (this.ft('sky') >= 1 ? 1.5 : 1); }
   get leader() { return this.team[0]; }
   get followers() { return this.team.length - 1; }
   has(pid: PartnerId) { return this.team.some((m) => m.pid === pid); }
@@ -138,7 +149,7 @@ export class Run {
     const combos = COMBOS.filter((c) => this.comboReady(c.id));
     if (combos.length) out.push({ kind: 'combo', id: combos[Math.floor(Math.random() * combos.length)].id });
     const pool: { c: Card; w: number }[] = [];
-    if (this.followers < MAX_FOLLOWERS) for (const p of this.recruitable()) pool.push({ c: { kind: 'recruit', partner: p }, w: this.followers < 2 ? 16 : 9 });
+    if (this.followers < this.maxFollowers) for (const p of this.recruitable()) pool.push({ c: { kind: 'recruit', partner: p }, w: this.followers < 2 ? 16 : 9 });
     for (const m of this.team) if (m.star < MAX_STAR) pool.push({ c: { kind: 'star', partner: m.pid }, w: m.pid === 'shiba' ? 7 : 9 });
     for (const b of BUFFS) if (this.L(b.id) < b.maxLv) pool.push({ c: { kind: 'buff', id: b.id }, w: b.weight });
     while (out.length < n && pool.length) {
@@ -154,7 +165,7 @@ export class Run {
   apply(c: Card): boolean {
     track('card_pick', { ...c, level: this.level });
     switch (c.kind) {
-      case 'recruit': if (this.followers < MAX_FOLLOWERS && !this.has(c.partner)) this.addMember(c.partner); break;
+      case 'recruit': if (this.followers < this.maxFollowers && !this.has(c.partner)) this.addMember(c.partner); break;
       case 'star': {
         const m = this.member(c.partner);
         if (m && m.star < MAX_STAR) { m.star++; m.down = false; this.recalc(); m.hp = m.maxHp; }

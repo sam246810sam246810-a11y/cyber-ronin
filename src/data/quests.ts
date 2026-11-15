@@ -1,7 +1,7 @@
 // 新手 7 日嘉年華。合規設計：免費玩家完成約 2/3 任務即可拿到最終大獎。
 export type CounterKey =
   | 'kills' | 'rooms' | 'runs' | 'upgrades' | 'merges' | 'chests'
-  | 'eliteKills' | 'bossKills' | 'chapterClears' | 'evolutions' | 'logins' | 'builds' | 'recruits';
+  | 'eliteKills' | 'bossKills' | 'chapterClears' | 'evolutions' | 'logins' | 'builds' | 'recruits' | 'pulls';
 
 export interface QuestDef { id: string; day: number; text: string; key: CounterKey; target: number; points: number }
 

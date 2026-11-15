@@ -1,6 +1,8 @@
 import { CHAPTERS } from '../data/chapters';
 import { BUILDINGS, BUILDING_MAP, BuildingId, buildCost, buildSeconds, rushGems, AD_RUSH_SEC } from '../data/village';
-import { ALL_PARTNERS, EGG, MAX_PLV, PARTNERS, PartnerId, RECRUITABLE, plvGold, shardCost } from '../data/partners';
+import { ALL_PARTNERS, MAX_PLV, PARTNERS, PartnerId, RECRUITABLE, STARTER_PARTNERS, plvGold, shardCost } from '../data/partners';
+import { Banner, DUPE_SHARDS, PULL_COST, STANDARD, WEEK_MS, limitedBanner, poolOf } from '../data/gacha';
+import { DAILY_CHESTS, DAILY_QUESTS, PASS, PASS_FREE, PASS_PREMIUM, PASS_XP, Reward } from '../data/daily';
 import type { RunBonus } from '../game/run';
 import { Item, MERGE_COUNT, RARITIES, SLOTS, Slot, TPL_MAP, itemStats, upgradeCost } from '../data/equipment';
 import { CounterKey, QUESTS, MILESTONES, CARNIVAL_DAYS, CARNIVAL_CLAIM_DAYS, CARNIVAL_PACK, QuestDef } from '../data/quests';
@@ -26,7 +28,11 @@ export interface Save {
   daily: { date: string; freeChest: boolean; adGems: number; adEgg: boolean };
   offer: { expiresAt: number; lastShownAt: number; purchased: boolean };
   settings: { muted: boolean; vibrate: boolean; music: boolean; stopOnRelease: boolean };
-  partners: Record<PartnerId, { lv: number; shards: number }>;
+  partners: Record<PartnerId, { lv: number; shards: number; owned: boolean }>;
+  gacha: { pityStd: number; pityLim: number; limWeek: number; firstTen: boolean };
+  tickets: number;
+  dailyQ: { base: Record<string, number>; claimed: string[]; chests: number[] };
+  pass: { season: number; xp: number; premium: boolean; free: number[]; prem: number[] };
   flags: { tutMove: boolean; tutMap: boolean; tutCard: boolean };
   activeRun: unknown | null;
   selectedChapter: number;
@@ -38,7 +44,7 @@ const DAY = 86400000;
 
 function fresh(): Save {
   const counters = {} as Record<CounterKey, number>;
-  (['kills', 'rooms', 'runs', 'upgrades', 'merges', 'chests', 'eliteKills', 'bossKills', 'chapterClears', 'evolutions', 'logins', 'builds', 'recruits'] as CounterKey[])
+  (['kills', 'rooms', 'runs', 'upgrades', 'merges', 'chests', 'eliteKills', 'bossKills', 'chapterClears', 'evolutions', 'logins', 'builds', 'recruits', 'pulls'] as CounterKey[])
     .forEach((k) => (counters[k] = 0));
   const s: Save = {
     v: 1, gold: 800, gems: 60, items: [], nextUid: 1,
@@ -50,7 +56,11 @@ function fresh(): Save {
     daily: { date: '', freeChest: false, adGems: 0, adEgg: false },
     offer: { expiresAt: 0, lastShownAt: 0, purchased: false },
     settings: { muted: false, vibrate: true, music: true, stopOnRelease: false },
-    partners: Object.fromEntries(ALL_PARTNERS.map((p) => [p, { lv: 1, shards: 0 }])) as Record<PartnerId, { lv: number; shards: number }>,
+    partners: Object.fromEntries(ALL_PARTNERS.map((p) => [p, { lv: 1, shards: 0, owned: p === 'shiba' || STARTER_PARTNERS.includes(p) }])) as Record<PartnerId, { lv: number; shards: number; owned: boolean }>,
+    gacha: { pityStd: 0, pityLim: 0, limWeek: -1, firstTen: false },
+    tickets: 0,
+    dailyQ: { base: {}, claimed: [], chests: [] },
+    pass: { season: 0, xp: 0, premium: false, free: [], prem: [] },
     flags: { tutMove: false, tutMap: false, tutCard: false },
     activeRun: null,
     selectedChapter: 1,
@@ -70,7 +80,20 @@ function addItemTo(s: Save, tpl: string, rarity: number, level = 1): Item {
   return it;
 }
 
+function migratePartners(base: Save['partners'], old: Partial<Save['partners']> | undefined, hall: number): Save['partners'] {
+  const out = { ...base };
+  // v0.3 以前沒有 owned：保留當時已經能用的夥伴（貓兔熊 + 依舊招募所等級解鎖的狐狸 / 企鵝 / 倉鼠）
+  const legacy: PartnerId[] = ['cat', 'rabbit', 'bear', ...(hall >= 1 ? ['fox' as PartnerId] : []), ...(hall >= 2 ? ['penguin' as PartnerId] : []), ...(hall >= 3 ? ['hamster' as PartnerId] : [])];
+  for (const p of ALL_PARTNERS) {
+    const o = old?.[p];
+    if (!o) continue;
+    out[p] = { lv: o.lv ?? 1, shards: o.shards ?? 0, owned: o.owned ?? (base[p].owned || legacy.includes(p) || (o.lv ?? 1) > 1) };
+  }
+  return out;
+}
+
 export let save: Save = load();
+save.village.levels.hall = Math.min(save.village.levels.hall ?? 0, 5);
 
 function load(): Save {
   try {
@@ -78,7 +101,7 @@ function load(): Save {
     if (raw) {
       const base = fresh();
       const parsed = JSON.parse(raw) as Save;
-      return { ...base, ...parsed, counters: { ...base.counters, ...parsed.counters }, settings: { ...base.settings, ...parsed.settings }, partners: { ...base.partners, ...(parsed.partners ?? {}) }, flags: { ...base.flags, ...(parsed.flags ?? {}) }, daily: { ...base.daily, ...parsed.daily }, village: { ...base.village, ...(parsed.village ?? {}), levels: { ...base.village.levels, ...(parsed.village?.levels ?? {}) } } };
+      return { ...base, ...parsed, counters: { ...base.counters, ...parsed.counters }, settings: { ...base.settings, ...parsed.settings }, partners: migratePartners(base.partners, parsed.partners, parsed.village?.levels?.hall ?? 0), gacha: { ...base.gacha, ...(parsed.gacha ?? {}) }, dailyQ: { ...base.dailyQ, ...(parsed.dailyQ ?? {}) }, pass: { ...base.pass, ...(parsed.pass ?? {}) }, flags: { ...base.flags, ...(parsed.flags ?? {}) }, daily: { ...base.daily, ...parsed.daily }, village: { ...base.village, ...(parsed.village ?? {}), levels: { ...base.village.levels, ...(parsed.village?.levels ?? {}) } } };
     }
   } catch { /* 損毀就重建 */ }
   return fresh();
@@ -102,13 +125,19 @@ export function currentDay(): number {
 const dateKey = () => new Date(now()).toDateString();
 
 export function onBoot() {
+  if (save.daily.date !== dateKey()) {
+    save.daily = { date: dateKey(), freeChest: false, adGems: 0, adEgg: false };
+    save.dailyQ = { base: { ...save.counters }, claimed: [], chests: [] };
+  }
   const d = currentDay();
   if (d !== save.lastLoginDay) {
     save.lastLoginDay = d;
     save.counters.logins += 1;
     track('login', { day: d });
   }
-  if (save.daily.date !== dateKey()) save.daily = { date: dateKey(), freeChest: false, adGems: 0, adEgg: false };
+  // 戰令換季
+  const season = currentSeason();
+  if (season !== save.pass.season) save.pass = { season, xp: 0, premium: false, free: [], prem: [] };
   persist();
 }
 
@@ -415,9 +444,9 @@ export function adRushBuild(): boolean {
   return true;
 }
 
+/** 已擁有、可在冒險中招募的夥伴 */
 export function unlockedPartners(): PartnerId[] {
-  const hall = bLevel('hall');
-  return RECRUITABLE.filter((p) => PARTNERS[p].unlockHall <= hall);
+  return RECRUITABLE.filter((p) => save.partners[p]?.owned);
 }
 
 export function runBonus(): RunBonus {
@@ -429,8 +458,10 @@ export function runBonus(): RunBonus {
     rerolls: bLevel('tower'),
     unlocked: unlockedPartners(),
     plv: Object.fromEntries(ALL_PARTNERS.map((p) => [p, save.partners[p]?.lv ?? 1])) as Record<PartnerId, number>,
-    startPartner: hall >= 4,
-    startStar: hall >= 6 ? 3 : hall >= 5 ? 2 : 1,
+    rescueChoices: hall >= 1 ? 3 : 2,
+    startPartner: hall >= 2,
+    startStar: hall >= 5 ? 3 : hall >= 3 ? 2 : 1,
+    maxFollowers: hall >= 4 ? 7 : 6,
   };
 }
 
@@ -460,6 +491,7 @@ export function settleRun(r: { win: boolean; chapter: number; battles: number; r
   bump('runs'); bump('kills', r.kills); bump('rooms', r.battles);
   bump('eliteKills', r.eliteKills); bump('bossKills', r.bossKills); bump('evolutions', r.evolutions); bump('recruits', r.recruits);
   if (r.win) bump('chapterClears');
+  addPassXp(r.battles * PASS_XP.perBattle + PASS_XP.perRun);
   persist();
   return reward;
 }
@@ -487,23 +519,152 @@ export function upgradePartner(p: PartnerId): boolean {
   return true;
 }
 
-/** 開夥伴蛋，回傳每次抽到的夥伴 */
-export function openEgg(free = false): PartnerId[] | null {
-  if (!free && save.gems < EGG.gems) return null;
-  if (free) { if (save.daily.adEgg) return null; save.daily.adEgg = true; } else save.gems -= EGG.gems;
-  const got: PartnerId[] = [];
-  for (let i = 0; i < EGG.draws; i++) {
-    const p = ALL_PARTNERS[Math.floor(Math.random() * ALL_PARTNERS.length)];
-    addShards(p, EGG.shardsPerDraw);
-    got.push(p);
+// ---------- 夥伴召喚 ----------
+export const weekIndex = () => Math.floor((now() - startOfDay(save.firstLaunch)) / WEEK_MS);
+export const currentLimited = () => limitedBanner(weekIndex());
+export const limitedEndsAt = () => startOfDay(save.firstLaunch) + (weekIndex() + 1) * WEEK_MS;
+
+export interface PullResult { p: PartnerId; rarity: number; isNew: boolean; shards: number }
+
+function rollOne(b: Banner, pityKey: 'pityStd' | 'pityLim', minRarity = 0): PartnerId {
+  save.gacha[pityKey]++;
+  let rarity = 0;
+  let r = Math.random();
+  for (let i = 0; i < b.odds.length; i++) { r -= b.odds[i]; if (r <= 0) { rarity = i; break; } }
+  rarity = Math.max(rarity, minRarity);
+  let pick: PartnerId | null = null;
+  if (b.featured) {
+    const fr = PARTNERS[b.featured].rarity;
+    if (save.gacha.pityLim >= b.pity) pick = b.featured;            // 限時池：保底必得主打
+    else if (rarity === fr && Math.random() < b.featuredShare!) pick = b.featured;
+  } else if (save.gacha.pityStd >= b.pity) rarity = Math.max(rarity, b.pityMinRarity!);
+  if (!pick) {
+    let pool = poolOf(b, rarity);
+    if (b.featured && rarity === PARTNERS[b.featured].rarity) pool = pool.filter((p) => p !== b.featured).length ? pool.filter((p) => p !== b.featured) : pool;
+    if (!pool.length) pool = poolOf(b, 0);
+    pick = pool[Math.floor(Math.random() * pool.length)];
   }
-  bump('chests');
-  track('egg_open', { free, got });
-  persist();
-  return got;
+  const pr = PARTNERS[pick].rarity;
+  if (b.featured) { if (pick === b.featured) save.gacha.pityLim = 0; }
+  else if (pr >= b.pityMinRarity!) save.gacha.pityStd = 0;
+  return pick;
 }
 
-export const partnerUpgradable = () => ALL_PARTNERS.some((p) => (p === 'shiba' || PARTNERS[p].unlockHall <= bLevel('hall')) && canUpgradePartner(p));
+export function pullCost(n: 1 | 10): { gems: number; tickets: number } {
+  if (n === 10) return { gems: save.tickets >= 10 ? 0 : PULL_COST.ten, tickets: save.tickets >= 10 ? 10 : 0 };
+  return { gems: save.tickets >= 1 ? 0 : PULL_COST.single, tickets: save.tickets >= 1 ? 1 : 0 };
+}
+
+/** 召喚；free = 每日廣告免費 / 新手十連 */
+export function pull(bannerId: 'standard' | 'limited', n: 1 | 10, free: 'none' | 'ad' | 'starter' = 'none'): PullResult[] | null {
+  const b = bannerId === 'standard' ? STANDARD : currentLimited();
+  if (free === 'ad') { if (save.daily.adEgg) return null; save.daily.adEgg = true; }
+  else if (free === 'starter') { if (save.gacha.firstTen) return null; save.gacha.firstTen = true; }
+  else {
+    const c = pullCost(n);
+    if (save.gems < c.gems || save.tickets < c.tickets) return null;
+    save.gems -= c.gems; save.tickets -= c.tickets;
+  }
+  const key = bannerId === 'standard' ? 'pityStd' : 'pityLim';
+  const out: PullResult[] = [];
+  for (let i = 0; i < n; i++) {
+    // 十連最後一抽保底藍色以上；新手十連保底紫色以上
+    const min = n === 10 && i === 9 && !out.some((x) => x.rarity >= 2) ? (free === 'starter' ? 3 : 2) : 0;
+    const p = rollOne(b, key, min);
+    const d = save.partners[p];
+    const res: PullResult = { p, rarity: PARTNERS[p].rarity, isNew: !d.owned, shards: 0 };
+    if (!d.owned) d.owned = true;
+    else { res.shards = DUPE_SHARDS[res.rarity]; d.shards += res.shards; }
+    out.push(res);
+  }
+  if (free === 'starter' && !out.some((x) => x.rarity >= 3)) {
+    // 保險：新手十連至少一隻紫色
+    const p = poolOf(b, 3)[0];
+    out[9] = { p, rarity: 3, isNew: !save.partners[p].owned, shards: 0 };
+    save.partners[p].owned = true;
+  }
+  bump('pulls', n);
+  track('gacha_pull', { banner: b.id, n, free, got: out.map((x) => `${x.p}:${x.rarity}`) });
+  persist();
+  return out;
+}
+
+export const partnerUpgradable = () => ALL_PARTNERS.some((p) => save.partners[p].owned && canUpgradePartner(p));
+
+// ---------- 獎勵 ----------
+export function grant(r: Reward): string[] {
+  const lines: string[] = [];
+  if (r.gold) { save.gold += r.gold; lines.push(`🪙 +${r.gold}`); }
+  if (r.gems) { save.gems += r.gems; lines.push(`💎 +${r.gems}`); }
+  if (r.tickets) { save.tickets += r.tickets; lines.push(`🎟️ 召喚券 +${r.tickets}`); }
+  if (r.shards) {
+    const p = r.shards.p === 'random' ? RECRUITABLE[Math.floor(Math.random() * RECRUITABLE.length)] : r.shards.p;
+    addShards(p, r.shards.n);
+    lines.push(`${PARTNERS[p].icon} ${PARTNERS[p].name}碎片 +${r.shards.n}`);
+  }
+  return lines;
+}
+
+// ---------- 每日任務 ----------
+export const dailyProgress = (id: string) => {
+  const q = DAILY_QUESTS.find((x) => x.id === id)!;
+  return Math.min(q.target, save.counters[q.key] - (save.dailyQ.base[q.key] ?? 0));
+};
+export const dailyDone = (id: string) => dailyProgress(id) >= DAILY_QUESTS.find((x) => x.id === id)!.target;
+export const dailyPoints = () => DAILY_QUESTS.filter((q) => save.dailyQ.claimed.includes(q.id)).reduce((a, q) => a + q.pts, 0);
+export const dailyClaimable = () => DAILY_QUESTS.some((q) => dailyDone(q.id) && !save.dailyQ.claimed.includes(q.id))
+  || DAILY_CHESTS.some((c, i) => dailyPoints() >= c.pts && !save.dailyQ.chests.includes(i));
+
+export function claimDaily(id: string): boolean {
+  const q = DAILY_QUESTS.find((x) => x.id === id);
+  if (!q || !dailyDone(id) || save.dailyQ.claimed.includes(id)) return false;
+  save.dailyQ.claimed.push(id);
+  addPassXp(q.pts * PASS_XP.perDailyPoint);
+  track('daily_claim', { id });
+  persist();
+  return true;
+}
+
+export function claimDailyChest(i: number): string[] | null {
+  const c = DAILY_CHESTS[i];
+  if (!c || dailyPoints() < c.pts || save.dailyQ.chests.includes(i)) return null;
+  save.dailyQ.chests.push(i);
+  const lines = grant(c.reward);
+  persist();
+  return lines;
+}
+
+// ---------- 戰令 ----------
+export const currentSeason = () => Math.floor((now() - startOfDay(save.firstLaunch)) / (PASS.seasonDays * DAY));
+export const seasonEndsAt = () => startOfDay(save.firstLaunch) + (currentSeason() + 1) * PASS.seasonDays * DAY;
+export const passLevel = () => Math.min(PASS.levels, Math.floor(save.pass.xp / PASS.xpPer));
+export function addPassXp(n: number) { save.pass.xp = Math.min(PASS.levels * PASS.xpPer, save.pass.xp + n); }
+export const passClaimable = () => {
+  const lv = passLevel();
+  for (let i = 0; i < lv; i++) if (!save.pass.free.includes(i) || (save.pass.premium && !save.pass.prem.includes(i))) return true;
+  return false;
+};
+
+export function claimPass(i: number, premium: boolean): string[] | null {
+  if (i >= passLevel()) return null;
+  const list = premium ? save.pass.prem : save.pass.free;
+  if (list.includes(i) || (premium && !save.pass.premium)) return null;
+  list.push(i);
+  const lines = grant((premium ? PASS_PREMIUM : PASS_FREE)[i]);
+  track('pass_claim', { i, premium });
+  persist();
+  return lines;
+}
+
+export function buyPass() {
+  if (save.pass.premium) return false;
+  save.pass.premium = true;
+  save.shop.spentNtd += PASS.ntd;
+  if (!save.shop.anyPurchase) { addItemTo(save, FIRST_PURCHASE_GIFT.tpl, FIRST_PURCHASE_GIFT.rarity); save.shop.anyPurchase = true; }
+  track('purchase', { sku: 'pass', ntd: PASS.ntd, simulated: true });
+  persist();
+  return true;
+}
 
 // ---------- 冒險存檔 ----------
 export function saveRun(snapshot: unknown) { save.activeRun = snapshot; persist(); }
