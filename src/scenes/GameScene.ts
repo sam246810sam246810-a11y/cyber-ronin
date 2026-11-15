@@ -1437,7 +1437,8 @@ export class GameScene extends Phaser.Scene {
 
       const cx = this.px - e.x;
       const cy = this.py - e.y;
-      const rr = e.radius + pr;
+      // 接觸傷害用身體的 85%（圖的邊緣有留白）
+      const rr = e.radius * 0.85 + pr;
       if (cx * cx + cy * cy < rr * rr) this.hurt(e.damage);
     }
   }
