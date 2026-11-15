@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { loadSave, writeSave } from './storage';
+import { decodeMusic, hasMusic } from './assets';
 
 /** 音效與音樂：統一控制開關、音量與同一音效的播放頻率 */
 class AudioManager {
@@ -38,9 +39,14 @@ class AudioManager {
     if (this.musicKey === key && this.music?.isPlaying) return;
     this.stopMusic();
     this.musicKey = key;
-    if (!this.musicOn || !this.has(key)) return;
-    this.music = this.game.sound.add(key, { loop: true, volume });
-    this.music.play();
+    if (!this.musicOn || !hasMusic(key)) return;
+    const game = this.game;
+    void decodeMusic(game, key, [key]).then((ok) => {
+      // 解壓完成時可能已經換了別首或關掉音樂
+      if (!ok || this.musicKey !== key || !this.musicOn || this.music) return;
+      this.music = game.sound.add(key, { loop: true, volume });
+      this.music.play();
+    });
   }
 
   /** 大廳音樂跟著目前選的關卡（沒有該關的就用預設大廳音樂） */
@@ -49,7 +55,7 @@ class AudioManager {
     if (stageId !== undefined) this.lobbyStage = stageId;
     if (!this.lobbyStage) this.lobbyStage = loadSave().lastStage ?? 'slums';
     const k = `bgm-lobby-${this.lobbyStage}`;
-    this.playMusic(this.has(k) ? k : 'bgm-menu');
+    this.playMusic(hasMusic(k) ? k : 'bgm-menu');
   }
 
   stopMusic() {

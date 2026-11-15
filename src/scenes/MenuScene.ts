@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { releaseLazy } from '../game/assets';
 import { canUnlock, starOf, unlockChar, unlockCost } from '../game/gacha';
 import { MAX_STAR } from '../config/gacha';
 import { CHARACTERS, CHAR_ORDER, CharId, WEAPONS } from '../config/balance';
@@ -30,6 +31,7 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    releaseLazy(this, []); // 回到大廳就釋放戰鬥用的大圖（Boss 動作、大招特效）
     setupLogicalCamera(this);
     const s = loadSave();
     this.charIdx = Math.max(0, CHAR_ORDER.indexOf(s.lastChar));

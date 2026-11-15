@@ -34,6 +34,7 @@ import { SpatialGrid } from '../game/SpatialGrid';
 import { TEX } from '../game/textures';
 import { SaveData, formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
+import { ULT_FX, buildAnims, queueLazy } from '../game/assets';
 import { vibrate } from '../game/haptics';
 import { applyRunToDaily, equippedStats } from '../game/meta';
 import { charStats, mergeStats, spiritStats, starOf, talentLevel } from '../game/gacha';
@@ -494,8 +495,24 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
+  /** 只載入這一場會用到的 Boss 動作與大招特效（其他的釋放掉，避免手機記憶體不足閃退） */
+  preload() {
+    const data = (this.sys.settings.data ?? {}) as { char?: CharId; daily?: boolean; stage?: string; mode?: GameMode };
+    const save = loadSave();
+    const daily = !!data.daily;
+    const mode = daily ? 'normal' : data.mode ?? 'normal';
+    const stage = daily ? STAGES[0] : mode === 'weekly' ? stageById(weeklyBoss().stage) : stageById(data.stage);
+    let charId: CharId = daily ? dailyChallenge(todayKey()).char : data.char && save.chars.includes(data.char) ? data.char : save.lastChar;
+    if (!daily && !save.chars.includes(charId)) charId = 'jin';
+    const texs = new Set<string>(BOSSES.map((b) => b.tex));
+    if (stage.finalBoss) texs.add(stage.finalBoss.tex);
+    if (mode === 'weekly') texs.add(weeklyBoss().tex);
+    queueLazy(this, [...texs, ...(ULT_FX[charId] ?? []).map((f) => `fx-${f}`)]);
+  }
+
   // ---------- 初始化 ----------
   create(data: { char?: CharId; wanted?: number; daily?: boolean; stage?: string; mode?: GameMode }) {
+    buildAnims(this);
     this.resetState();
     this.save = loadSave();
     this.modStats = equippedStats(this.save);

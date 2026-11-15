@@ -3,17 +3,7 @@ import Phaser from 'phaser';
 import { H, W, textStyle } from './layout';
 import { ULTIMATES } from '../config/expansion';
 import type { CharId } from '../config/balance';
-
-/** 每個角色的大招特效動畫（兩段式的 SSR 有兩段） */
-const ULT_FX: Record<CharId, string[]> = {
-  jin: ['ultjin'],
-  zero: ['ultzero'],
-  tetsu: ['ulttetsu'],
-  oboro: ['ultoboro'],
-  hayabusa: ['ulthayabusa'],
-  kagura: ['ultkagura1', 'ultkagura2'],
-  misora: ['ultmisora1', 'ultmisora2'],
-};
+import { ULT_FX, useLazy } from './assets';
 
 export function playUltPreview(scene: Phaser.Scene, id: CharId, onDone?: () => void) {
   const u = ULTIMATES[id];
@@ -53,7 +43,17 @@ export function playUltPreview(scene: Phaser.Scene, id: CharId, onDone?: () => v
     spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spr.destroy());
   };
   const fxs = ULT_FX[id] ?? [];
-  scene.time.delayedCall(800, () => {
+  // 大招特效圖很大，試看時才載入（並釋放其他角色的）
+  let ready = false;
+  void useLazy(scene, fxs.map((f) => `fx-${f}`), true).then(() => (ready = true));
+  const start = () => {
+    if (!ready && scene.time.now - openedAt < 3000) {
+      scene.time.delayedCall(100, start);
+      return;
+    }
+    fire();
+  };
+  const fire = () => {
     scene.tweens.add({ targets: band, x: W * 2.3, duration: 160, ease: 'Cubic.In' });
     const flash = scene.add.rectangle(W / 2, H / 2, W, H, 0xffffff, 0.8);
     layer.add(flash);
@@ -61,7 +61,10 @@ export function playUltPreview(scene: Phaser.Scene, id: CharId, onDone?: () => v
     scene.cameras.main.shake(260, 0.01);
     if (fxs[0]) playFx(fxs[0]);
     if (fxs[1]) scene.time.delayedCall(850, () => playFx(fxs[1]));
-  });
+    scene.time.delayedCall(fxs[1] ? 2100 : 1300, close);
+  };
+  const openedAt = scene.time.now;
+  scene.time.delayedCall(800, start);
   let closed = false;
   const close = () => {
     if (closed) return;
@@ -69,8 +72,6 @@ export function playUltPreview(scene: Phaser.Scene, id: CharId, onDone?: () => v
     scene.tweens.add({ targets: layer, alpha: 0, duration: 250, onComplete: () => layer.destroy() });
     onDone?.();
   };
-  scene.time.delayedCall(fxs[1] ? 2900 : 2100, close);
-  const openedAt = scene.time.now;
   dim.on('pointerup', () => {
     if (scene.time.now - openedAt > 600) close();
   });
