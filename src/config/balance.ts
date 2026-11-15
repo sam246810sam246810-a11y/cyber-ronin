@@ -11,7 +11,11 @@ export const PLAYER = {
 
 export const RUN = {
   duration: 600, // 10 分鐘
-  maxEnemies: 360,
+  maxEnemies: 240,
+  /** 敵人放大到和角色一樣大之後：數量變少、單隻血量與經驗變多 */
+  spawnScale: 0.65,
+  gruntHpScale: 1.6,
+  gruntXpScale: 1.5,
   revives: 1,
   rerolls: 2,
   banishes: 2,
@@ -414,12 +418,12 @@ export interface EnemyDef {
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyDef> = {
-  drone: { kind: 'drone', name: '維安無人機', desc: '企業的巡邏無人機，數量多、速度快。', hp: 6, speed: 80, damage: 6, radius: 10, xp: 1, color: 0xff3d81, tex: 'enemy-drone' },
-  thug: { kind: 'thug', name: '改造幫派份子', desc: '裝了廉價義肢的街頭混混。', hp: 16, speed: 56, damage: 9, radius: 13, xp: 2, color: 0xff8a3d, tex: 'enemy-thug' },
-  husk: { kind: 'husk', name: '殭屍化義體人', desc: '被病毒侵蝕神經的義體人，耐打又沉重。', hp: 45, speed: 40, damage: 14, radius: 17, xp: 4, color: 0xb44dff, tex: 'enemy-husk' },
-  gunner: { kind: 'gunner', name: '企業槍兵', desc: '保持距離，用電漿步槍遠程射擊。', hp: 24, speed: 52, damage: 7, radius: 13, xp: 3, color: 0x9dff3d, tex: 'enemy-gunner' },
-  elite: { kind: 'elite', name: '企業執法者', desc: '重裝精英，擊倒後掉落寶箱。', hp: 320, speed: 50, damage: 18, radius: 24, xp: 25, color: 0xffc83d, tex: 'enemy-elite' },
-  boss: { kind: 'boss', name: '鬼面將軍', desc: '', hp: 1500, speed: 54, damage: 25, radius: 42, xp: 120, color: 0xff2244, tex: 'boss-oni' },
+  drone: { kind: 'drone', name: '維安無人機', desc: '企業的巡邏無人機，數量多、速度快。', hp: 6, speed: 80, damage: 6, radius: 15, xp: 1, color: 0xff3d81, tex: 'enemy-drone' },
+  thug: { kind: 'thug', name: '改造幫派份子', desc: '裝了廉價義肢的街頭混混。', hp: 16, speed: 56, damage: 9, radius: 22, xp: 2, color: 0xff8a3d, tex: 'enemy-thug' },
+  husk: { kind: 'husk', name: '殭屍化義體人', desc: '被病毒侵蝕神經的義體人，耐打又沉重。', hp: 45, speed: 40, damage: 14, radius: 25, xp: 4, color: 0xb44dff, tex: 'enemy-husk' },
+  gunner: { kind: 'gunner', name: '企業槍兵', desc: '保持距離，用電漿步槍遠程射擊。', hp: 24, speed: 52, damage: 7, radius: 22, xp: 3, color: 0x9dff3d, tex: 'enemy-gunner' },
+  elite: { kind: 'elite', name: '企業執法者', desc: '重裝精英，擊倒後掉落寶箱。', hp: 320, speed: 50, damage: 18, radius: 36, xp: 25, color: 0xffc83d, tex: 'enemy-elite' },
+  boss: { kind: 'boss', name: '鬼面將軍', desc: '', hp: 1500, speed: 54, damage: 25, radius: 70, xp: 120, color: 0xff2244, tex: 'boss-oni' },
 };
 
 export type BossVariant = 'oni' | 'spider' | 'apex';
@@ -437,9 +441,9 @@ export interface BossDef {
 }
 
 export const BOSSES: BossDef[] = [
-  { variant: 'oni', at: 180, hp: 1200, title: '鬼面將軍', desc: '企業的私兵統帥。會蓄力衝刺，並放出環狀彈幕。', tex: 'boss-oni', radius: 42, speed: 54, final: false },
-  { variant: 'spider', at: 360, hp: 4000, title: '絡新婦', desc: '蜘蛛型戰鬥機甲。召喚無人機，並噴出旋轉彈幕。', tex: 'boss-spider', radius: 46, speed: 46, final: false },
-  { variant: 'apex', at: 570, hp: 9000, title: '鬼面將軍・極', desc: '重生的鬼面將軍。衝刺、環狀與旋轉彈幕全部用上。', tex: 'boss-apex', radius: 52, speed: 62, final: true },
+  { variant: 'oni', at: 180, hp: 1200, title: '鬼面將軍', desc: '企業的私兵統帥。會蓄力衝刺，並放出環狀彈幕。', tex: 'boss-oni', radius: 70, speed: 54, final: false },
+  { variant: 'spider', at: 360, hp: 4000, title: '絡新婦', desc: '蜘蛛型戰鬥機甲。召喚無人機，並噴出旋轉彈幕。', tex: 'boss-spider', radius: 74, speed: 46, final: false },
+  { variant: 'apex', at: 570, hp: 9000, title: '鬼面將軍・極', desc: '重生的鬼面將軍。衝刺、環狀與旋轉彈幕全部用上。', tex: 'boss-apex', radius: 78, speed: 62, final: true },
 ];
 
 /** 一般敵人的血量隨時間成長 */

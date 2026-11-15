@@ -795,7 +795,7 @@ export class GameScene extends Phaser.Scene {
   private updateTimeline(dt: number) {
     const seg = currentWave(this.t);
     const alive = this.activeEnemies.length;
-    this.spawnAcc += seg.rate * this.spawnMult * this.wmods.spawn * dt;
+    this.spawnAcc += seg.rate * RUN.spawnScale * this.spawnMult * this.wmods.spawn * dt;
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
       if (alive < RUN.maxEnemies) this.spawnEnemy(pickWeighted(seg.weights));
@@ -859,7 +859,8 @@ export class GameScene extends Phaser.Scene {
     const def = ENEMIES[kind];
     const e = this.obtainEnemy();
     const [x, y] = at ?? this.spawnPoint(def.radius + 30);
-    const mult = kind === 'boss' ? 1 : enemyHpMult(this.t) * this.wmods.hp;
+    const grunt = kind !== 'boss' && kind !== 'elite';
+    const mult = kind === 'boss' ? 1 : enemyHpMult(this.t) * this.wmods.hp * (grunt ? RUN.gruntHpScale : 1);
     Object.assign(e, {
       active: true,
       def,
@@ -870,7 +871,7 @@ export class GameScene extends Phaser.Scene {
       speed: def.speed * (0.92 + Math.random() * 0.16) * this.wmods.speed,
       damage: def.damage * (1 + this.t / 600) * this.wmods.dmg,
       radius: def.radius,
-      xp: def.xp,
+      xp: Math.round(def.xp * (grunt ? RUN.gruntXpScale : 1)),
       kx: 0,
       ky: 0,
       flash: 0,
@@ -917,7 +918,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnSwarm() {
-    const n = 30;
+    const n = 20;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       this.spawnEnemy('drone', [this.px + Math.cos(a) * 320, this.py + Math.sin(a) * 640]);
@@ -1484,7 +1485,7 @@ export class GameScene extends Phaser.Scene {
     const kind = e.def.kind;
     this.seenEnemies.add(e.boss ? `boss-${e.boss.variant}` : kind);
     this.sparks.explode(kind === 'boss' ? 40 : kind === 'elite' ? 18 : 5, e.x, e.y);
-    this.playFx('death', e.x, e.y, e.radius * (kind === 'boss' ? 5 : 4.2), 0, kind === 'boss' || kind === 'elite' ? 0xffffff : e.def.color, 26, 8);
+    this.playFx('death', e.x, e.y, e.radius * (kind === 'boss' ? 3.5 : 3), 0, kind === 'boss' || kind === 'elite' ? 0xffffff : e.def.color, 26, 8);
     Audio.play('sfx-kill', 0.22, 45, 500);
     if (!fromIai) {
       this.intent += (kind === 'elite' ? INTENT.eliteBonus : kind === 'boss' ? 0 : 1) * this.intentMult;
