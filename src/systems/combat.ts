@@ -17,7 +17,7 @@ export function calcDamage(atk: number, mult: number, def: number, rng: Rng = Ma
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export const DIFFICULTY: Record<Difficulty, { name: string; enemyHp: number; enemyAtk: number; exp: number; drop: number }> = {
-  easy: { name: '簡單', enemyHp: 0.7, enemyAtk: 0.6, exp: 1.2, drop: 1.0 },
+  easy: { name: '簡單', enemyHp: 0.6, enemyAtk: 0.5, exp: 1.2, drop: 1.0 },
   normal: { name: '普通', enemyHp: 1.0, enemyAtk: 1.0, exp: 1.0, drop: 1.0 },
   hard: { name: '困難', enemyHp: 1.4, enemyAtk: 1.3, exp: 1.0, drop: 1.2 },
 };
@@ -99,6 +99,25 @@ export function applyItem(name: string, v: Vitals): string {
   if (e.mp) { const before = v.mp; v.mp = Math.min(v.maxMp, v.mp + e.mp); parts.push(`MP +${v.mp - before}`); }
   if (e.cure) { e.cure.forEach((k) => delete v.statuses[k]); parts.push('解除異常'); }
   return `${name}：${parts.join('、')}`;
+}
+
+// ---------- 自動瞄準 ----------
+export interface AimCandidate { x: number; y: number }
+/**
+ * 自動瞄準：在 range 內找最近的目標。面向方向前方（±90°）的目標距離打 7 折，
+ * 所以同樣遠時會優先打面前的那隻，但背後很近的敵人還是會被選到。
+ * 回傳目標索引，沒有回傳 -1。
+ */
+export function pickAimTarget(from: AimCandidate, aim: AimCandidate, targets: AimCandidate[], range: number): number {
+  let best = -1, bestScore = Infinity;
+  targets.forEach((t, i) => {
+    const dx = t.x - from.x, dy = t.y - from.y, d = Math.hypot(dx, dy);
+    if (d > range) return;
+    const ahead = dx * aim.x + dy * aim.y >= 0;
+    const score = ahead ? d * 0.7 : d;
+    if (score < bestScore) { bestScore = score; best = i; }
+  });
+  return best;
 }
 
 // ---------- 劍士連段 ----------

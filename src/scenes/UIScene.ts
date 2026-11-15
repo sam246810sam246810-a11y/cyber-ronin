@@ -70,7 +70,7 @@ export class UIScene extends Phaser.Scene {
       [EV.dialogue, (r: DialogueRequest) => { this.showButtons(false); this.dialogue.open({ ...r, onDone: () => { this.showButtons(true); r.onDone(); this.refreshStatus(); } }); }],
       [EV.hud, (h: HudInfo | null) => { if (h) this.buttons.attack.setLabel(h.label, h.canInteract); this.refreshStatus(); }],
       [EV.toast, (msg: string) => this.toast(msg)],
-      [EV.area, (name: string) => this.showAreaName(name)],
+      [EV.area, (name: string) => { if (this.dialogue.isOpen) { this.dialogue.close(); this.showButtons(true); } this.showAreaName(name); }],
       [EV.banner, (b: BannerInfo) => this.banner(b)],
     ];
     handlers.forEach(([e, h]) => ev.on(e, h, this));

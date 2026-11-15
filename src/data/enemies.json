@@ -1,6 +1,55 @@
 {
-  "kitsunebi": { "name": "狐火",     "hp": 20,   "atk": 6, "def": 2, "speed": 40, "exp": 5, "money": [2, 5], "frame": 0, "burnChance": 0.3 },
-  "karakasa":  { "name": "唐傘小僧", "hp": 30,   "atk": 8, "def": 3, "speed": 130, "exp": 7, "money": [3, 7], "frame": 2 },
-  "nogitsune": { "name": "野狐",     "hp": 25,   "atk": 7, "def": 2, "speed": 60, "exp": 6, "money": [3, 6], "frame": 4 },
-  "dummy":     { "name": "稻草人",   "hp": 9999, "atk": 0, "def": 0, "speed": 0,  "exp": 0, "money": [0, 0], "frame": 6 }
+  "kitsunebi": {
+    "name": "狐火",
+    "hp": 20,
+    "atk": 6,
+    "def": 2,
+    "speed": 36,
+    "exp": 5,
+    "money": [
+      2,
+      5
+    ],
+    "frame": 0,
+    "burnChance": 0.2
+  },
+  "karakasa": {
+    "name": "唐傘小僧",
+    "hp": 30,
+    "atk": 8,
+    "def": 3,
+    "speed": 110,
+    "exp": 7,
+    "money": [
+      3,
+      7
+    ],
+    "frame": 2
+  },
+  "nogitsune": {
+    "name": "野狐",
+    "hp": 25,
+    "atk": 7,
+    "def": 2,
+    "speed": 60,
+    "exp": 6,
+    "money": [
+      3,
+      6
+    ],
+    "frame": 4
+  },
+  "dummy": {
+    "name": "稻草人",
+    "hp": 9999,
+    "atk": 0,
+    "def": 0,
+    "speed": 0,
+    "exp": 0,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 6
+  }
 }

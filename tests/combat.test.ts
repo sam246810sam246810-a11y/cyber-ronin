@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, nextComboStep, scaleEnemy, tickStatuses, type Statuses, type Vitals } from '../src/systems/combat';
+import { pickAimTarget, applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, nextComboStep, scaleEnemy, tickStatuses, type Statuses, type Vitals } from '../src/systems/combat';
 
 const seq = (...v: number[]) => { let i = 0; return () => v[i++ % v.length]; };
 
@@ -22,7 +22,7 @@ describe('calcDamage', () => {
 describe('scaleEnemy', () => {
   const base = { hp: 30, atk: 8, exp: 7 };
   it('困難：HP ×1.4、攻擊 ×1.3', () => expect(scaleEnemy(base, 'hard')).toEqual({ hp: 42, atk: 10, exp: 7 }));
-  it('簡單：經驗 ×1.2', () => expect(scaleEnemy(base, 'easy')).toEqual({ hp: 21, atk: 5, exp: 8 }));
+  it('簡單：HP ×0.6、攻擊 ×0.5、經驗 ×1.2', () => expect(scaleEnemy(base, 'easy')).toEqual({ hp: 18, atk: 4, exp: 8 }));
   it('攻擊 0 的稻草人維持 0', () => expect(scaleEnemy({ hp: 1, atk: 0, exp: 0 }, 'hard').atk).toBe(0));
 });
 
@@ -68,4 +68,12 @@ describe('nextComboStep', () => {
     expect(nextComboStep(2, 0.3)).toBe(0);
   });
   it('間隔太久重來', () => expect(nextComboStep(1, 0.8)).toBe(0));
+});
+
+describe('pickAimTarget', () => {
+  const me = { x: 0, y: 0 }, right = { x: 1, y: 0 };
+  it('選最近的', () => expect(pickAimTarget(me, right, [{ x: 50, y: 0 }, { x: 20, y: 10 }], 100)).toBe(1));
+  it('同樣距離時優先面前的', () => expect(pickAimTarget(me, right, [{ x: -30, y: 0 }, { x: 40, y: 0 }], 100)).toBe(1));
+  it('背後很近的還是會選到', () => expect(pickAimTarget(me, right, [{ x: -10, y: 0 }, { x: 80, y: 0 }], 100)).toBe(0));
+  it('超出範圍回傳 -1', () => expect(pickAimTarget(me, right, [{ x: 200, y: 0 }], 100)).toBe(-1));
 });

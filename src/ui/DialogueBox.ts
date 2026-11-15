@@ -43,6 +43,12 @@ export class DialogueBox {
     this.showLine();
   }
 
+  /** 直接關閉（換地圖時），不觸發 onDone。 */
+  close(): void {
+    this.req = undefined;
+    this.root.setVisible(false);
+  }
+
   private showLine(): void {
     const [speaker, text] = this.req!.lines[this.index];
     this.name.setText(speaker);

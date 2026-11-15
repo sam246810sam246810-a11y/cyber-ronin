@@ -93,7 +93,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         if (this.ai === 'tele' && time >= this.stateUntil) { this.ai = 'dash'; this.stateUntil = time + 350; this.dir = toward; this.setScale(0.9, 1.15); }
         else if (this.ai === 'dash' && time >= this.stateUntil) { this.ai = 'rest'; this.stateUntil = time + 700; this.setScale(1); }
         else if (this.ai === 'rest' && time >= this.stateUntil) this.ai = 'idle';
-        if (this.ai === 'idle' && dist < SIGHT + 10) { this.ai = 'tele'; this.stateUntil = time + 320; this.setScale(1.15, 0.8); }
+        if (this.ai === 'idle' && dist < SIGHT + 10) { this.ai = 'tele'; this.stateUntil = time + 480; this.setScale(1.15, 0.8); }
         if (this.ai === 'dash') this.setVelocity(this.dir.x * this.info.speed, this.dir.y * this.info.speed);
         else this.setVelocity(0, 0);
         break;
@@ -104,19 +104,27 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           this.setTint(Math.floor(time / 60) % 2 ? 0xffffff : 0xff6a6a);
           if (time >= this.stateUntil) { this.ai = 'dash'; this.stateUntil = time + 280; this.dir = toward; this.clearTint(); }
         } else if (this.ai === 'dash') {
-          this.setVelocity(this.dir.x * 220, this.dir.y * 220);
+          this.setVelocity(this.dir.x * 190, this.dir.y * 190);
           if (time >= this.stateUntil) { this.ai = 'rest'; this.stateUntil = time + 450; }
         } else if (this.ai === 'rest') {
           this.setVelocity(0, 0);
           if (time >= this.stateUntil) this.ai = 'idle';
         } else if (dist < SIGHT + 20) {
-          if (dist < 60 && time >= this.dashReadyAt) { this.ai = 'tele'; this.stateUntil = time + 420; this.dashReadyAt = time + 1600; }
+          if (dist < 60 && time >= this.dashReadyAt) { this.ai = 'tele'; this.stateUntil = time + 600; this.dashReadyAt = time + 2000; }
           else this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
         } else this.setVelocity(0, 0);
         break;
       }
     }
     if (this.body) this.setFlipX((this.body as Phaser.Physics.Arcade.Body).velocity.x > 5);
+  }
+
+  /** 撞到主角後退開一下，避免貼著連續傷害。 */
+  recoil(from: Vec2): void {
+    const me = this.center, dx = me.x - from.x, dy = me.y - from.y, d = Math.hypot(dx, dy) || 1;
+    this.setVelocity((dx / d) * 120, (dy / d) * 120);
+    this.hitstunUntil = this.scene.time.now + 250;
+    this.ai = 'rest'; this.stateUntil = this.scene.time.now + 900; this.setScale(1);
   }
 
   /** 被攻擊。回傳是否被打倒。 */

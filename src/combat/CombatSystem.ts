@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import skills from '../data/skills.json';
 import { Player } from '../entities/Player';
 import { Enemy, type HitOptions } from '../entities/Enemy';
-import { applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, COMBO_MULT, hasStatus, nextComboStep, tickStatuses } from '../systems/combat';
+import { applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, COMBO_MULT, hasStatus, nextComboStep, pickAimTarget, tickStatuses } from '../systems/combat';
+import { facingFromVector } from '../systems/movement';
 import { classStats, gameState } from '../systems/gameState';
 import { hudState } from '../systems/hudState';
 import type { Action } from '../systems/inputState';
@@ -12,7 +13,9 @@ import { floatText, ring, slashArc } from './fx';
 type SkillId = keyof typeof skills;
 
 const DODGE = { duration: 400, iframes: 250, cooldown: 800, speed: 230 };
-const HURT_IFRAMES = 600;
+const HURT_IFRAMES = 900;
+/** 自動瞄準範圍（px）：近戰、遠程 */
+const AIM_RANGE = { melee: 56, ranged: 170 };
 const MP_REGEN = 1; // 每秒
 
 interface Projectile {
@@ -47,6 +50,7 @@ export class CombatSystem {
   private barrierUntil = 0;
   private barrier?: Phaser.GameObjects.Arc;
   private chargeRing: Phaser.GameObjects.Arc;
+  private readonly marker: Phaser.GameObjects.Graphics;
   private dotAccum = 0;
   private projectiles: Projectile[] = [];
   private dead = false;
@@ -60,6 +64,7 @@ export class CombatSystem {
   ) {
     player.speed = this.cls.spd;
     this.chargeRing = scene.add.circle(0, 0, 10).setStrokeStyle(1.5, 0x9fd8ff, 1).setVisible(false).setDepth(130000);
+    this.marker = scene.add.graphics().setDepth(125000);
     hudState.maxHp = this.cls.hp;
     hudState.maxMp = this.cls.mp;
   }
@@ -85,6 +90,24 @@ export class CombatSystem {
   /** 互動優先時（按攻擊鈕其實是對話）取消這次按壓。 */
   cancelAttackPress(): void { this.attackHeld = false; this.chargeRing.setVisible(false); }
 
+  private get isMelee(): boolean { return this.cls.name === '劍士'; }
+
+  /** 找出 range 內要自動瞄準的敵人。 */
+  private aimTarget(range: number): Enemy | undefined {
+    const alive = this.enemies.filter((e) => e.alive);
+    const i = pickAimTarget(this.player.center, this.player.aim, alive.map((e) => e.center), range);
+    return i >= 0 ? alive[i] : undefined;
+  }
+
+  /** 攻擊前自動轉向最近的敵人（手機上用搖桿很難精準瞄準）。 */
+  private autoAim(range: number): void {
+    const t = this.aimTarget(range);
+    if (!t) return;
+    const p = this.player.center, c = t.center, dx = c.x - p.x, dy = c.y - p.y, d = Math.hypot(dx, dy) || 1;
+    this.player.aim = { x: dx / d, y: dy / d };
+    this.player.facing = facingFromVector(this.player.aim, this.player.facing);
+  }
+
   // ---------- 普通攻擊 ----------
   private attack(): void {
     if (this.busy || this.now < this.attackReady) return;
@@ -93,25 +116,28 @@ export class CombatSystem {
   }
 
   private swordSwing(): void {
+    this.autoAim(AIM_RANGE.melee);
     const step = nextComboStep(this.comboStep, (this.now - this.lastSwing) / 1000);
     this.comboStep = step; this.lastSwing = this.now;
     this.attackReady = this.now + (step === 2 ? 420 : 260);
     this.slowUntil = this.now + 200;
     const p = this.player.center, a = this.player.aim, ang = Math.atan2(a.y, a.x);
-    const reach = step === 2 ? 16 : 13;
+    const reach = step === 2 ? 20 : 17;
     slashArc(this.scene, p.x, p.y - 2, ang, reach, step === 1 ? 2.4 : 2.0, step === 2 ? 0xffd84a : 0xf8f0e0, step === 2 ? 4 : 3);
-    this.hitCircle({ x: p.x + a.x * 12, y: p.y + a.y * 12 }, step === 2 ? 15 : 13, COMBO_MULT[step], { knock: step === 2 ? 200 : 120 });
+    this.hitCircle({ x: p.x + a.x * 13, y: p.y + a.y * 13 }, step === 2 ? 20 : 17, COMBO_MULT[step], { knock: step === 2 ? 200 : 120 });
   }
 
   private shootArrow(heldMs: number): void {
     if (this.busy || this.now < this.attackReady) return;
     const charged = heldMs >= 600;
+    this.autoAim(AIM_RANGE.ranged);
     this.attackReady = this.now + 320;
     this.slowUntil = this.now + 120;
     this.fire(0, this.player.aim, charged ? 300 : 230, charged ? 2.0 : 1.0, charged ? 230 : 170, { pierce: charged, tint: charged ? 0x9fd8ff : undefined });
   }
 
   private throwTalisman(fireTalisman: boolean): void {
+    this.autoAim(AIM_RANGE.ranged);
     this.attackReady = this.now + 380;
     this.slowUntil = this.now + 150;
     this.fire(fireTalisman ? 2 : 1, this.player.aim, 170, fireTalisman ? skills.fire.mult : 1.1, 130, { opts: fireTalisman ? { burn: true } : {}, spin: true });
@@ -125,6 +151,7 @@ export class CombatSystem {
     if (gameState.mp < s.mp) { this.cb.toast('MP 不足'); return; }
     gameState.mp -= s.mp;
     this.skillReady[i] = this.now + s.cd * 1000;
+    if (id !== 'spin' && id !== 'barrier') this.autoAim(id === 'thrust' ? AIM_RANGE.melee + 40 : AIM_RANGE.ranged);
     const p = this.player.center, a = this.player.aim;
     switch (id) {
       case 'spin':
@@ -248,6 +275,7 @@ export class CombatSystem {
     const pc = this.player.center, ec = e.center, dx = pc.x - ec.x, dy = pc.y - ec.y, dist = Math.hypot(dx, dy) || 1;
     this.knock = { x: (dx / dist) * 160, y: (dy / dist) * 160 };
     this.knockUntil = this.now + 90;
+    e.recoil(pc);
     this.scene.cameras.main.shake(90, 0.004);
     const burn = (e.info as { burnChance?: number }).burnChance ?? 0;
     if (burn && Math.random() < burn) { applyStatus(gameState.statuses, 'burn'); this.cb.toast('燒傷了！'); }
@@ -301,7 +329,7 @@ export class CombatSystem {
       for (const e of this.enemies) {
         if (!e.alive || pr.hit.has(e)) continue;
         const ec = e.center;
-        if (Math.hypot(ec.x - pr.sprite.x, ec.y - pr.sprite.y) < 10) {
+        if (Math.hypot(ec.x - pr.sprite.x, ec.y - pr.sprite.y) < 12) {
           pr.hit.add(e);
           this.hitEnemy(e, pr.mult, { x: pr.sprite.x - (pr.sprite.body?.velocity.x ?? 0), y: pr.sprite.y - (pr.sprite.body?.velocity.y ?? 0) }, { knock: 110, ...pr.opts });
           if (!pr.pierce) { this.removeProjectile(pr.sprite); break; }
@@ -331,6 +359,15 @@ export class CombatSystem {
     if (!this.dead && hasStatus(gameState.statuses, 'burn')) this.player.setTint(0xffb08a);
     else if (!this.dead && hasStatus(gameState.statuses, 'poison')) this.player.setTint(0xb08aff);
     else if (!this.dead) this.player.clearTint();
+
+    // 目前會被自動瞄準的敵人：腳下畫紅色準星
+    this.marker.clear();
+    const t = this.dead ? undefined : this.aimTarget(this.isMelee ? AIM_RANGE.melee : AIM_RANGE.ranged);
+    if (t) {
+      const c = t.center, pulse = 1 + 0.15 * Math.sin(now / 120);
+      this.marker.lineStyle(1.5, 0xff5a5a, 0.9).strokeEllipse(c.x, c.y + 4, 16 * pulse, 7 * pulse);
+      this.marker.fillStyle(0xff5a5a, 0.9).fillTriangle(c.x - 3, c.y - 14, c.x + 3, c.y - 14, c.x, c.y - 10);
+    }
 
     // 介面資訊
     hudState.skills = this.skillIds.map((id, i) => ({

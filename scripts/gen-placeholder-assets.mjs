@@ -473,7 +473,7 @@ interior('home', '燈的家', [
   '#...tttt...#',
   '#..........#',
   '#####m######',
-], (m) => { chest(m, 'home_chest', 2, 6, { item: '回復丸', count: 2 }); sign(m, 'home_note', 9, 3, 'home_note'); });
+], (m) => { chest(m, 'home_chest', 2, 6, { item: '回復丸', count: 3 }); sign(m, 'home_note', 9, 3, 'home_note'); });
 interior('minka', '阿梅的家', [
   '############',
   '#ff..s..ff.#',
