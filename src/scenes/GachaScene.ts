@@ -126,9 +126,8 @@ export class GachaScene extends Phaser.Scene {
       return;
     }
     if (this.pool === 'char') {
-      // 本期 UP 的 SSR 放在中間最大，另一位 SSR 在旁邊；SR 頭像排在下方
+      // 只主打本期 UP 的 SSR；其他角色頭像排在左側
       const up = currentUp();
-      const other = SSR_UP_ROTATION.find((c) => c !== up)!;
       const live = (id: CharId, x: number, yb: number, hgt: number) => {
         let img: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
         if (this.anims.exists(`live-${id}`)) {
@@ -140,41 +139,45 @@ export class GachaScene extends Phaser.Scene {
         return img;
       };
       const base = cy + h / 2 - 70;
-      const glow = this.add.ellipse(W / 2 - 40, base - h * 0.35, 320, h * 0.85, 0xffc83d, 0.14).setBlendMode(Phaser.BlendModes.ADD);
-      this.tweens.add({ targets: glow, alpha: 0.3, yoyo: true, repeat: -1, duration: 1200 });
-      const o = live(other, W / 2 + 150, base - 10, h * 0.62);
-      o.setAlpha(0.85);
-      live(up, W / 2 - 50, base, h * 0.92);
-      // 本期 UP 角標與名牌
-      const rib = this.add.container(W / 2 - 170, cy - h / 2 + 64).setAngle(-8);
-      rib.add(this.add.rectangle(0, 0, 150, 40, 0xff2e6a, 1).setStrokeStyle(2, 0xffd84d));
-      rib.add(this.add.text(0, 0, '本期 UP', textStyle(20, '#ffffff')).setOrigin(0.5).setStroke('#7a1a3a', 4));
-      this.tweens.add({ targets: rib, scale: 1.06, yoyo: true, repeat: -1, duration: 600 });
-      const plate = (id: CharId, x: number, y: number, big: boolean) => {
-        const w2 = big ? 220 : 160;
-        this.add.rectangle(x, y, w2, big ? 52 : 40, 0x07060d, 0.85).setStrokeStyle(2, 0xffd84d, 0.9);
-        this.add.text(x - w2 / 2 + 10, y, 'SSR', textStyle(big ? 16 : 13, '#ffd84d')).setOrigin(0, 0.5);
-        this.add.text(x + 18, y - (big ? 8 : 6), CHARACTERS[id].name, textStyle(big ? 16 : 12, '#ffffff')).setOrigin(0.5);
-        this.add.text(x + 18, y + (big ? 12 : 9), CHARACTERS[id].role, textStyle(big ? 11 : 10, '#ffb0d8', false)).setOrigin(0.5);
-      };
-      plate(up, W / 2 - 50, base + 16, true);
-      plate(other, W / 2 + 150, base - 4, false);
-      this.add.text(W / 2 - 50, base + 50, `點角色看介紹與試看大招　本期至 ${upEndsText()}`, textStyle(11, '#c9c6e0', false)).setOrigin(0.5).setStroke('#07060d', 3);
-      // SR 頭像一排
+      const hx = W / 2 + 30;
+      const glow = this.add.ellipse(hx, base - h * 0.4, 340, h * 0.85, 0xffc83d, 0.12).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: glow, alpha: 0.26, yoyo: true, repeat: -1, duration: 1400 });
+      live(up, hx, base, h * 0.92);
+      // 名牌：金框＋上方一行「本期機率提升」
+      const pw = 260;
+      this.add.rectangle(hx, base + 18, pw, 54, 0x07060d, 0.88).setStrokeStyle(2, 0xffd84d, 0.95);
+      this.add.text(hx - pw / 2 + 12, base + 18, 'SSR', textStyle(17, '#ffd84d')).setOrigin(0, 0.5);
+      this.add.text(hx + 20, base + 9, CHARACTERS[up].name, textStyle(17, '#ffffff')).setOrigin(0.5);
+      this.add.text(hx + 20, base + 31, CHARACTERS[up].role, textStyle(11, '#ffb0d8', false)).setOrigin(0.5);
+      const tagY = base - 22;
+      const tag = this.add.text(hx, tagY, '✦ 本期機率提升 ✦', textStyle(15, '#ffe9a0')).setOrigin(0.5).setStroke('#5a3a00', 4);
+      const lines = this.add.graphics();
+      lines.lineStyle(2, 0xffd84d, 0.8).lineBetween(hx - 150, tagY, hx - tag.width / 2 - 8, tagY).lineBetween(hx + tag.width / 2 + 8, tagY, hx + 150, tagY);
+      this.tweens.add({ targets: tag, alpha: 0.65, yoyo: true, repeat: -1, duration: 900 });
+      this.add.text(hx, base + 58, `點角色看介紹與試看大招　本期至 ${upEndsText()}`, textStyle(11, '#c9c6e0', false)).setOrigin(0.5).setStroke('#07060d', 3);
+      // 左側直排：其他 SSR（金框）＋ SR（紫框）
+      const others = SSR_UP_ROTATION.filter((c) => c !== up);
       const srs = (Object.keys(CHARACTERS) as CharId[]).filter((c) => CHAR_RARITY[c] === 2);
-      // SR 頭像：左側直排，不擋到主打角色
       const sx = 34;
-      const sy0 = cy - h / 2 + 150;
-      this.add.text(sx, sy0 - 34, 'SR', textStyle(14, '#c48bff')).setOrigin(0.5).setStroke('#07060d', 3);
-      srs.forEach((c, i) => {
-        const y = sy0 + i * 54;
+      let y = cy - h / 2 + 70;
+      const head = (label: string, color: string) => {
+        this.add.text(sx, y, label, textStyle(13, color)).setOrigin(0.5).setStroke('#07060d', 3);
+        y += 34;
+      };
+      const icon = (c: CharId, ring: number) => {
         const key = this.textures.exists(`avatar-${c}`) ? `avatar-${c}` : `char-${c}`;
         this.add.circle(sx, y, 23, 0x07060d, 0.85);
         const im = this.add.image(sx, y, key);
         im.setScale(42 / im.width);
-        this.add.circle(sx, y, 22).setStrokeStyle(2, 0xb46bff, 0.9);
+        this.add.circle(sx, y, 22).setStrokeStyle(2, ring, 0.95);
         im.setInteractive({ useHandCursor: true }).on('pointerup', () => this.showCharIntro(c));
-      });
+        y += 54;
+      };
+      head('SSR', '#ffd84d');
+      others.forEach((c) => icon(c, 0xffd84d));
+      y += 4;
+      head('SR', '#c48bff');
+      srs.forEach((c) => icon(c, 0xb46bff));
       return;
     }
     // 靈物池
