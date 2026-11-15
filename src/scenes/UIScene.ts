@@ -372,6 +372,9 @@ export class UIScene extends Phaser.Scene {
     this.resetJoy();
     const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, dimAlpha).setInteractive();
     this.modalLayer.add(dim);
+    // 視窗淡入
+    this.modalLayer.setAlpha(0);
+    this.tweens.add({ targets: this.modalLayer, alpha: 1, duration: 160 });
   }
 
   private closeModalUI() {

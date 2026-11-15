@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS, H, W, textStyle } from '../game/layout';
-import { header, makeButton, menuBackground, moduleIcon, setupLogicalCamera } from '../game/ui';
+import { fancyTitle, makeButton, moduleIcon, setupLogicalCamera } from '../game/ui';
+import { CONTENT_TOP, enter, goTo, lobbyBackground, tabBar, topBar } from '../game/chrome';
+
 import { loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
@@ -20,16 +22,19 @@ export class GachaScene extends Phaser.Scene {
     Audio.playMusic('bgm-menu');
     this.busy = false;
     this.draw();
+    enter(this);
   }
 
   private draw() {
     this.children.removeAll(true);
-    menuBackground(this);
+    this.tweens.killAll();
+    lobbyBackground(this, 0.6);
     const s = loadSave();
-    const hd = header(this, '黑市販賣機', null, () => !this.busy && this.scene.start('Menu'));
-    hd.credits.setText(`晶片 ${s.chips}`).setColor('#7fd4ff');
+    topBar(this, s);
+    fancyTitle(this, W / 2, CONTENT_TOP + 24, '黑市販賣機', 26, '#ffffff', '#ff3d81');
+    tabBar(this, 'Gacha');
 
-    const my = 330;
+    const my = CONTENT_TOP + 230;
     this.add.ellipse(W / 2, my + 175, 300, 50, COLORS.magenta, 0.15);
     const machine = this.add.image(W / 2, my, this.textures.exists('gacha-machine') ? 'gacha-machine' : 'pickup-chest');
     const src = machine.texture.getSourceImage();
@@ -39,12 +44,12 @@ export class GachaScene extends Phaser.Scene {
     this.add.text(W / 2, my + 210, `距離保底 SSR 還有 ${GACHA.pity - s.pity} 抽`, textStyle(17, '#ffd84d')).setOrigin(0.5);
     this.add.text(W / 2, my + 238, '十連抽保證至少一個 SR 以上', textStyle(14, COLORS.dim, false)).setOrigin(0.5);
 
-    const by = my + 300;
+    const by = my + 290;
     makeButton(this, W / 2 - 120, by, 210, 70, `單抽  ${GACHA.single}`, COLORS.cyan, () => this.doPull(1), 22).setEnabled(s.chips >= GACHA.single);
     makeButton(this, W / 2 + 120, by, 210, 70, `十連  ${GACHA.ten}`, COLORS.magenta, () => this.doPull(10), 22).setEnabled(s.chips >= GACHA.ten);
 
     makeButton(this, W / 2 - 90, by + 86, 160, 44, '機率說明', 0x888899, () => this.showRates(), 15);
-    makeButton(this, W / 2 + 90, by + 86, 160, 44, '前往義體', COLORS.cyan, () => this.scene.start('Armory'), 15);
+    makeButton(this, W / 2 + 90, by + 86, 160, 44, '前往義體', COLORS.cyan, () => goTo(this, 'Armory'), 15);
     this.add
       .text(W / 2, by + 130, '晶片可從每日任務、成就、每日挑戰與擊敗 Boss 取得', { ...textStyle(13, '#8a86a8', false), align: 'center', wordWrap: { width: 460 } })
       .setOrigin(0.5, 0);

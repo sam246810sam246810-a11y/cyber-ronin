@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
-import { COLORS, H, W, textStyle } from '../game/layout';
-import { header, makeButton, menuBackground, moduleIcon, setupLogicalCamera } from '../game/ui';
+import { COLORS, W, textStyle } from '../game/layout';
+import { makeButton, moduleIcon, setupLogicalCamera } from '../game/ui';
+import { CONTENT_BOTTOM, CONTENT_TOP, enter, lobbyBackground, tabBar, topBar } from '../game/chrome';
+
 import { loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { dismantle, equippedStats, upgradeModule } from '../game/meta';
@@ -25,20 +27,22 @@ export class ArmoryScene extends Phaser.Scene {
     this.page = 0;
     this.selected = null;
     this.draw();
+    enter(this);
   }
 
   private draw() {
     this.children.removeAll(true);
-    menuBackground(this);
+    this.tweens.killAll();
+    lobbyBackground(this, 0.72);
     const s = loadSave();
-    const hd = header(this, '義體', null, () => this.scene.start('Menu'));
-    hd.credits.setText(`零件 ${s.parts}`).setColor('#7fd4ff');
+    topBar(this, s);
+    tabBar(this, 'Armory');
 
     // 裝備欄
     const slots: Slot[] = ['head', 'body', 'arm'];
     slots.forEach((slot, i) => {
       const x = W / 2 + (i - 1) * 160;
-      const y = 150;
+      const y = CONTENT_TOP + 78;
       const uid = s.equipped[slot];
       const m = s.modules.find((q) => q.uid === uid);
       this.add.text(x, y - 66, SLOT_NAME[slot], textStyle(14, COLORS.dim, false)).setOrigin(0.5);
@@ -58,7 +62,7 @@ export class ArmoryScene extends Phaser.Scene {
     const st = equippedStats(s);
     const lines = (Object.keys(st) as StatKey[]).map((k) => fmtStat(k, st[k]!));
     this.add
-      .text(W / 2, 222, lines.length ? lines.join('　') : '尚未裝備模組。打倒 Boss 或抽卡可以取得。', {
+      .text(W / 2, CONTENT_TOP + 140, lines.length ? lines.join('　') : '尚未裝備模組。打倒 Boss 或抽卡可以取得。', {
         ...textStyle(13, '#a9e8ff', false),
         align: 'center',
         wordWrap: { width: 500 },
@@ -73,7 +77,7 @@ export class ArmoryScene extends Phaser.Scene {
       ['arm', '手臂'],
     ];
     filters.forEach(([f, label], i) => {
-      makeButton(this, 70 + i * 100, 300, 92, 40, label, COLORS.violet, () => {
+      makeButton(this, 70 + i * 100, CONTENT_TOP + 200, 92, 40, label, COLORS.violet, () => {
         this.filter = f;
         this.page = 0;
         this.draw();
@@ -81,7 +85,7 @@ export class ArmoryScene extends Phaser.Scene {
     });
     const equippedSet = new Set(Object.values(s.equipped));
     const junk = s.modules.filter((m) => m.rarity === 0 && m.level === 0 && !equippedSet.has(m.uid));
-    makeButton(this, W - 66, 300, 112, 40, `分解 N ×${junk.length}`, 0x888899, () => {
+    makeButton(this, W - 66, CONTENT_TOP + 200, 112, 40, `分解 N ×${junk.length}`, 0x888899, () => {
       const save = loadSave();
       const gain = dismantle(save, junk.map((m) => m.uid));
       writeSave(save);
@@ -96,10 +100,10 @@ export class ArmoryScene extends Phaser.Scene {
       .sort((a, b) => b.rarity - a.rarity || b.level - a.level);
     const pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
     this.page = Math.min(this.page, pages - 1);
-    const cell = 96;
+    const cell = 88;
     list.slice(this.page * PER_PAGE, this.page * PER_PAGE + PER_PAGE).forEach((m, i) => {
       const x = W / 2 + ((i % 5) - 2) * (cell + 4);
-      const y = 380 + Math.floor(i / 5) * (cell + 4);
+      const y = CONTENT_TOP + 264 + Math.floor(i / 5) * (cell + 4);
       const icon = moduleIcon(this, x, y, cell - 6, m, equippedSet.has(m.uid));
       if (m.uid === this.selected) this.add.rectangle(x, y, cell, cell).setStrokeStyle(3, 0xffffff, 1);
       icon.setInteractive({ useHandCursor: true }).on('pointerup', () => {
@@ -110,7 +114,7 @@ export class ArmoryScene extends Phaser.Scene {
     });
     if (list.length === 0) this.add.text(W / 2, 430, '背包是空的', textStyle(16, COLORS.dim, false)).setOrigin(0.5);
     if (pages > 1) {
-      const py = 380 + 3 * (cell + 4) - 20;
+      const py = CONTENT_TOP + 264 + 3 * (cell + 4) - 24;
       makeButton(this, W / 2 - 90, py, 70, 36, '<', COLORS.cyan, () => {
         this.page = Math.max(0, this.page - 1);
         this.draw();
@@ -128,8 +132,8 @@ export class ArmoryScene extends Phaser.Scene {
   private drawDetail() {
     const s = loadSave();
     const m = s.modules.find((q) => q.uid === this.selected);
-    const top = Math.max(720, H - 250);
-    this.add.rectangle(W / 2, (top + H) / 2, 510, H - top - 16, 0x0b0916, 0.96).setStrokeStyle(1, COLORS.magenta, 0.5);
+    const top = CONTENT_BOTTOM - 206;
+    this.add.rectangle(W / 2, (top + CONTENT_BOTTOM) / 2, 510, CONTENT_BOTTOM - top, 0x0b0916, 0.96).setStrokeStyle(1, COLORS.magenta, 0.5);
     if (!m) {
       this.add.text(W / 2, top + 40, '點選模組查看詳細資料', textStyle(15, COLORS.dim, false)).setOrigin(0.5);
       return;
@@ -144,7 +148,7 @@ export class ArmoryScene extends Phaser.Scene {
     this.add.text(126, top + 56, lines.join('\n'), { ...textStyle(14, '#c9c6e0', false), lineSpacing: 4 }).setOrigin(0, 0);
 
     const equipped = s.equipped[base.slot] === m.uid;
-    const by = H - 44;
+    const by = CONTENT_BOTTOM - 34;
     makeButton(this, W / 2 - 165, by, 150, 50, equipped ? '卸下' : '裝備', COLORS.cyan, () => {
       const save = loadSave();
       save.equipped[base.slot] = equipped ? null : m.uid;

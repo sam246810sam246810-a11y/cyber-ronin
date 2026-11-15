@@ -1,0 +1,245 @@
+// 大廳與各功能頁共用的外框：頂部資源列、底部分頁列、設定視窗、轉場。
+import Phaser from 'phaser';
+import { COLORS, H, W, textStyle } from './layout';
+import { makeButton } from './ui';
+import { SaveData, loadSave, writeSave } from './storage';
+import { Audio } from './audio';
+import { setVibrate, vibrate, vibrateEnabled } from './haptics';
+import { claimableCount, equippedModules } from './meta';
+import { GACHA } from '../config/meta';
+import { UPGRADES, upgradeCost } from '../config/balance';
+
+export type TabKey = 'Shop' | 'Armory' | 'Menu' | 'Gacha' | 'Missions';
+
+export const TOP_H = 76;
+export const TAB_H = 96;
+/** 內容區（頂部資源列與底部分頁列之間） */
+export const CONTENT_TOP = TOP_H + 8;
+export const CONTENT_BOTTOM = H - TAB_H - 6;
+
+const TABS: { key: TabKey; label: string; icon: string; color: number }[] = [
+  { key: 'Shop', label: '強化', icon: 'ui-ic-upgrade', color: COLORS.gold },
+  { key: 'Armory', label: '義體', icon: 'ui-ic-implant', color: COLORS.cyan },
+  { key: 'Menu', label: '出擊', icon: 'ui-ic-battle', color: COLORS.magenta },
+  { key: 'Gacha', label: '抽卡', icon: 'ui-ic-gacha', color: COLORS.magenta },
+  { key: 'Missions', label: '任務', icon: 'ui-ic-mission', color: 0x5dff7a },
+];
+
+/** 切換畫面：淡出再進入下一個畫面 */
+export function goTo(scene: Phaser.Scene, key: string, data?: object) {
+  if ((scene as unknown as { _leaving?: boolean })._leaving) return;
+  (scene as unknown as { _leaving?: boolean })._leaving = true;
+  scene.cameras.main.fadeOut(140, 7, 6, 13);
+  scene.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => scene.scene.start(key, data));
+}
+
+/** 進入畫面時淡入，內容由下往上滑入 */
+export function enter(scene: Phaser.Scene) {
+  (scene as unknown as { _leaving?: boolean })._leaving = false;
+  scene.cameras.main.fadeIn(180, 7, 6, 13);
+}
+
+function iconImg(scene: Phaser.Scene, x: number, y: number, key: string, size: number) {
+  if (!scene.textures.exists(key)) return null;
+  const img = scene.add.image(x, y, key);
+  const src = img.texture.getSourceImage();
+  return img.setScale(size / Math.max(src.width, src.height));
+}
+
+function badge(scene: Phaser.Scene, x: number, y: number, n: number | boolean) {
+  if (!n) return;
+  const c = scene.add.circle(x, y, typeof n === 'number' ? 10 : 6, 0xff2244).setStrokeStyle(2, 0x07060d);
+  if (typeof n === 'number') scene.add.text(x, y, String(n), textStyle(11)).setOrigin(0.5);
+  scene.tweens.add({ targets: c, scale: 1.2, yoyo: true, repeat: -1, duration: 600 });
+}
+
+/** 頂部資源列：頭像＋晶片、信用點、零件 */
+export function topBar(scene: Phaser.Scene, save: SaveData) {
+  const bg = scene.add.graphics();
+  bg.fillGradientStyle(0x07060d, 0x07060d, 0x07060d, 0x07060d, 0.95, 0.95, 0, 0);
+  bg.fillRect(0, 0, W, TOP_H + 16);
+  bg.fillStyle(COLORS.magenta, 0.5);
+  bg.fillRect(0, TOP_H - 2, W, 1);
+
+  // 頭像
+  const ax = 40;
+  const ay = TOP_H / 2;
+  scene.add.circle(ax, ay, 27, 0x14102a);
+  const pk = scene.textures.exists(`portrait-${save.lastChar}`) ? `portrait-${save.lastChar}` : `char-${save.lastChar}`;
+  const face = scene.add.image(ax, ay + 10, pk);
+  const fs = face.texture.getSourceImage();
+  face.setScale(78 / Math.max(fs.width, fs.height));
+  const mask = scene.make.graphics({}, false).fillCircle(ax, ay, 25);
+  face.setMask(mask.createGeometryMask());
+  const ring = iconImg(scene, ax, ay, 'ui-frame-avatar', 64);
+  if (!ring) scene.add.circle(ax, ay, 27).setStrokeStyle(2, COLORS.cyan);
+  const wanted = save.bestWanted ?? 0;
+  const lv = scene.add.text(ax, ay + 28, save.wins > 0 ? `通緝 ${wanted}` : '新人', textStyle(11, '#ffd84d')).setOrigin(0.5);
+  lv.setStroke('#07060d', 3);
+
+  // 資源膠囊
+  const items: { icon: string; value: number; color: string; to: TabKey }[] = [
+    { icon: 'ui-ic-chip', value: save.chips ?? 0, color: '#7fd4ff', to: 'Gacha' },
+    { icon: 'ui-ic-coin', value: save.credits, color: '#ffd84d', to: 'Shop' },
+    { icon: 'ui-ic-parts', value: save.parts ?? 0, color: '#c9c6e0', to: 'Armory' },
+  ];
+  const cw = 132;
+  items.forEach((it, i) => {
+    const x = W - 14 - cw / 2 - (items.length - 1 - i) * (cw + 6);
+    const y = TOP_H / 2;
+    const pill = scene.add.graphics();
+    pill.fillStyle(0x000000, 0.55);
+    pill.fillRoundedRect(x - cw / 2 + 12, y - 14, cw - 12, 28, 14);
+    pill.lineStyle(1, 0xffffff, 0.15);
+    pill.strokeRoundedRect(x - cw / 2 + 12, y - 14, cw - 12, 28, 14);
+    iconImg(scene, x - cw / 2 + 14, y, it.icon, 34);
+    const t = scene.add.text(x + 14, y, formatNum(it.value), textStyle(15, it.color)).setOrigin(0.5);
+    t.setStroke('#07060d', 3);
+    const plus = scene.add.circle(x + cw / 2 - 14, y, 10, 0x2bd96b).setStrokeStyle(2, 0x07060d);
+    scene.add.text(plus.x, plus.y - 1, '+', textStyle(14)).setOrigin(0.5);
+    const hit = scene.add.zone(x, y, cw, 36).setInteractive({ useHandCursor: true });
+    hit.on('pointerup', () => {
+      Audio.play('sfx-click', 0.3);
+      goTo(scene, it.to);
+    });
+  });
+}
+
+export function formatNum(n: number): string {
+  if (n >= 100000) return `${Math.floor(n / 1000)}K`;
+  return n.toLocaleString('en-US');
+}
+
+/** 底部分頁列 */
+export function tabBar(scene: Phaser.Scene, active: TabKey) {
+  const save = loadSave();
+  const y0 = H - TAB_H;
+  const bg = scene.add.graphics();
+  bg.fillStyle(0x0b0916, 0.97);
+  bg.fillRect(0, y0, W, TAB_H);
+  bg.fillStyle(COLORS.cyan, 0.6);
+  bg.fillRect(0, y0, W, 2);
+  bg.fillStyle(COLORS.magenta, 0.25);
+  bg.fillRect(0, y0 + 2, W, 2);
+
+  const dots: Record<TabKey, number | boolean> = {
+    Shop: UPGRADES.some((u) => (save.upgrades[u.id] ?? 0) < u.maxLevel && save.credits >= upgradeCost(u, save.upgrades[u.id] ?? 0)),
+    Armory: equippedModules(save).length < 3 && (save.modules?.length ?? 0) > equippedModules(save).length,
+    Menu: false,
+    Gacha: (save.chips ?? 0) >= GACHA.single,
+    Missions: claimableCount(save),
+  };
+  writeSave(save);
+
+  const tw = W / TABS.length;
+  TABS.forEach((t, i) => {
+    const x = tw * i + tw / 2;
+    const isActive = t.key === active;
+    const isBattle = t.key === 'Menu';
+    const cy = y0 + TAB_H / 2 + (isActive ? -10 : 0);
+    if (isActive) {
+      const hl = scene.add.graphics();
+      hl.fillStyle(t.color, 0.22);
+      hl.fillRoundedRect(x - tw / 2 + 4, y0 - 14, tw - 8, TAB_H + 10, 10);
+      hl.lineStyle(2, t.color, 0.9);
+      hl.strokeRoundedRect(x - tw / 2 + 4, y0 - 14, tw - 8, TAB_H + 10, 10);
+    } else if (i > 0) {
+      bg.fillStyle(0xffffff, 0.06);
+      bg.fillRect(tw * i, y0 + 16, 1, TAB_H - 32);
+    }
+    const size = isBattle ? 58 : 44;
+    const icon = iconImg(scene, x, cy - 10, t.icon, isActive ? size + 8 : size);
+    if (!icon) scene.add.circle(x, cy - 10, 16, t.color, 0.6);
+    if (isActive && icon) scene.tweens.add({ targets: icon, y: icon.y - 3, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.InOut' });
+    const label = scene.add.text(x, cy + 26, t.label, textStyle(isActive ? 16.5 : 14, isActive ? '#ffffff' : '#8a86a8')).setOrigin(0.5);
+    label.setStroke('#07060d', 3);
+    badge(scene, x + 20, cy - 30, dots[t.key]);
+    const hit = scene.add.zone(x, y0 + TAB_H / 2, tw, TAB_H).setInteractive({ useHandCursor: true });
+    hit.on('pointerup', () => {
+      if (isActive) return;
+      Audio.play('sfx-click', 0.35);
+      goTo(scene, t.key);
+    });
+  });
+}
+
+/** 設定視窗 */
+export function openSettings(scene: Phaser.Scene) {
+  const layer = scene.add.container(0, 0).setDepth(200);
+  const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.8).setInteractive();
+  layer.add(dim);
+  const panel = panelBox(scene, W / 2, H / 2, 420, 420);
+  layer.add(panel);
+  const title = scene.add.text(W / 2, H / 2 - 160, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
+  title.setStroke('#07060d', 5);
+  layer.add(title);
+  const rows: [string, () => boolean, (v: boolean) => void][] = [
+    ['音樂', () => Audio.musicOn, (v) => {
+      Audio.setMusic(v);
+      if (v) Audio.playMusic('bgm-menu');
+    }],
+    ['音效', () => Audio.sfxOn, (v) => Audio.setSfx(v)],
+    ['震動', () => vibrateEnabled(), (v) => {
+      setVibrate(v);
+      if (v) vibrate(40);
+    }],
+  ];
+  rows.forEach(([name, get, set], i) => {
+    const y = H / 2 - 90 + i * 80;
+    layer.add(scene.add.text(W / 2 - 160, y, name, textStyle(22)).setOrigin(0, 0.5));
+    const b = makeButton(scene, W / 2 + 110, y, 140, 52, '', COLORS.cyan, () => {
+      set(!get());
+      b.setLabel(get() ? '開' : '關').setActive2(get());
+    }, 20);
+    b.setLabel(get() ? '開' : '關').setActive2(get());
+    layer.add(b);
+  });
+  const close = makeButton(scene, W / 2, H / 2 + 160, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
+  layer.add(close);
+  layer.setScale(0.9).setAlpha(0);
+  scene.tweens.add({ targets: layer, scale: 1, alpha: 1, duration: 180, ease: 'Back.Out' });
+  return layer;
+}
+
+/** 金屬面板（有生成的邊框就用九宮格伸縮） */
+export function panelBox(scene: Phaser.Scene, x: number, y: number, w: number, h: number) {
+  const c = scene.add.container(x, y);
+  const fill = scene.add.rectangle(0, 0, w - 12, h - 12, 0x0d0a1c, 0.95);
+  c.add(fill);
+  if (scene.textures.exists('ui-frame-panel')) {
+    const src = scene.textures.get('ui-frame-panel').getSourceImage();
+    const k = 0.5;
+    const ns = scene.add.nineslice(0, 0, 'ui-frame-panel', undefined, w / k, h / k, 90, 90, 90, 90).setScale(k);
+    void src;
+    c.add(ns);
+  } else c.add(scene.add.rectangle(0, 0, w, h).setStrokeStyle(2, COLORS.magenta, 0.8));
+  return c;
+}
+
+/** 大廳背景：生成的雨夜街景＋雨滴 */
+export function lobbyBackground(scene: Phaser.Scene, dim = 0) {
+  if (scene.textures.exists('ui-lobby-bg')) {
+    const bg = scene.add.image(W / 2, H / 2, 'ui-lobby-bg');
+    const src = bg.texture.getSourceImage();
+    bg.setScale(Math.max(W / src.width, H / src.height));
+  }
+  if (dim > 0) scene.add.rectangle(W / 2, H / 2, W, H, 0x07060d, dim);
+  // 雨
+  const rain = scene.add.graphics();
+  const drops = Array.from({ length: 60 }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 500 + Math.random() * 300, l: 10 + Math.random() * 14 }));
+  const fn = (_t: number, dt: number) => {
+    rain.clear();
+    rain.lineStyle(1, 0x9fd8ff, 0.35);
+    for (const d of drops) {
+      d.y += (d.v * dt) / 1000;
+      d.x -= (d.v * dt) / 6000;
+      if (d.y > H) {
+        d.y = -20;
+        d.x = Math.random() * W;
+      }
+      rain.lineBetween(d.x, d.y, d.x - 2, d.y + d.l);
+    }
+  };
+  scene.events.on('update', fn);
+  rain.once('destroy', () => scene.events.off('update', fn));
+}

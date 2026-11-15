@@ -3,13 +3,15 @@ import { CHARACTERS } from '../config/balance';
 import { ACHIEVEMENTS, dailyChallenge, dailyMissions, todayKey } from '../config/meta';
 import { WANTED_RULES } from '../config/expansion';
 import { COLORS, W, textStyle } from '../game/layout';
-import { header, makeButton, menuBackground, setupLogicalCamera } from '../game/ui';
+import { makeButton, setupLogicalCamera } from '../game/ui';
+import { enter, goTo, lobbyBackground, tabBar, topBar } from '../game/chrome';
+
 import { formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { achStats, ensureDaily } from '../game/meta';
 
 type Tab = 'daily' | 'ach' | 'challenge';
-const ACH_PER_PAGE = 7;
+const ACH_PER_PAGE = 5;
 
 /** 任務：每日任務、成就、每日挑戰 */
 export class MissionsScene extends Phaser.Scene {
@@ -20,21 +22,24 @@ export class MissionsScene extends Phaser.Scene {
     super('Missions');
   }
 
-  create() {
+  create(data?: { tab?: Tab }) {
+    this.tab = data?.tab ?? 'daily';
     setupLogicalCamera(this);
     Audio.playMusic('bgm-menu');
     this.page = 0;
     this.draw();
+    enter(this);
   }
 
   private draw() {
     this.children.removeAll(true);
-    menuBackground(this);
+    this.tweens.killAll();
+    lobbyBackground(this, 0.72);
     const s = loadSave();
     ensureDaily(s);
     writeSave(s);
-    const hd = header(this, '任務', null, () => this.scene.start('Menu'));
-    hd.credits.setText(`晶片 ${s.chips}`).setColor('#7fd4ff');
+    topBar(this, s);
+    tabBar(this, 'Missions');
     const tabs: [Tab, string][] = [
       ['daily', '每日任務'],
       ['ach', '成就'],
@@ -142,7 +147,7 @@ export class MissionsScene extends Phaser.Scene {
       .setOrigin(0.5);
     makeButton(this, W / 2, 700, 320, 76, '開始挑戰', 0x5dff7a, () => {
       Audio.stopMusic();
-      this.scene.start('Game', { daily: true });
+      goTo(this, 'Game', { daily: true });
     }, 26);
   }
 }

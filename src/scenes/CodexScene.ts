@@ -2,7 +2,8 @@ import Phaser from 'phaser';
 import { BOSSES, ENEMIES, EVOLUTIONS, PASSIVES, PASSIVE_POOL, UNLOCKS, WEAPONS, WEAPON_POOL, WeaponId } from '../config/balance';
 import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, textStyle } from '../game/layout';
-import { header, makeButton, menuBackground, setupLogicalCamera } from '../game/ui';
+import { header, makeButton, setupLogicalCamera } from '../game/ui';
+import { enter, goTo, lobbyBackground } from '../game/chrome';
 import { loadSave } from '../game/storage';
 import { Audio } from '../game/audio';
 
@@ -30,6 +31,7 @@ export class CodexScene extends Phaser.Scene {
     Audio.playMusic('bgm-menu');
     this.selected = 0;
     this.draw();
+    enter(this);
   }
 
   private entries(): Entry[] {
@@ -63,8 +65,9 @@ export class CodexScene extends Phaser.Scene {
 
   private draw() {
     this.children.removeAll(true);
-    menuBackground(this);
-    header(this, T.codexTitle, null, () => this.scene.start('Menu'));
+    this.tweens.killAll();
+    lobbyBackground(this, 0.75);
+    header(this, T.codexTitle, null, () => goTo(this, 'Menu'));
 
     const tabs: [Tab, string][] = [
       ['weapons', T.tabWeapons],

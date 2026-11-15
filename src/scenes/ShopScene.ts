@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { UPGRADES, upgradeCost } from '../config/balance';
 import { T } from '../i18n/zh-TW';
-import { COLORS, H, W, textStyle } from '../game/layout';
-import { header, makeButton, menuBackground, setupLogicalCamera } from '../game/ui';
+import { COLORS, W, textStyle } from '../game/layout';
+import { fancyTitle, makeButton, setupLogicalCamera } from '../game/ui';
+import { CONTENT_BOTTOM, CONTENT_TOP, enter, lobbyBackground, tabBar, topBar } from '../game/chrome';
+
 import { loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 
@@ -15,20 +17,25 @@ export class ShopScene extends Phaser.Scene {
     setupLogicalCamera(this);
     Audio.playMusic('bgm-menu');
     this.draw();
+    enter(this);
   }
 
   private draw() {
     this.children.removeAll(true);
-    menuBackground(this);
+    this.tweens.killAll();
+    lobbyBackground(this, 0.72);
     const save = loadSave();
-    header(this, T.shopTitle, save.credits, () => this.scene.start('Menu'));
+    topBar(this, save);
+    fancyTitle(this, W / 2, CONTENT_TOP + 22, T.shopTitle, 24, '#ffffff', '#ffc83d');
+    tabBar(this, 'Shop');
 
-    const rowH = Math.min(96, (H - 110) / UPGRADES.length - 6);
+    const top0 = CONTENT_TOP + 50;
+    const rowH = Math.min(90, (CONTENT_BOTTOM - top0) / UPGRADES.length - 6);
     UPGRADES.forEach((u, i) => {
       const lv = save.upgrades[u.id] ?? 0;
       const maxed = lv >= u.maxLevel;
       const cost = upgradeCost(u, lv);
-      const y = 96 + i * (rowH + 6) + rowH / 2;
+      const y = top0 + i * (rowH + 6) + rowH / 2;
       this.add.rectangle(W / 2, y, 510, rowH, COLORS.panel, 0.95).setStrokeStyle(1, 0x2e2650);
       this.add.image(32 + 18, y, u.icon).setDisplaySize(rowH - 30, rowH - 30);
       this.add.text(92, y - rowH / 2 + 12, u.name, textStyle(19)).setOrigin(0, 0);
