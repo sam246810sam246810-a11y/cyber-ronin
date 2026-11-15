@@ -9,6 +9,7 @@ import { pointerToLogical } from './camera';
 export class VirtualJoystick {
   readonly radius = 36;
   vector: Vec2 = { x: 0, y: 0 };
+  get active(): boolean { return this.pointerId !== null; }
   onFirstMove?: () => void;
 
   private pointerId: number | null = null;

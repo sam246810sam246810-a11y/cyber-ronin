@@ -6,6 +6,12 @@ import type { Vec2 } from '../systems/movement';
 
 export type EnemyKind = keyof typeof enemies;
 type State = 'idle' | 'chase' | 'tele' | 'dash' | 'rest' | 'return';
+type Behaviour = 'chase' | 'hop' | 'dash' | 'shooter' | 'slam' | 'none';
+/** 每種怪物用哪一套 AI（第二章的怪物沿用第一章的行為，數值不同） */
+const BEHAVIOUR: Record<string, Behaviour> = {
+  kitsunebi: 'chase', aokitsunebi: 'chase', karakasa: 'hop', nogitsune: 'dash', kappa: 'dash',
+  bonespider: 'shooter', dorotabou: 'shooter', chochin: 'slam', suiko: 'slam', dummy: 'none',
+};
 
 const SIGHT = 100;   // 進入視野開始追擊
 const LEASH = 200;   // 離開原位太遠就回去
@@ -26,6 +32,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   private shootReadyAt = 0;
   private warn?: Phaser.GameObjects.Arc;
   readonly elite: boolean;
+  private baseTint?: number;
+  private get behaviour(): Behaviour { return BEHAVIOUR[this.kind] ?? 'chase'; }
+  private restoreTint(): void { if (this.baseTint) this.setTint(this.baseTint); else this.clearTint(); }
   readonly guard?: string;
   private dir: Vec2 = { x: 0, y: 0 };
   private hitstunUntil = 0;
@@ -49,6 +58,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     body.setSize(12, 10).setOffset(2, 6);
     if (kind === 'dummy') body.setImmovable(true);
     if (this.elite) this.setScale(1.4);
+    const tint = (enemies[kind] as { tint?: number }).tint;
+    if (tint) { this.baseTint = tint; this.setTint(tint); }
     this.bar = scene.add.graphics().setDepth(120000);
   }
 
@@ -68,9 +79,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       if (this.dotAccum >= 1) { const n = Math.floor(this.dotAccum); this.dotAccum -= n; this.damage(n, false, '#ff9a4a'); if (!this.alive) return; }
     }
     if (hasStatus(this.statuses, 'paralyze')) { this.setVelocity(0, 0); this.setTint(0xfff27a); return; }
-    if (hasStatus(this.statuses, 'burn')) this.setTint(0xffb08a); else if (this.ai !== 'tele') this.clearTint();
+    if (hasStatus(this.statuses, 'burn')) this.setTint(0xffb08a); else if (this.ai !== 'tele') this.restoreTint();
     if (time < this.hitstunUntil) { const b = this.body as Phaser.Physics.Arcade.Body; b.velocity.scale(0.85); return; }
-    if (this.kind === 'dummy') { this.setVelocity(0, 0); return; }
+    if (this.behaviour === 'none') { this.setVelocity(0, 0); return; }
 
     const me = this.center;
     const toT = { x: target.x - me.x, y: target.y - me.y };
@@ -86,8 +97,9 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    switch (this.kind) {
-      case 'kitsunebi': {
+    const dashTele = this.kind === 'kappa' ? 500 : 600, dashSpeed = this.kind === 'kappa' ? 230 : 190;
+    switch (this.behaviour) {
+      case 'chase': {
         if (dist < SIGHT) this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
         else {
           const t = time / 1000 + this.seed;
@@ -96,7 +108,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         }
         break;
       }
-      case 'karakasa': {
+      case 'hop': {
         // 蹲下預備 → 跳向玩家 → 休息
         if (this.ai === 'tele' && time >= this.stateUntil) { this.ai = 'dash'; this.stateUntil = time + 350; this.dir = toward; this.setScale(0.9, 1.15); }
         else if (this.ai === 'dash' && time >= this.stateUntil) { this.ai = 'rest'; this.stateUntil = time + 700; this.setScale(1); }
@@ -106,29 +118,29 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         else this.setVelocity(0, 0);
         break;
       }
-      case 'nogitsune': {
+      case 'dash': {
         if (this.ai === 'tele') {
           this.setVelocity(0, 0);
           this.setTint(Math.floor(time / 60) % 2 ? 0xffffff : 0xff6a6a);
-          if (time >= this.stateUntil) { this.ai = 'dash'; this.stateUntil = time + 280; this.dir = toward; this.clearTint(); }
+          if (time >= this.stateUntil) { this.ai = 'dash'; this.stateUntil = time + 280; this.dir = toward; this.restoreTint(); }
         } else if (this.ai === 'dash') {
-          this.setVelocity(this.dir.x * 190, this.dir.y * 190);
+          this.setVelocity(this.dir.x * dashSpeed, this.dir.y * dashSpeed);
           if (time >= this.stateUntil) { this.ai = 'rest'; this.stateUntil = time + 450; }
         } else if (this.ai === 'rest') {
           this.setVelocity(0, 0);
           if (time >= this.stateUntil) this.ai = 'idle';
         } else if (dist < SIGHT + 20) {
-          if (dist < 60 && time >= this.dashReadyAt) { this.ai = 'tele'; this.stateUntil = time + 600; this.dashReadyAt = time + 2000; }
+          if (dist < 60 && time >= this.dashReadyAt) { this.ai = 'tele'; this.stateUntil = time + dashTele; this.dashReadyAt = time + 2000; }
           else this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
         } else this.setVelocity(0, 0);
         break;
       }
-      case 'bonespider': {
+      case 'shooter': {
         // 保持距離，閃紫光後吐毒絲
         if (this.ai === 'tele') {
           this.setVelocity(0, 0);
           this.setTint(Math.floor(time / 70) % 2 ? 0xffffff : 0xb04aff);
-          if (time >= this.stateUntil) { this.clearTint(); this.emit('shoot', this, toward); this.ai = 'rest'; this.stateUntil = time + 500; this.shootReadyAt = time + 2200; }
+          if (time >= this.stateUntil) { this.restoreTint(); this.emit('shoot', this, toward); this.ai = 'rest'; this.stateUntil = time + 500; this.shootReadyAt = time + (this.kind === 'dorotabou' ? 2600 : 2200); }
         } else if (this.ai === 'rest') {
           this.setVelocity(0, 0);
           if (time >= this.stateUntil) this.ai = 'idle';
@@ -140,14 +152,14 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         } else this.setVelocity(0, 0);
         break;
       }
-      case 'chochin': {
+      case 'slam': {
         // 精英：慢慢逼近，地上出現紅圈後重擊
         if (this.ai === 'tele') {
           this.setVelocity(0, 0);
           const k = 1 - (this.stateUntil - time) / 750;
           this.warn?.setPosition(this.center.x, this.center.y).setFillStyle(0xff3a3a, 0.15 + 0.3 * k);
           if (time >= this.stateUntil) {
-            this.emit('aoe', this, { x: this.center.x, y: this.center.y, r: 30 });
+            this.emit('aoe', this, { x: this.center.x, y: this.center.y, r: this.kind === 'suiko' ? 36 : 30 });
             this.warn?.destroy(); this.warn = undefined;
             this.ai = 'rest'; this.stateUntil = time + 700; this.dashReadyAt = time + 2200;
           }
@@ -157,7 +169,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         } else if (dist < SIGHT + 20) {
           if (dist < 36 && time >= this.dashReadyAt) {
             this.ai = 'tele'; this.stateUntil = time + 750;
-            this.warn = this.scene.add.circle(me.x, me.y, 30, 0xff3a3a, 0.15).setStrokeStyle(1.5, 0xff3a3a, 0.9).setDepth(5);
+            this.warn = this.scene.add.circle(me.x, me.y, this.kind === 'suiko' ? 36 : 30, 0xff3a3a, 0.15).setStrokeStyle(1.5, 0xff3a3a, 0.9).setDepth(5);
           } else this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
         } else this.setVelocity(0, 0);
         break;
@@ -185,7 +197,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       this.setVelocity((dx / d) * k, (dy / d) * k);
       this.hitstunUntil = this.scene.time.now + (this.elite ? 60 : 200);
       // 精英的重擊不會被普通攻擊打斷
-      if (!this.elite && (this.ai === 'tele' || this.ai === 'dash')) { this.ai = 'rest'; this.stateUntil = this.scene.time.now + 300; this.setScale(1); this.clearTint(); }
+      if (!this.elite && (this.ai === 'tele' || this.ai === 'dash')) { this.ai = 'rest'; this.stateUntil = this.scene.time.now + 300; this.setScale(1); this.restoreTint(); }
     }
     this.damage(amount, crit, crit ? '#ffd84a' : '#ffffff');
     return !this.alive;
@@ -196,7 +208,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     this.barUntil = this.scene.time.now + 2500;
     floatText(this.scene, this.x, this.y - 8, crit ? `${amount}!` : String(amount), color, crit ? 11 : 9);
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(70, () => { if (this.alive) this.clearTint(); });
+    this.scene.time.delayedCall(70, () => { if (this.alive) this.restoreTint(); });
     if (this.kind === 'dummy') { if (this.hp < this.maxHp * 0.5) this.hp = this.maxHp; return; }
     if (this.hp <= 0) this.die();
   }

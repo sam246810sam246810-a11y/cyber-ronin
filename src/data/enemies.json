@@ -139,5 +139,118 @@
         "chance": 1.0
       }
     ]
+  },
+  "kappa": {
+    "name": "河童",
+    "hp": 90,
+    "atk": 26,
+    "def": 8,
+    "speed": 55,
+    "exp": 40,
+    "money": [
+      8,
+      15
+    ],
+    "frame": 12,
+    "drops": [
+      {
+        "item": "河童的皿碎片",
+        "chance": 0.5
+      }
+    ]
+  },
+  "dorotabou": {
+    "name": "泥田坊",
+    "hp": 110,
+    "atk": 24,
+    "def": 10,
+    "speed": 24,
+    "exp": 45,
+    "money": [
+      8,
+      16
+    ],
+    "frame": 14,
+    "shot": {
+      "frame": 7,
+      "slow": 0.6
+    },
+    "drops": [
+      {
+        "item": "泥塊",
+        "chance": 0.5
+      },
+      {
+        "item": "玉鋼",
+        "chance": 0.2
+      }
+    ]
+  },
+  "aokitsunebi": {
+    "name": "青鬼火",
+    "hp": 60,
+    "atk": 22,
+    "def": 6,
+    "speed": 42,
+    "exp": 30,
+    "money": [
+      5,
+      10
+    ],
+    "frame": 0,
+    "tint": 8388511,
+    "poisonChance": 0.3,
+    "drops": [
+      {
+        "item": "狐火的殘焰",
+        "chance": 0.5
+      }
+    ]
+  },
+  "suiko": {
+    "name": "水虎",
+    "hp": 480,
+    "atk": 32,
+    "def": 12,
+    "speed": 34,
+    "exp": 220,
+    "money": [
+      60,
+      90
+    ],
+    "frame": 16,
+    "elite": true,
+    "poisonChance": 0.4,
+    "drops": [
+      {
+        "item": "玉鋼",
+        "chance": 1
+      },
+      {
+        "item": "河童的皿碎片",
+        "chance": 1
+      }
+    ]
+  },
+  "kappaking": {
+    "name": "河童王",
+    "hp": 1500,
+    "atk": 34,
+    "def": 12,
+    "speed": 32,
+    "exp": 600,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 0,
+    "elite": true,
+    "poisonChance": 0,
+    "drops": [
+      {
+        "item": "河童的皿碎片",
+        "chance": 1
+      }
+    ]
   }
 }

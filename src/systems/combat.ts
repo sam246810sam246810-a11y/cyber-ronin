@@ -28,9 +28,9 @@ export function scaleEnemy<T extends { hp: number; atk: number; exp: number }>(b
 }
 
 // ---------- 狀態異常 ----------
-export type StatusKind = 'poison' | 'paralyze' | 'burn';
-export const STATUS_DURATION: Record<StatusKind, number> = { poison: 8, paralyze: 1.5, burn: 5 };
-export const STATUS_NAME: Record<StatusKind, string> = { poison: '毒', paralyze: '麻', burn: '燒' };
+export type StatusKind = 'poison' | 'paralyze' | 'burn' | 'slow';
+export const STATUS_DURATION: Record<StatusKind, number> = { poison: 8, paralyze: 1.5, burn: 5, slow: 3 };
+export const STATUS_NAME: Record<StatusKind, string> = { poison: '毒', paralyze: '麻', burn: '燒', slow: '慢' };
 /** 剩餘秒數；0 或不存在＝沒有該狀態 */
 export type Statuses = Partial<Record<StatusKind, number>>;
 
@@ -64,7 +64,7 @@ export const ITEMS: Record<string, ItemEffect> = {
   '大回復丸': { hp: 150 },
   '靈水': { mp: 30 },
   '解毒草': { cure: ['poison', 'burn'] },
-  '萬能符': { cure: ['poison', 'burn', 'paralyze'] },
+  '萬能符': { cure: ['poison', 'burn', 'paralyze', 'slow'] },
   '擴充布袋': {},
 };
 

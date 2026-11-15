@@ -3,13 +3,15 @@ import { GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES, TILE_SIZE as T } from '.
 import { Player } from '../entities/Player';
 import { Enemy, type EnemyKind } from '../entities/Enemy';
 import { Boss } from '../entities/Boss';
+import { KappaKing } from '../entities/KappaKing';
+import jobs from '../data/jobs.json';
 import { CombatSystem, type Breakable } from '../combat/CombatSystem';
 import { floatText, ring } from '../combat/fx';
 import npcs from '../data/npcs.json';
 import dialogues from '../data/dialogues.json';
 import { inputState, resetInput } from '../systems/inputState';
 import { pickVariant, type DialogueVariant, type Line } from '../systems/dialogue';
-import { gameState, gearLabel, giveRandomGear, openChest, statsOf, type Reward } from '../systems/gameState';
+import { canChangeJob, changeJob, gameState, gearLabel, giveRandomGear, openChest, statsOf, type Reward } from '../systems/gameState';
 import { serialize, writeSave } from '../systems/save';
 import { accept, offersFrom, onPickup, pickupVisible, questDef, readyFor, turnIn } from '../systems/quests';
 import { FONT_FAMILY } from '../config';
@@ -23,21 +25,29 @@ import { hudState, type MapMarker } from '../systems/hudState';
 import { EV, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
 import type { Facing } from '../systems/movement';
 
-interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: boolean }
+interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: 'ch1' | 'ch2' | boolean }
+type BossLike = Boss | KappaKing;
+/** 每個 Boss 的對話與旗標 */
+const BOSSES: Record<string, { name: string; intro: string; retry: string; seen: string; defeated: string; flags: string[]; outro: 'ch1' | 'ch2'; tip: string; reward: { money: number; item: string; tier: number } }> = {
+  tsuchigumo: { name: '土蜘蛛', intro: 'boss_intro', retry: 'boss_retry', seen: 'boss_seen', defeated: 'boss_defeated', flags: ['boss_defeated', 'chapter1_done'], outro: 'ch1',
+    tip: '點亮四個角落的石燈籠，可以讓土蜘蛛動彈不得！', reward: { money: 500, item: '銀鑰匙', tier: 2 } },
+  kappaking: { name: '河童王', intro: 'kappa_intro', retry: 'kappa_retry', seen: 'kappa_seen', defeated: 'kappa_defeated', flags: ['kappa_defeated', 'chapter2_done'], outro: 'ch2',
+    tip: '打開四個角落的水閘，讓河童王頭上的皿乾掉！', reward: { money: 1200, item: '河童王的冠', tier: 3 } },
+};
 
-type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup';
+type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice';
 interface Thing { id: string; kind: Kind; x: number; y: number; sprite: Phaser.GameObjects.Sprite; props: Record<string, unknown> }
 interface Block { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; dir: string; moving: boolean; pushMs: number }
 interface Plate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string }
-interface Gate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; open: boolean }
+interface Gate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; open: boolean; water?: boolean }
 interface Crack extends Breakable { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; id: string }
 interface Pool { x: number; y: number; until: number; next: number; gfx: Phaser.GameObjects.Arc }
 
 const FRAME = {
   chest: [25, 26], ironChest: [45, 46], goldChest: [47, 48], shimenawa: 27, well: 28, sign: 29,
-  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54,
+  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54, plank: 59, lever: [63, 64], waterGate: 65,
 };
-const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起' };
+const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘' };
 const DIRS: Record<string, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const gateFlag = (group: string) => `gate:${group}`;
 
@@ -60,7 +70,8 @@ export class WorldScene extends Phaser.Scene {
   private webs: Crack[] = [];
   private breakables: Breakable[] = [];
   private pools: Pool[] = [];
-  private boss?: Boss;
+  private boss?: BossLike;
+  private cameo?: Phaser.GameObjects.Sprite;
   private mapKey = '';
   private areaName = '';
   private pickupObjs: Phaser.Types.Tilemaps.TiledObject[] = [];
@@ -81,7 +92,7 @@ export class WorldScene extends Phaser.Scene {
     resetInput();
     this.things = []; this.enemies = []; this.blocks = []; this.plates = []; this.gates = []; this.cracks = [];
     this.webs = []; this.breakables = []; this.pools = []; this.boss = undefined;
-    this.pickupObjs = []; this.icons = new Map();
+    this.pickupObjs = []; this.icons = new Map(); this.cameo = undefined;
     hudState.boss = { visible: false, name: '', hp: 0, max: 1 };
     this.lanternNext = {};
     this.transitioning = false;
@@ -123,6 +134,7 @@ export class WorldScene extends Phaser.Scene {
       toast: (m) => this.game.events.emit(EV.toast, m),
     });
     this.combat.breakables = this.breakables;
+    this.combat.dropTier = Number((Array.isArray(map.properties) ? map.properties as { name: string; value: unknown }[] : []).find((p) => p.name === 'tier')?.value ?? 1);
 
     const cam = this.cameras.main;
     cam.setZoom(RENDER_SCALE);
@@ -151,7 +163,7 @@ export class WorldScene extends Phaser.Scene {
     writeSave('auto', serialize(gameState, mapKey, spawnName, areaName));
 
     if (this.boss) this.time.delayedCall(600, () => this.bossIntro());
-    if (data.outro) this.time.delayedCall(600, () => this.chapterOutro());
+    if (data.outro) this.time.delayedCall(600, () => this.chapterOutro(data.outro === 'ch2' ? 'ch2' : 'ch1'));
     if (data.intro) this.time.delayedCall(700, () => this.say([
       ['燈', '……嗯，睡過頭了！'],
       ['燈', '爺爺好像留了字條在房間裡。先看看再出門吧。'],
@@ -207,6 +219,20 @@ export class WorldScene extends Phaser.Scene {
       case 'sign': add('sign', this.add.sprite(x, y, 'tilesheet', FRAME.sign)); break;
       case 'well': add('well', this.add.sprite(x, y, 'tilesheet', FRAME.well)); break;
       case 'jizo': add('jizo', this.add.sprite(x, y, 'tilesheet', FRAME.jizo)); break;
+      case 'lever': add('lever', this.add.sprite(x, y, 'tilesheet', FRAME.lever[gameState.flags.has(`lever:${o.name}`) ? 1 : 0])); break;
+      case 'sluice': add('sluice', this.add.sprite(x, y, 'tilesheet', FRAME.lever[0])); break;
+      case 'watergate': {
+        const s = this.add.sprite(x, y, 'tilesheet', FRAME.waterGate).setDepth(1);
+        solid(s, 16, 16, 0, 0);
+        this.gates.push({ sprite: s, tx, ty, group: String(props.group), open: false, water: true });
+        break;
+      }
+      case 'cameo': {
+        if (gameState.flags.has('kappa_defeated')) break;
+        const frame = (npcs as Record<string, { frame: number }>)[String(props.npc)]?.frame ?? 0;
+        this.cameo = this.add.sprite(x, y, 'npcs', frame).setDepth(y);
+        break;
+      }
       case 'board': add('board', this.add.sprite(x, y, 'tilesheet', FRAME.board)); break;
       case 'pickup': this.pickupObjs.push(o); break;
       case 'cocoon': {
@@ -217,8 +243,11 @@ export class WorldScene extends Phaser.Scene {
         break;
       }
       case 'boss': {
-        if (gameState.flags.has('boss_defeated')) break;
-        const b = this.boss = new Boss(this, x, y, gameState.difficulty);
+        const kind = String(props.kind ?? 'tsuchigumo');
+        if (gameState.flags.has(BOSSES[kind].defeated)) break;
+        const b = this.boss = kind === 'kappaking' ? new KappaKing(this, x, y, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
+        if (b instanceof KappaKing) b.arena = { x: 2 * T, y: 2 * T, w: 20 * T, h: 12 * T };
+        b.on('band', (en: Enemy, band: { y: number; h: number; mult: number }) => this.combat.enemyBand(en, band));
         this.physics.add.collider(b, this.obstacles);
         b.minionCount = () => this.enemies.filter((e) => e.alive && e !== b).length;
         b.on('shoot', (en: Enemy, dir: { x: number; y: number }, speed?: number) => this.combat.enemyShoot(en, dir, speed));
@@ -228,7 +257,8 @@ export class WorldScene extends Phaser.Scene {
         b.on('webs', (_: Enemy, at: { x: number; y: number }) => this.spawnWebs(at.x, at.y));
         b.on('phase', (_: Enemy, p: number) => {
           sound.sfx('roar');
-          this.game.events.emit(EV.toast, p === 2 ? '土蜘蛛召喚了手下！小心地上的毒' : '土蜘蛛發狂了！動作變快了');
+          const nm = BOSSES[kind].name;
+          this.game.events.emit(EV.toast, p === 2 ? `${nm}召喚了手下！` : `${nm}發狂了！動作變快了`);
         });
         b.on('killed', () => this.onBossDefeated());
         this.enemies.push(b);
@@ -311,6 +341,38 @@ export class WorldScene extends Phaser.Scene {
     return !!g && this.enemies.some((e) => e.alive && e.guard === g);
   }
 
+  /** 拉桿：同一組全部拉下就打開水門 */
+  private pullLever(t: Thing): void {
+    const key = `lever:${t.id}`, group = String(t.props.group);
+    if (gameState.flags.has(key)) { this.game.events.emit(EV.toast, '拉桿已經拉下了'); return; }
+    gameState.flags.add(key);
+    t.sprite.setFrame(FRAME.lever[1]);
+    sound.sfx('select');
+    const all = this.things.filter((x) => x.kind === 'lever' && x.props.group === group);
+    const total = Math.max(all.length, this.leverTotal(group));
+    const on = [...gameState.flags].filter((f) => f.startsWith('lever:') && this.leverGroupOf(f.slice(6)) === group).length;
+    if (on >= total) this.solveGroup(group);
+    else this.game.events.emit(EV.toast, `拉下了拉桿（${on}/${total}）……遠處傳來水聲`);
+  }
+
+  /** 同一組的拉桿可能分散在地圖各處：從地圖物件算總數 */
+  private leverTotal(group: string): number {
+    return (this.map.getObjectLayer('objects')?.objects ?? []).filter((o) => o.type === 'lever' && propsOf(o).group === group).length;
+  }
+  private leverGroupOf(id: string): string | undefined {
+    const o = (this.map.getObjectLayer('objects')?.objects ?? []).find((x) => x.type === 'lever' && x.name === id);
+    return o ? String(propsOf(o).group) : undefined;
+  }
+
+  private openSluice(t: Thing): void {
+    if (t.sprite.frame.name === String(FRAME.lever[1])) { this.game.events.emit(EV.toast, '水閘還在關回去的途中……'); return; }
+    t.sprite.setFrame(FRAME.lever[1]);
+    sound.sfx('gate');
+    ring(this, t.x, t.y, 30, 0x5ab0e8, 500);
+    if (this.boss?.alive && this.boss.started) { this.boss.stun(4000); this.game.events.emit(EV.toast, '水退了！河童王頭上的皿乾掉了！'); }
+    this.time.delayedCall(15000, () => { if (t.sprite.active) t.sprite.setFrame(FRAME.lever[0]); });
+  }
+
   private onEnemyKilled(e: Enemy): void {
     if (!e.guard) return;
     if (this.enemies.some((x) => x.alive && x.guard === e.guard)) return;
@@ -325,6 +387,7 @@ export class WorldScene extends Phaser.Scene {
   // ---------- 謎題 ----------
   private restoreSolvedPuzzles(): void {
     for (const t of this.things) if (t.kind === 'chest' && this.isSealed(t) && !gameState.openedChests.has(t.id)) t.sprite.setTint(0xb08aff);
+    for (const t of this.things) if (t.kind === 'lever' && gameState.flags.has(gateFlag(String(t.props.group)))) t.sprite.setFrame(FRAME.lever[1]);
     const groups = new Set([...this.gates.map((g) => g.group)]);
     for (const group of groups) {
       if (!gameState.flags.has(gateFlag(group))) continue;
@@ -413,6 +476,12 @@ export class WorldScene extends Phaser.Scene {
     g.open = true;
     this.solids.remove(g.sprite);
     (g.sprite.body as Phaser.Physics.Arcade.StaticBody).enable = false;
+    if (g.water) {
+      // 水門：水退掉，變成木板路
+      if (animate) { this.tweens.add({ targets: g.sprite, alpha: 0.3, duration: 400, yoyo: true, onYoyo: () => g.sprite.setFrame(FRAME.plank) }); }
+      else g.sprite.setFrame(FRAME.plank);
+      return;
+    }
     if (animate) this.tweens.add({ targets: g.sprite, y: g.sprite.y - 12, alpha: 0, duration: 500, onComplete: () => g.sprite.destroy() });
     else g.sprite.destroy();
   }
@@ -503,20 +572,25 @@ export class WorldScene extends Phaser.Scene {
   }
 
   // ---------- Boss 戰 ----------
+  private get bossInfo() { return BOSSES[this.boss instanceof KappaKing ? 'kappaking' : 'tsuchigumo']; }
+
   private bossIntro(): void {
-    const first = !gameState.flags.has('boss_seen');
-    this.runDialogue(first ? 'boss_intro' : 'boss_retry', () => {
+    const info = this.bossInfo;
+    const first = !gameState.flags.has(info.seen);
+    this.runDialogue(first ? info.intro : info.retry, () => {
+      if (this.cameo) { const c = this.cameo; this.tweens.add({ targets: c, alpha: 0, y: c.y - 10, duration: 600, onComplete: () => c.destroy() }); this.cameo = undefined; }
       this.boss?.start(this.time.now);
-      this.game.events.emit(EV.toast, '點亮四個角落的石燈籠，可以讓土蜘蛛動彈不得！');
+      this.game.events.emit(EV.toast, info.tip);
     });
   }
 
   private summonSpiders(): void {
     if (!this.boss) return;
+    const kind = this.boss instanceof KappaKing ? 'kappa' : 'bonespider';
     for (const dx of [-48, 48]) {
       const x = Phaser.Math.Clamp(this.boss.x + dx, 3 * T, 21 * T), y = Phaser.Math.Clamp(this.boss.y + 16, 3 * T, 12 * T);
       ring(this, x, y, 14, 0xb04aff, 400);
-      const e = new Enemy(this, x, y, 'bonespider', gameState.difficulty);
+      const e = new Enemy(this, x, y, kind, gameState.difficulty);
       this.physics.add.collider(e, this.obstacles);
       this.physics.add.collider(e, this.solids);
       e.on('shoot', (en: Enemy, dir: { x: number; y: number }) => this.combat.enemyShoot(en, dir));
@@ -581,35 +655,36 @@ export class WorldScene extends Phaser.Scene {
     this.cameras.main.flash(600, 255, 240, 220);
     sound.sfx('roar');
     sound.music('village');
-    gameState.money += 500;
-    gameState.items['銀鑰匙'] = (gameState.items['銀鑰匙'] ?? 0) + 1;
-    const g = giveRandomGear(gameState, Math.random, 2, 2);
-    this.game.events.emit(EV.toast, `獲得 500 文、銀鑰匙${g ? `、${gearLabel(g)}` : ''}`);
-    this.time.delayedCall(1800, () => this.runDialogue('boss_defeated', () => {
-      gameState.flags.add('boss_defeated');
-      gameState.flags.add('chapter1_done');
-      this.goTo('shrine', 'door', 'up', { outro: true });
+    const info = this.bossInfo;
+    gameState.money += info.reward.money;
+    gameState.items[info.reward.item] = (gameState.items[info.reward.item] ?? 0) + 1;
+    const g = giveRandomGear(gameState, Math.random, info.reward.tier, 2);
+    this.game.events.emit(EV.toast, `獲得 ${info.reward.money} 文、${info.reward.item}${g ? `、${gearLabel(g)}` : ''}`);
+    this.time.delayedCall(1800, () => this.runDialogue(info.defeated, () => {
+      info.flags.forEach((f) => gameState.flags.add(f));
+      this.goTo('shrine', 'door', 'up', { outro: info.outro });
     }));
   }
 
-  private chapterOutro(): void {
-    this.runDialogue('chapter1_outro', () => {
+  private chapterOutro(ch: 'ch1' | 'ch2'): void {
+    this.runDialogue(ch === 'ch2' ? 'chapter2_outro' : 'chapter1_outro', () => {
       const col = collectionReport(MAPS, gameState.openedChests, gameState.flags).percent;
       const m = Math.floor(gameState.playTime / 60);
       const path = gameState.bond >= gameState.anger ? '羈絆' : '怒火';
-      this.game.events.emit(EV.banner, { title: '第一章　完', sub: `遊玩時間 ${m} 分・收集度 ${col}%・你走在「${path}」的路上`, duration: 6000 });
+      this.game.events.emit(EV.banner, { title: ch === 'ch2' ? '第二章　完' : '第一章　完', sub: `遊玩時間 ${m} 分・收集度 ${col}%・你走在「${path}」的路上`, duration: 6000 });
       this.refreshHud(true);
     });
   }
 
   // ---------- 氣氛 ----------
   private addFog(): void {
-    const fog = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0xdde8ee, 0.14).setOrigin(0).setScrollFactor(0).setDepth(200000);
+    // 蓋住整張地圖（不用 scrollFactor 0，畫面放大時位置才不會跑掉）
+    const fog = this.add.rectangle(-GAME_WIDTH, -GAME_HEIGHT, this.map.widthInPixels + GAME_WIDTH * 2, this.map.heightInPixels + GAME_HEIGHT * 2, 0xdde8ee, 0.14).setOrigin(0).setDepth(200000);
     this.tweens.add({ targets: fog, alpha: 0.6, duration: 3000, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
   }
 
   private addDarkness(objects: Phaser.Types.Tilemaps.TiledObject[]): void {
-    this.add.rectangle(0, 0, GAME_WIDTH * 2, GAME_HEIGHT * 2, 0x0a0814, 0.42).setOrigin(0.25).setScrollFactor(0).setDepth(190000);
+    this.add.rectangle(-GAME_WIDTH, -GAME_HEIGHT, this.map.widthInPixels + GAME_WIDTH * 2, this.map.heightInPixels + GAME_HEIGHT * 2, 0x0a0814, 0.42).setOrigin(0).setDepth(190000);
     // 用幾層半透明圓疊出由亮到暗的光暈
     const glow = (x: number, y: number, r: number, color: number) => {
       const c = this.add.container(x, y).setDepth(190001);
@@ -638,6 +713,7 @@ export class WorldScene extends Phaser.Scene {
       if (t.kind === 'chest' && !gameState.openedChests.has(t.id)) mk.push({ ...tp(t.x, t.y), color: 0xf2c94c });
       if (t.kind === 'npc' || t.kind === 'board') mk.push({ ...tp(t.x, t.y), color: this.icons.get(t)?.text ? 0xffd84a : 0xffffff });
       if (t.kind === 'pickup') mk.push({ ...tp(t.x, t.y), color: 0xc7f0a0 });
+      if (t.kind === 'lever' && !gameState.flags.has(`lever:${t.id}`)) mk.push({ ...tp(t.x, t.y), color: 0xff9a4a });
       if (t.kind === 'well' || t.kind === 'bossdoor') mk.push({ ...tp(t.x, t.y), color: 0xff5ae0 });
     }
     for (const g of this.gates) if (!g.open) mk.push({ ...tp(g.sprite.x, g.sprite.y), color: 0x8a8aa0 });
@@ -690,6 +766,9 @@ export class WorldScene extends Phaser.Scene {
     }
     if (t.kind === 'lantern') { this.lightLantern(t); return; }
     if (t.kind === 'board') { this.game.events.emit(EV.board); return; }
+    if (t.kind === 'lever') { this.pullLever(t); return; }
+    if (t.kind === 'sluice') { this.openSluice(t); return; }
+    if (t.kind === 'npc' && t.props.npc === 'priest' && canChangeJob(gameState) && gameState.flags.has('ch2_started')) { this.runDialogue(`job_${gameState.classId}`); return; }
     if (t.kind === 'pickup') {
       gameState.flags.add(`pickup:${t.id}`);
       sound.sfx('pickup');
@@ -706,7 +785,7 @@ export class WorldScene extends Phaser.Scene {
       ring(this, t.x, t.y, 16, 0xffe0b0, 500);
       sound.sfx('save');
       this.game.events.emit(EV.toast, '地藏保佑，HP 和 MP 全滿了');
-      const req: SaveRequest = { map: this.mapKey, spawn: 'jizo', areaName: this.areaName };
+      const req: SaveRequest = { map: this.mapKey, spawn: String(t.props.spawn ?? 'jizo'), areaName: this.areaName };
       this.game.events.emit(EV.save, req);
       return;
     }
@@ -723,6 +802,14 @@ export class WorldScene extends Phaser.Scene {
       if (open === 'shop') this.game.events.emit(EV.shop, npc || 'rin');
       if (open === 'forge') this.game.events.emit(EV.forge);
       if (open?.startsWith('warp:')) { const [, map, spawn] = open.split(':'); this.goTo(map, spawn, 'up'); }
+      if (open?.startsWith('job:')) {
+        const id = open.slice(4), j = (jobs as Record<string, { name: string; skills: string[] }>)[id];
+        if (changeJob(gameState, id)) {
+          sound.sfx('levelup');
+          ring(this, this.player.x, this.player.y, 24, 0xffd84a, 600);
+          this.game.events.emit(EV.banner, { title: `轉職：${j.name}`, sub: '屬性 +10%，學會了兩個新技能（已裝到技能鈕上）', duration: 3000 });
+        }
+      }
       after?.();
     };
     this.say(v.lines, (choice) => {
@@ -784,7 +871,7 @@ export class WorldScene extends Phaser.Scene {
       if (!e.alive) continue;
       if (locked) { e.setVelocity(0, 0); continue; }
       e.update(this.time.now, dt / 1000, target);
-      const ec = e.center, reach = e instanceof Boss ? 18 : e.elite ? 14 : 11;
+      const ec = e.center, reach = e instanceof Boss || e instanceof KappaKing ? 18 : e.elite ? 14 : 11;
       if (Math.abs(ec.x - target.x) < reach && Math.abs(ec.y - target.y) < reach - 1) this.combat.touchedBy(e);
     }
     this.playerGlow?.setPosition(this.player.x, this.player.y);
@@ -795,7 +882,7 @@ export class WorldScene extends Phaser.Scene {
       if (now > p.until) { p.gfx.destroy(); this.pools = this.pools.filter((x) => x !== p); continue; }
       if (!locked && now >= p.next && Math.hypot(target.x - p.x, target.y - p.y) < 20) { p.next = now + 600; this.combat.poolHit(this.boss?.info.atk ?? 10, p); }
     }
-    if (this.boss) hudState.boss = { visible: this.boss.alive && this.boss.started, name: '土蜘蛛', hp: Math.max(0, this.boss.hp), max: this.boss.maxHp };
+    if (this.boss) hudState.boss = { visible: this.boss.alive && this.boss.started, name: this.bossInfo.name, hp: Math.max(0, this.boss.hp), max: this.boss.maxHp };
 
     hudState.minimap.player = { x: target.x / T, y: target.y / T };
     this.markerTimer -= dt;

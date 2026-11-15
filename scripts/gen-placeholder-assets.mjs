@@ -58,6 +58,9 @@ const TILES = [
   { name: 'stone_lantern_on' }, { name: 'iron_chest' }, { name: 'iron_chest_open' }, { name: 'gold_chest' },
   { name: 'gold_chest_open' }, { name: 'boss_door' }, { name: 'bones' },
   { name: 'jizo' }, { name: 'cocoon' }, { name: 'web_wall' }, { name: 'notice_board' },
+  // 55– 第二章：河童沼澤、水神祠
+  { name: 'mud' }, { name: 'reeds' }, { name: 'lily' }, { name: 'swamp_water', collides: true }, { name: 'plank' },
+  { name: 'moss_wall', collides: true }, { name: 'moss_floor' }, { name: 'shallow' }, { name: 'lever_off' }, { name: 'lever_on' }, { name: 'water_gate' },
 ];
 const COLS = 8;
 const ts = new Canvas(COLS * T, Math.ceil(TILES.length / COLS) * T);
@@ -88,6 +91,10 @@ function dwall(ox, oy) {
   ts.rect(ox, oy, T, T, 0x2a2634);
   for (let y = 0; y < T; y += 4) { ts.rect(ox, oy + y, T, 1, 0x1c1924); const off = (y / 4) % 2 ? 4 : 0; for (let x = off; x < T; x += 8) ts.rect(ox + x, oy + y, 1, 4, 0x1c1924); }
   ts.rect(ox, oy + 1, T, 1, 0x3a3546);
+}
+function swampWater(ox, oy) {
+  ts.rect(ox, oy, T, T, 0x2e5a4a);
+  for (const [x, y] of [[2, 4], [9, 7], [4, 12], [12, 13]]) ts.rect(ox + x, oy + y, 3, 1, 0x4a7a6a);
 }
 function bamboo(ox, oy) {
   grassBase(ox, oy);
@@ -323,6 +330,54 @@ const draw = {
     ts.rect(ox, oy + 1, T, 10, C.woodD); ts.rect(ox + 1, oy + 2, 14, 8, C.woodL); ts.rect(ox, oy, T, 2, C.roof);
     ts.rect(ox + 2, oy + 3, 5, 5, C.white); ts.rect(ox + 9, oy + 3, 5, 4, 0xf2e6c9); ts.rect(ox + 3, oy + 4, 3, 1, C.red); ts.rect(ox + 10, oy + 4, 3, 1, C.dark);
   },
+  mud(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x6a5a3a);
+    for (let i = 0; i < 12; i++) ts.px(ox + Math.floor(rnd() * T), oy + Math.floor(rnd() * T), rnd() > 0.5 ? 0x5a4a2e : 0x7a6a48);
+    ts.rect(ox + 3, oy + 9, 4, 2, 0x4e4028); ts.rect(ox + 10, oy + 4, 3, 2, 0x4e4028);
+  },
+  reeds(ox, oy) {
+    grassBase(ox, oy);
+    for (const x of [2, 5, 8, 11, 13]) { ts.rect(ox + x, oy + 4 + (x % 3), 1, 12 - (x % 3), 0x8aa04a); ts.rect(ox + x, oy + 3 + (x % 3), 1, 2, 0x6a4a2a); }
+  },
+  lily(ox, oy) {
+    swampWater(ox, oy);
+    ts.rect(ox + 2, oy + 3, 12, 10, 0x4a9a4a); ts.rect(ox + 3, oy + 2, 10, 12, 0x4a9a4a); ts.rect(ox + 8, oy + 7, 5, 1, 0x2a6a2a);
+    ts.rect(ox + 4, oy + 4, 3, 2, 0x6aba6a); ts.px(ox + 10, oy + 10, 0xf0d0e0);
+  },
+  swamp_water: swampWater,
+  plank(ox, oy) {
+    swampWater(ox, oy);
+    ts.rect(ox + 1, oy, 14, T, 0x8a6a42);
+    for (let y = 0; y < T; y += 4) ts.rect(ox + 1, oy + y, 14, 1, 0x6a4a2a);
+    ts.rect(ox + 1, oy, 1, T, 0x5a3a20); ts.rect(ox + 14, oy, 1, T, 0x5a3a20);
+  },
+  moss_wall(ox, oy) {
+    dwall(ox, oy);
+    for (let i = 0; i < 18; i++) ts.px(ox + Math.floor(rnd() * T), oy + Math.floor(rnd() * T), rnd() > 0.5 ? 0x3a6a3a : 0x2a5030);
+    ts.rect(ox, oy + 1, T, 1, 0x4a7a4a);
+  },
+  moss_floor(ox, oy) {
+    dfloor(ox, oy);
+    for (let i = 0; i < 8; i++) ts.px(ox + Math.floor(rnd() * T), oy + Math.floor(rnd() * T), 0x4a6a4a);
+  },
+  shallow(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x3a6a7a);
+    for (const [x, y] of [[2, 3], [9, 6], [4, 11], [11, 13]]) ts.rect(ox + x, oy + y, 3, 1, 0x6aa0b0);
+    ts.px(ox + 7, oy + 2, 0x8ac0d0);
+  },
+  lever_off(ox, oy) {
+    ts.rect(ox + 3, oy + 11, 10, 4, 0x5a5a66); ts.rect(ox + 4, oy + 10, 8, 1, 0x7a7a88);
+    ts.rect(ox + 5, oy + 3, 2, 8, C.wood); ts.rect(ox + 4, oy + 2, 4, 2, C.red);
+  },
+  lever_on(ox, oy) {
+    ts.rect(ox + 3, oy + 11, 10, 4, 0x5a5a66); ts.rect(ox + 4, oy + 10, 8, 1, 0x7a7a88);
+    ts.rect(ox + 9, oy + 3, 2, 8, C.wood); ts.rect(ox + 8, oy + 2, 4, 2, 0x4fd84f);
+  },
+  water_gate(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x1e4a5a);
+    for (const [x, y] of [[1, 2], [8, 5], [3, 9], [10, 12]]) ts.rect(ox + x, oy + y, 4, 1, 0x4a8aa0);
+    ts.rect(ox, oy, T, 1, 0x6aa0b0); ts.rect(ox, oy + 15, T, 1, 0x0e2a3a);
+  },
   bones(ox, oy) {
     dfloor(ox, oy);
     ts.rect(ox + 3, oy + 9, 7, 1, 0xe8e4d8); ts.rect(ox + 2, oy + 8, 2, 3, 0xe8e4d8); ts.rect(ox + 9, oy + 8, 2, 3, 0xe8e4d8);
@@ -369,8 +424,17 @@ const NPCS = [
   ['tesshin', { hair: 0xd8a880, skin: 0xd8a880, top: 0x5a4a3a, bottom: 0x3a2e24, feet: 0x2a221a, apron: 0x7a5232, beard: 0x3a2a1a }],
   ['ume', { hair: 0x4a3020, skin: 0xf2d2b0, top: 0x4f8a5a, bottom: 0x3a6a44, feet: 0x2a4a30, lips: 0xc06060, bun: true }],
   ['taro', { hair: 0x1a1a1a, skin: 0xf0c8a0, top: 0xe8823a, bottom: 0x5a5a8a, feet: 0x3a3a5a }],
+  ['kawataro', 'kappa'],
+  ['yashamaru', { hair: 0xe8e8f0, skin: 0xe0d0c8, top: 0x1a1a24, bottom: 0x2a2a3a, feet: 0x101018, lips: 0x8a2a4a }],
 ];
 const npc = new Canvas(2 * T, NPCS.length * T);
+function drawKappaKid(cv, ox, oy) {
+  const G = 0x5ab05a, D = 0x3a803a, Y = 0xf2c94c, W = 0xdfe8ef;
+  cv.rect(ox + 5, oy + 9, 6, 5, G); cv.rect(ox + 4, oy + 9, 8, 3, 0x8a6a3a); // 龜殼
+  cv.rect(ox + 4, oy + 2, 8, 7, G); cv.rect(ox + 5, oy + 1, 6, 2, W); cv.rect(ox + 6, oy, 4, 1, 0x9ad0e8); // 皿
+  cv.px(ox + 6, oy + 5, 0x1a1a1a); cv.px(ox + 9, oy + 5, 0x1a1a1a); cv.rect(ox + 7, oy + 7, 2, 1, Y);
+  cv.rect(ox + 5, oy + 14, 2, 2, D); cv.rect(ox + 9, oy + 14, 2, 2, D);
+}
 function drawFox(cv, ox, oy) {
   const O = 0xe8823a, W = 0xf8f0e0, D = 0xb05a20;
   cv.rect(ox + 4, oy + 8, 8, 6, O); cv.rect(ox + 5, oy + 12, 6, 2, W);
@@ -383,7 +447,7 @@ function drawFox(cv, ox, oy) {
 NPCS.forEach(([, pal], r) => {
   for (let c = 0; c < 2; c++) {
     const tmp = new Canvas(T, T + 1);
-    if (pal === 'fox') drawFox(tmp, 0, 0); else drawPerson(tmp, 0, 0, pal, 0, 0);
+    if (pal === 'fox') drawFox(tmp, 0, 0); else if (pal === 'kappa') drawKappaKid(tmp, 0, 0); else drawPerson(tmp, 0, 0, pal, 0, 0);
     // 複製到 sheet，第二格往下 1px（只保留身體上半部位移，腳不動）
     for (let y = 0; y < T; y++) for (let x = 0; x < T; x++) {
       const sy = c === 1 && y < 12 ? y - 1 : y;
@@ -396,7 +460,7 @@ NPCS.forEach(([, pal], r) => {
 
 // ---------- 怪物：每列一種，2 欄動畫 ----------
 // 順序要和 src/data/enemies.json 的 frame 對應：kitsunebi 0、karakasa 2、nogitsune 4、dummy 6
-const en = new Canvas(2 * T, 6 * T);
+const en = new Canvas(2 * T, 9 * T);
 function kitsunebi(ox, oy, f) {
   const B = 0x4fb8ff, L = 0xbfe8ff, W = 0xffffff, D = 0x1f6fbf;
   const s = f ? 1 : 0;
@@ -437,6 +501,33 @@ function bonespider(ox, oy, f) {
   }
   en.rect(ox + 7, oy + 8, 2, 2, D);
 }
+function kappa(ox, oy, f) {
+  const G = 0x4a9a4a, D = 0x2a6a2a, Y = 0xf2c94c, W = 0xdfe8ef, S = 0x7a5a2a;
+  const s = f ? 1 : 0;
+  en.rect(ox + 3, oy + 7, 10, 6, S); en.rect(ox + 4, oy + 8, 8, 4, 0x9a7a3a); // 殼
+  en.rect(ox + 4, oy + 2 + s, 8, 6, G); en.rect(ox + 5, oy + 1 + s, 6, 2, W); en.rect(ox + 6, oy + s, 4, 1, 0x9ad0e8);
+  en.px(ox + 5, oy + 4 + s, 0xff3a3a); en.px(ox + 10, oy + 4 + s, 0xff3a3a); en.rect(ox + 6, oy + 6 + s, 4, 2, Y);
+  en.rect(ox + 2, oy + 8, 2, 3, G); en.rect(ox + 12, oy + 8, 2, 3, G);
+  en.rect(ox + 4, oy + 13, 3, 3 - s, D); en.rect(ox + 9, oy + 13, 3, 2 + s, D);
+}
+function dorotabou(ox, oy, f) {
+  const M = 0x6a5a3a, L = 0x8a7a52, D = 0x4a3e26;
+  const s = f ? 1 : 0;
+  en.rect(ox + 3, oy + 6 + s, 10, 10 - s, M); en.rect(ox + 4, oy + 4 + s, 8, 3, M); en.rect(ox + 5, oy + 3 + s, 6, 1, L);
+  en.rect(ox + 5, oy + 7 + s, 2, 2, 0xffe08a); // 只有一隻眼
+  en.rect(ox + 1, oy + 9, 2, 4, M); en.rect(ox + 13, oy + 8 - s, 2, 4, M);
+  for (const [x, y] of [[4, 12], [9, 10], [11, 14], [6, 15]]) en.px(ox + x, oy + y, D);
+  en.rect(ox + 7, oy + 11 + s, 3, 1, D);
+}
+function suiko(ox, oy, f) {
+  const B = 0x3a6a8a, L = 0x6aa0c8, W = 0xe8f0f8, R = 0xff4a4a;
+  const s = f ? 1 : 0;
+  en.rect(ox + 2, oy + 6, 12, 8, B); en.rect(ox + 3, oy + 3 + s, 10, 5, B); en.rect(ox + 4, oy + 2 + s, 8, 1, L);
+  for (let x = 3; x < 13; x += 2) en.px(ox + x, oy + 8, L); // 鱗
+  en.px(ox + 5, oy + 5 + s, R); en.px(ox + 10, oy + 5 + s, R); en.rect(ox + 6, oy + 7 + s, 4, 1, W);
+  en.rect(ox + 1, oy + 1 + s, 2, 3, W); en.rect(ox + 13, oy + 1 + s, 2, 3, W); // 角
+  en.rect(ox + 3, oy + 14, 3, 2, B); en.rect(ox + 10, oy + 14, 3, 2, B); en.rect(ox + 13, oy + 10, 3, 2, B);
+}
 function chochin(ox, oy, f) {
   const P = 0xf2e0b0, L = 0xe8823a, R = 0xc23b2f, K = 0x2a1e1e;
   const s = f ? 1 : 0;
@@ -449,6 +540,7 @@ function chochin(ox, oy, f) {
 for (let f = 0; f < 2; f++) {
   kitsunebi(f * T, 0, f); karakasa(f * T, T, f); nogitsune(f * T, 2 * T, f); dummy(f * T, 3 * T);
   bonespider(f * T, 4 * T, f); chochin(f * T, 5 * T, f);
+  kappa(f * T, 6 * T, f); dorotabou(f * T, 7 * T, f); suiko(f * T, 8 * T, f);
 }
 
 // ---------- 土蜘蛛（32×32，4 格：待機 0、待機 1、舉腳 2、發光 3）----------
@@ -477,8 +569,26 @@ function drawBoss(ox, f) {
 const oy0 = (y) => y;
 for (let f = 0; f < 4; f++) drawBoss(f * BS, f);
 
+// ---------- 河童王（32×32，4 格）----------
+const kk = new Canvas(4 * BS, BS);
+function drawKappaKing(ox, f) {
+  const G = f === 3 ? 0x2a6a4a : 0x3a8a4a, D = 0x2a5a2a, S = 0x6a4a22, SL = 0x9a7a3a, Y = 0xf2c94c, W = 0xdfe8ef, R = 0xff3a3a;
+  const bob = f === 1 ? 1 : 0, dry = f === 3;
+  kk.rect(ox + 6, 12 + bob, 20, 14, S); kk.rect(ox + 8, 13 + bob, 16, 11, SL); // 大龜殼
+  for (let x = 10; x < 24; x += 4) kk.rect(ox + x, 15 + bob, 2, 7, S);
+  kk.rect(ox + 9, 4 + bob, 14, 10, G); kk.rect(ox + 10, 3 + bob, 12, 1, G);
+  kk.rect(ox + 10, 1 + bob, 12, 3, W); kk.rect(ox + 12, 1 + bob, 8, 2, dry ? 0x8a8a8a : 0x5ab0e8); // 皿（乾掉時變灰）
+  kk.rect(ox + 8, 0 + bob, 16, 1, Y); kk.rect(ox + 10, -1 + bob + 1, 2, 1, Y); kk.rect(ox + 20, bob, 2, 1, Y); // 王冠
+  kk.rect(ox + 11, 7 + bob, 3, 2, R); kk.rect(ox + 18, 7 + bob, 3, 2, R); kk.rect(ox + 13, 10 + bob, 6, 3, Y);
+  const arm = f === 2 ? -6 : 0;
+  kk.rect(ox + 2, 14 + arm, 5, 4, G); kk.rect(ox + 25, 14 + (f === 2 ? 0 : arm), 5, 4, G);
+  kk.rect(ox + 0, 18 + arm, 4, 3, D); kk.rect(ox + 28, 18, 4, 3, D);
+  kk.rect(ox + 8, 26, 6, 5, D); kk.rect(ox + 18, 26, 6, 5, D);
+}
+for (let f = 0; f < 4; f++) drawKappaKing(f * BS, f);
+
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
-const fx = new Canvas(7 * T, T);
+const fx = new Canvas(9 * T, T);
 fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
 fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
 fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
@@ -488,6 +598,8 @@ fx.rect(5 * T + 5, 6, 6, 7, 0x4a2a1a); fx.rect(5 * T + 6, 7, 4, 5, 0x6a3a22); fx
 fx.rect(5 * T + 4, 8, 1, 3, 0x2a1a10); fx.rect(5 * T + 11, 8, 1, 3, 0x2a1a10); fx.px(5 * T + 7, 8, 0xc8a070);
 // 6：護身符
 fx.rect(6 * T + 5, 4, 6, 9, 0xc23b2f); fx.rect(6 * T + 6, 5, 4, 7, 0xe04848); fx.rect(6 * T + 7, 2, 2, 3, C.yellow); fx.rect(6 * T + 6, 7, 4, 2, C.yellow);
+fx.rect(7 * T + 5, 5, 6, 6, 0x6a5a3a); fx.rect(7 * T + 4, 6, 8, 4, 0x6a5a3a); fx.rect(7 * T + 6, 6, 3, 2, 0x8a7a52);
+fx.rect(8 * T + 3, 6, 10, 5, 0xdfe8ef); fx.rect(8 * T + 4, 5, 8, 1, 0xdfe8ef); fx.rect(8 * T + 5, 7, 6, 2, 0x9ad0e8);
 fx.rect(4 * T + 5, 5, 6, 6, 0xb04aff); fx.rect(4 * T + 4, 6, 8, 4, 0xb04aff); fx.rect(4 * T + 6, 6, 4, 4, 0xe8d8ff); fx.px(4 * T + 3, 8, 0xe8d8ff); fx.px(4 * T + 12, 8, 0xe8d8ff);
 
 // ---------- 地圖工具 ----------
@@ -620,6 +732,11 @@ const maps = {};
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
   obj(m, 'board', 'village_board', tilePoint(17, 13));
+  // 南邊：往河童沼澤（第二章）
+  m.fill('obst', 18, H - 1, 3, 1, 0); m.fill('ground', 18, H - 1, 3, 1, gid.path);
+  exit(m, tileRect(18, H - 1, 3, 1), 'swamp', 'north', 'down');
+  spawn(m, 'south', 19, H - 3);
+  for (let x = 18; x <= 20; x++) obj(m, 'blocker', `rope_s_${x}`, tilePoint(x, H - 2), { flag: 'ch2_started', dialogue: 'blocker_swamp' });
   obj(m, 'jizo', 'village_jizo', tilePoint(23, 12)); spawn(m, 'jizo', 23, 13);
   chest(m, 'village_chest', 36, 3, { money: 30, gearTier: 1 });
 
@@ -840,12 +957,136 @@ function bones(m, list) { for (const [x, y] of list) m.set('ground', x, y, gid.b
   maps.lair = toTiled(m, { displayName: '土蜘蛛的巢穴', dark: true, boss: true });
 }
 
+
+// ================= 第二章 =================
+const lever = (m, id, x, y, group) => obj(m, 'lever', id, tilePoint(x, y), { group });
+const waterGate = (m, id, x, y, group) => { m.set('obst', x, y, 0); obj(m, 'watergate', id, tilePoint(x, y), { group }); };
+
+// 河童沼澤（44×30）
+{
+  const W = 44, H = 30;
+  const m = newMap(W, H, 'grass');
+  seed = 2026;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const r = rnd(); if (r < 0.12) m.set('ground', x, y, gid.reeds); else if (r < 0.2) m.set('ground', x, y, gid.mud); }
+  for (let x = 0; x < W; x++) { m.set('obst', x, 0, gid.tree); m.set('obst', x, H - 1, gid.tree); }
+  for (let y = 0; y < H; y++) { m.set('obst', 0, y, gid.tree); m.set('obst', W - 1, y, gid.tree); }
+  // 北邊入口
+  m.fill('obst', 20, 0, 3, 1, 0); m.fill('ground', 20, 0, 3, 4, gid.path);
+  exit(m, tileRect(20, 0, 3, 1), 'village', 'south', 'up');
+  spawn(m, 'north', 21, 2);
+  // 大池塘＋木橋
+  m.fill('obst', 6, 8, 12, 8, gid.swamp_water); m.fill('ground', 6, 8, 12, 8, gid.swamp_water);
+  for (let x = 6; x < 18; x++) { m.set('obst', x, 12, 0); m.set('ground', x, 12, gid.plank); }
+  for (const [x, y] of [[8, 9], [15, 14], [10, 15], [16, 9]]) m.set('ground', x, y, gid.lily);
+  // 東邊的河＋橋
+  m.fill('obst', 28, 1, 3, 15, gid.swamp_water); m.fill('ground', 28, 1, 3, 15, gid.swamp_water);
+  for (let x = 28; x < 31; x++) { m.set('obst', x, 7, 0); m.set('ground', x, 7, gid.plank); }
+  // 水神祠所在的小島（四周是水，只能從水門進）
+  m.fill('obst', 33, 16, 10, 13, gid.swamp_water); m.fill('ground', 33, 16, 10, 13, gid.swamp_water);
+  m.fill('obst', 35, 18, 7, 10, 0); m.fill('ground', 35, 18, 7, 10, gid.mud);
+  for (const x of [33, 34]) waterGate(m, `swamp_gate_${x}`, x, 22, 'swamp');
+  m.set('obst', 40, 19, gid.torii_top); m.set('obst', 38, 19, gid.torii_top);
+  m.set('ground', 39, 19, gid.stairs_down); exit(m, tileRect(39, 19), 'suijin1', 'up', 'down');
+  spawn(m, 'shrine', 39, 21);
+  // 西邊的祕密小空間（從蘆葦叢鑽進去）
+  m.fill('obst', 1, 14, 4, 6, gid.tree); m.fill('obst', 1, 15, 3, 3, 0); m.fill('ground', 1, 15, 3, 3, gid.grass);
+  m.set('obst', 4, 16, 0); m.set('ground', 4, 16, gid.reeds);
+  obj(m, 'secret', 'swamp_pocket', tileRect(1, 15, 3, 3));
+  // 樹與泥地
+  for (const [x, y] of [[3, 4], [10, 3], [25, 4], [36, 10], [24, 20], [12, 24], [5, 25], [18, 18], [41, 5]]) m.set('obst', x, y, gid.tree);
+  m.fill('ground', 19, 18, 6, 6, gid.mud);
+  // 物件
+  lever(m, 'swamp_lever_w', 4, 4, 'swamp'); lever(m, 'swamp_lever_s', 22, 26, 'swamp'); lever(m, 'swamp_lever_e', 38, 4, 'swamp');
+  sign(m, 'swamp_sign', 23, 3, 'sign_swamp');
+  obj(m, 'jizo', 'swamp_jizo', tilePoint(18, 3), { spawn: 'jizo' }); spawn(m, 'jizo', 18, 4);
+  npcAt(m, 'kawataro', 24, 14);
+  chest(m, 'swamp_chest_1', 12, 20, { item: '大回復丸', count: 1, money: 120 });
+  chest(m, 'swamp_chest_2', 40, 9, { gearTier: 3, money: 80 });
+  chest(m, 'swamp_chest_secret', 2, 16, { gearTier: 3, minRarity: 2, money: 200 });
+  chest(m, 'swamp_chest_island', 37, 26, { gearTier: 3, minRarity: 1, item: '萬能符', count: 2 });
+  obj(m, 'pickup', 'dish_1', tilePoint(14, 4), { group: 'dish', frame: 8, label: '河太郎的皿' });
+  const es = [['kappa', 8, 18], ['kappa', 19, 10], ['kappa', 26, 12], ['kappa', 36, 7], ['dorotabou', 21, 21], ['dorotabou', 14, 26], ['dorotabou', 30, 24],
+    ['aokitsunebi', 10, 5], ['aokitsunebi', 34, 13], ['aokitsunebi', 4, 22]];
+  es.forEach(([k, x, y], i) => obj(m, 'enemy', `${k}_${i}`, tilePoint(x, y), { kind: k }));
+  maps.swamp = toTiled(m, { displayName: '河童沼澤', fog: true, tier: 3 });
+}
+
+function shrineFloor(W, H) {
+  const m = newMap(W, H, 'moss_floor');
+  m.fill('obst', 0, 0, W, H, gid.moss_wall);
+  m.carve = (x, y, w, h) => m.fill('obst', x, y, w, h, 0);
+  m.torch = (x, y) => { m.set('obst', x, y, gid.dwall_torch); obj(m, 'light', `light_${x}_${y}`, tilePoint(x, y + 1)); };
+  return m;
+}
+const shallow = (m, x, y, w, h) => m.fill('ground', x, y, w, h, gid.shallow);
+
+// 水神祠 B1：拉桿開水門＋推石頭＋裂牆
+{
+  const m = shrineFloor(30, 18);
+  m.carve(1, 1, 6, 6); m.carve(7, 3, 4, 1); m.carve(11, 1, 10, 10); m.carve(22, 1, 7, 10); m.carve(22, 12, 7, 5); m.carve(13, 12, 5, 4);
+  shallow(m, 11, 6, 10, 3); shallow(m, 22, 8, 7, 3);
+  waterGate(m, 'w1_gate_a', 21, 5, 'w1a');
+  gateAt(m, 'w1_gate_b', 25, 11, 'w1b');
+  cracked(m, 'w1_crack', 15, 11);
+  stairs(m, 2, 2, true, 'swamp', 'shrine', 'down'); spawn(m, 'up', 2, 3);
+  stairs(m, 25, 14, false, 'suijin2', 'up', 'down'); spawn(m, 'down', 25, 13);
+  obj(m, 'jizo', 'w1_jizo', tilePoint(5, 2), { spawn: 'jizo' }); spawn(m, 'jizo', 5, 3);
+  lever(m, 'w1_lever', 12, 9, 'w1a');
+  block(m, 'w1_block', 24, 4, 'w1b', 'down'); plate(m, 'w1_plate', 24, 7, 'w1b');
+  sign(m, 'w1_sign', 13, 2, 'sign_w1');
+  chest(m, 'w1_chest', 19, 2, { item: '靈水', count: 2, money: 100 });
+  chest(m, 'w1_chest_b', 27, 2, { gearTier: 3, minRarity: 1 });
+  chest(m, 'w1_secret_chest', 15, 14, { gearTier: 3, minRarity: 2, money: 150 });
+  enemy(m, 'kappa', 14, 5); enemy(m, 'kappa', 18, 8); enemy(m, 'aokitsunebi', 16, 3); enemy(m, 'dorotabou', 27, 9);
+  m.torch(3, 0); m.torch(15, 0); m.torch(25, 0);
+  maps.suijin1 = toTiled(m, { displayName: '水神祠 B1', dark: true, tier: 3 });
+}
+
+// 水神祠 B2：燈籠順序＋水虎守衛寶箱＋河童王的門
+{
+  const m = shrineFloor(32, 20);
+  m.carve(1, 1, 6, 6); m.carve(7, 3, 6, 1); m.carve(13, 1, 10, 12); m.carve(23, 4, 1, 1); m.carve(24, 1, 7, 8);
+  m.carve(24, 10, 7, 6); m.carve(17, 13, 1, 1); m.carve(13, 14, 10, 5); m.carve(1, 8, 4, 3);
+  shallow(m, 13, 8, 10, 4); shallow(m, 24, 12, 7, 3);
+  cracked(m, 'w2_crack', 3, 7);
+  waterGate(m, 'w2_gate', 27, 9, 'w2');
+  stairs(m, 2, 2, true, 'suijin1', 'down', 'down'); spawn(m, 'up', 2, 3);
+  obj(m, 'jizo', 'w2_jizo', tilePoint(25, 14), { spawn: 'jizo' }); spawn(m, 'jizo', 25, 13);
+  lantern(m, 'w2_l_rice', 25, 2, 'w2', '稻', 3);
+  lantern(m, 'w2_l_water', 27, 2, 'w2', '水', 1);
+  lantern(m, 'w2_l_wood', 29, 2, 'w2', '木', 2);
+  sign(m, 'w2_mural', 18, 2, 'mural_w2');
+  m.set('obst', 31, 12, 0); obj(m, 'bossdoor', 'w2_kappa_door', tilePoint(31, 12), { dialogue: 'kappa_door' });
+  chest(m, 'w2_chest', 5, 5, { item: '大回復丸', count: 2, money: 100 });
+  chest(m, 'w2_secret_chest', 2, 9, { gearTier: 3, minRarity: 2 });
+  chest(m, 'w2_guard_chest', 20, 17, { guard: 'w2_elite', gearTier: 3, minRarity: 3, money: 300 });
+  enemy(m, 'suiko', 16, 16, { guard: 'w2_elite' }); enemy(m, 'aokitsunebi', 14, 15);
+  enemy(m, 'kappa', 15, 4); enemy(m, 'dorotabou', 21, 10); enemy(m, 'kappa', 19, 6);
+  m.torch(4, 0); m.torch(17, 0); m.torch(27, 0); m.torch(15, 13); m.torch(20, 13);
+  maps.suijin2 = toTiled(m, { displayName: '水神祠 B2', dark: true, tier: 3 });
+}
+
+// 河童王的水殿（Boss）
+{
+  const m = shrineFloor(24, 16);
+  m.carve(2, 2, 20, 12);
+  shallow(m, 2, 2, 20, 12);
+  for (let y = 4; y < 12; y += 3) for (let x = 5; x < 20; x += 5) m.set('ground', x, y, gid.moss_floor);
+  spawn(m, 'entry', 12, 12);
+  obj(m, 'boss', 'kappa_king', tilePoint(12, 5), { kind: 'kappaking' });
+  obj(m, 'cameo', 'yashamaru', tilePoint(12, 3), { npc: 'yashamaru' });
+  for (const [x, y] of [[3, 3], [20, 3], [3, 12], [20, 12]]) obj(m, 'sluice', `sluice_${x}_${y}`, tilePoint(x, y));
+  m.torch(6, 1); m.torch(17, 1); m.torch(1, 8); m.torch(22, 8);
+  maps.kappa_lair = toTiled(m, { displayName: '河童王的水殿', dark: true, boss: true, tier: 3 });
+}
+
 mkdirSync('assets/tiles', { recursive: true }); mkdirSync('assets/sprites', { recursive: true }); mkdirSync('assets/maps', { recursive: true });
 ts.save('assets/tiles/tiles.png');
 pl.save('assets/sprites/player.png');
 npc.save('assets/sprites/npcs.png');
 en.save('assets/sprites/enemies.png');
 boss.save('assets/sprites/boss.png');
+kk.save('assets/sprites/kappaking.png');
 fx.save('assets/sprites/fx.png');
 for (const [k, v] of Object.entries(maps)) writeFileSync(`assets/maps/${k}.json`, JSON.stringify(v));
 writeFileSync('src/data/npcs.json', JSON.stringify(Object.fromEntries(NPCS.map(([id], i) => [id, { frame: i * 2 }])), null, 2) + '\n');

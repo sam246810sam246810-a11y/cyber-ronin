@@ -39,6 +39,8 @@ export function deserialize(raw: unknown): { state: GameState; map: string; spaw
     equipped: { ...base.equipped, ...(st.equipped ?? {}) },
     checkpoint: st.checkpoint ?? { map: f.map, spawn: f.spawn ?? 'start' },
   } as GameState;
+  if (!Array.isArray(state.skillSlots) || state.skillSlots.length !== 2) state.skillSlots = base.skillSlots;
+  if (state.job === undefined) state.job = null;
   const max = statsOf(state);
   state.hp = typeof st.hp === 'number' ? Math.min(Math.max(1, st.hp), max.maxHp) : max.maxHp;
   state.mp = typeof st.mp === 'number' ? Math.min(Math.max(0, st.mp), max.maxMp) : max.maxMp;

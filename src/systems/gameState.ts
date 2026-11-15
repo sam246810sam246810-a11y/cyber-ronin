@@ -3,7 +3,8 @@ import classes from '../data/classes.json';
 import { applyItem, type Difficulty, type Rng, type Statuses } from './combat';
 import { BASES, canUse, equipName, equipStats, generateEquip, RARITIES, type BaseId, type Equip, type Slot } from './equipment';
 import { BAG_START, canAddGear, canAddItem, type Bag } from './inventory';
-import { addExp, computeStats, type Stats } from './progression';
+import { addExp, computeStats, JOB_LEVEL, type Stats } from './progression';
+import jobs from '../data/jobs.json';
 
 export interface Reward { money?: number; item?: string; count?: number; gearTier?: number; minRarity?: number; key?: string }
 export type ClassId = keyof typeof classes;
@@ -27,6 +28,10 @@ export interface GameState extends Bag {
   anger: number;
   /** 遊玩時間（秒） */
   playTime: number;
+  /** 轉職後的職業（PRD 4.3），沒轉職是 null */
+  job: string | null;
+  /** 技能鈕上裝的 2 個技能 */
+  skillSlots: [string, string];
   /** 任務進度（PRD 9） */
   quests: Record<string, { status: 'active' | 'done'; progress: number }>;
 }
@@ -49,6 +54,7 @@ export function newGameState(classId: ClassId = 'swordsman', difficulty: Difficu
     flags: new Set(), openedChests: new Set(),
     checkpoint: { map: 'home', spawn: 'door' },
     bond: 0, anger: 0, playTime: 0, quests: {},
+    job: null, skillSlots: [c.skills[0], c.skills[1]] as [string, string],
   };
   const st = statsOf(s); s.hp = st.maxHp; s.mp = st.maxMp;
   return s;
@@ -60,7 +66,7 @@ export function equippedGear(s: GameState): Equip[] {
 
 /** 目前的最終能力值（等級＋裝備） */
 export function statsOf(s: GameState): Stats {
-  return computeStats(s.classId, s.level, equippedGear(s).map(equipStats));
+  return computeStats(s.classId, s.level, equippedGear(s).map(equipStats), !!s.job);
 }
 
 /** 能力上限改變後，HP／MP 不超過上限 */
@@ -133,7 +139,7 @@ export function openChest(s: GameState, chestId: string, reward: Reward, rng: Rn
 export function statsIfSwapped(s: GameState, slot: Slot, uid: number | null): Stats {
   const equipped = { ...s.equipped, [slot]: uid };
   const gear = Object.values(equipped).map((u) => s.gear.find((g) => g.uid === u)).filter((g): g is Equip => !!g);
-  return computeStats(s.classId, s.level, gear.map(equipStats));
+  return computeStats(s.classId, s.level, gear.map(equipStats), !!s.job);
 }
 
 /** 從背包使用消耗品。HP／MP 已滿且沒有異常時不使用，回傳 null。 */
@@ -149,8 +155,52 @@ export function useItem(s: GameState, name: string): string | null {
   return msg;
 }
 
+/** 已經學會的技能：基本 2 個＋Lv6、Lv9 各 1 個＋轉職後 2 個 */
+export function learnedSkills(s: GameState): string[] {
+  const c = classes[s.classId] as { skills: string[]; later: Record<string, number> };
+  const out = [...c.skills, ...Object.entries(c.later).filter(([, lv]) => s.level >= lv).map(([id]) => id)];
+  if (s.job) out.push(...(jobs as Record<string, { skills: string[] }>)[s.job].skills);
+  return out;
+}
+
+/** 把技能裝到第 slot 個技能鈕；已經裝在另一格就交換 */
+export function setSkillSlot(s: GameState, slot: 0 | 1, skill: string): boolean {
+  if (!learnedSkills(s).includes(skill)) return false;
+  const other = slot === 0 ? 1 : 0;
+  if (s.skillSlots[other] === skill) s.skillSlots[other] = s.skillSlots[slot];
+  s.skillSlots[slot] = skill;
+  return true;
+}
+
+export function canChangeJob(s: GameState): boolean { return !s.job && s.level >= JOB_LEVEL && s.flags.has('chapter1_done'); }
+
+/** 轉職：屬性 +10%，學會 2 個新技能並裝到技能鈕上 */
+export function changeJob(s: GameState, job: string): boolean {
+  const j = (jobs as Record<string, { base: string; skills: string[] }>)[job];
+  if (!j || j.base !== s.classId || !canChangeJob(s)) return false;
+  s.job = job;
+  s.skillSlots = [j.skills[0], j.skills[1]];
+  const st = statsOf(s); s.hp = st.maxHp; s.mp = st.maxMp;
+  return true;
+}
+
+export function className(s: GameState): string {
+  return s.job ? (jobs as Record<string, { name: string }>)[s.job].name : classes[s.classId].name;
+}
+
 /** 目前的主線目標（顯示在畫面上方）。 */
 export function currentObjective(flags: ReadonlySet<string>): string {
+  // 先看章節：已經結束的章節不再回頭看裡面的旗標
+  if (flags.has('chapter2_done')) return '第二章完成！感謝遊玩（第三章製作中）';
+  if (flags.has('chapter1_done')) {
+    if (!flags.has('ch2_started')) return '第二章：到神社找宮司爺爺';
+    if (!flags.has('visited:swamp')) return '從狐火村南邊前往河童沼澤';
+    if (!flags.has('gate:swamp')) return '河童沼澤：拉下三個水門拉桿，打開往水神祠的路';
+    if (!flags.has('visited:suijin1')) return '進入沼澤小島上的水神祠';
+    if (!flags.has('visited:suijin2')) return '水神祠 B1：找到往下的路';
+    if (!flags.has('reached_kappa_door')) return '水神祠 B2：找到河童王';
+    return '打倒河童王，解開沼澤的異變';
+  }
   if (!flags.has('talked_priest')) return '到北邊的神社找宮司爺爺';
   if (!flags.has('found_well')) return '調查東邊竹林深處的古井';
   if (!flags.has('prologue_done')) return '回神社向宮司爺爺報告';
@@ -158,8 +208,7 @@ export function currentObjective(flags: ReadonlySet<string>): string {
   if (!flags.has('visited:b2')) return '古井地城 B1：找到往下的路';
   if (!flags.has('visited:b3')) return '古井地城 B2：找到往下的路';
   if (!flags.has('reached_boss_door')) return '古井地城 B3：找到土蜘蛛的巢穴';
-  if (!flags.has('boss_defeated')) return '打倒土蜘蛛，救出孩子們';
-  return '第一章完成！感謝遊玩（第二章製作中）';
+  return '打倒土蜘蛛，救出孩子們';
 }
 
 /** 全域唯一的進度。 */

@@ -15,12 +15,15 @@ import { collectionReport } from '../../systems/collection';
 import { MANUAL_SLOTS, formatPlayTime, readSave, serialize, writeSave, type SaveFile, type SlotId } from '../../systems/save';
 import type { SaveRequest } from '../../systems/events';
 import { accept, dailyBounties, dateKey, isReady, offersFrom, progressOf, questDef, rewardText, turnIn, type QuestDef } from '../../systems/quests';
-import { currentObjective } from '../../systems/gameState';
+import { className, currentObjective, learnedSkills, setSkillSlot } from '../../systems/gameState';
+import skillData from '../../data/skills.json';
+import classData from '../../data/classes.json';
+import jobData from '../../data/jobs.json';
 import { getSettings, updateSettings, type Settings } from '../../systems/settings';
 import { sound } from '../../audio/sound';
 import { MAX_PLUS, RECIPES, SYNTH_COST, craft, enhance, enhanceCost, missingFor, recipeOutput, synthesize } from '../../systems/forge';
 
-type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest' | 'settings';
+type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest' | 'settings' | 'skills';
 type ShopTab = 'buy' | 'sell';
 type Selection = { kind: 'gear'; uid: number } | { kind: 'item'; name: string } | { kind: 'buyItem'; name: string } | { kind: 'buyGear'; base: BaseId } | null;
 
@@ -34,6 +37,9 @@ const ITEM_DESC: Record<string, string> = {
   '野狐的毛': '素材。蓬鬆又保暖。',
   '蜘蛛絲': '素材。比鋼線還堅韌。',
   '玉鋼': '素材。鍛冶屋打造武器用的好鋼。',
+  '河童的皿碎片': '素材。又硬又光滑。',
+  '泥塊': '素材。黏性很強的泥。',
+  '河童王的冠': '河童王身上掉下來的冠。好像在哪裡會派上用場。（第三章）',
   '擴充布袋': `背包增加 ${BAG_EXPAND} 格（最多 ${BAG_MAX} 格）`,
 };
 const STAT_ROWS: [keyof Stats, string][] = [['maxHp', 'HP'], ['maxMp', 'MP'], ['atk', '攻擊'], ['def', '防禦'], ['spd', '速度'], ['crit', '爆擊率'], ['mpRegen', 'MP 回復']];
@@ -154,6 +160,23 @@ export class GameOverlay {
       <div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">今日懸賞（${today}，每天換新）</div>${daily.join('') || '<div class="kf-empty">還沒有懸賞。</div>'}<div class="kf-msg">${esc(this.msg)}</div></div>`;
   }
 
+  private skillsView(): string {
+    const s = gameState, sk = skillData as Record<string, { name: string; mp: number; cd: number; desc: string }>;
+    const learned = learnedSkills(s);
+    const later = Object.entries((classData[s.classId] as { later: Record<string, number> }).later).filter(([id]) => !learned.includes(id));
+    const rows = learned.map((id) => {
+      const k = sk[id], slot = s.skillSlots.indexOf(id);
+      return `<div class="kf-card"><h3>${esc(k.name)}${slot >= 0 ? `　<span class="kf-up">技能鈕 ${slot + 1}</span>` : ''}</h3><div>${esc(k.desc)}</div>
+        <div class="kf-tag">MP ${k.mp}・冷卻 ${k.cd} 秒</div>
+        <div class="kf-btns"><button class="kf-btn secondary" data-slot0="${id}" ${slot === 0 ? 'disabled' : ''}>裝到技能鈕 1</button><button class="kf-btn secondary" data-slot1="${id}" ${slot === 1 ? 'disabled' : ''}>裝到技能鈕 2</button></div></div>`;
+    }).join('');
+    const jobs = jobData as Record<string, { name: string; base: string }>;
+    const jobHint = s.job ? `已轉職為「${className(s)}」` : `Lv10 且第一章結束後，可以找宮司爺爺轉職（${Object.values(jobs).filter((j) => j.base === s.classId).map((j) => j.name).join('／')}）`;
+    return `<div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">已學會（點按鈕把技能裝到右下角的技能鈕）</div>${rows}</div>
+      <div class="kf-col"><div class="kf-sec">之後會學會</div>${later.map(([id, lv]) => `<div class="kf-row"><span class="n">${esc(sk[id].name)}</span><span class="kf-tag">Lv.${lv}</span></div>`).join('') || '<div class="kf-empty">職業技能都學會了。</div>'}
+        <div class="kf-sec">轉職</div><div class="kf-tag">${esc(jobHint)}</div><div class="kf-msg">${esc(this.msg)}</div></div>`;
+  }
+
   private settingsView(): string {
     const st = getSettings(), s = gameState;
     const row = (key: keyof Settings, label: string, values: [number, string][]) => `<div class="kf-sec">${label}</div><div class="kf-btns">${values.map(([v, t]) =>
@@ -250,11 +273,11 @@ export class GameOverlay {
     }
     const s = gameState;
     const tabs = this.mode === 'menu'
-      ? ([['status', '狀態'], ['quest', '任務'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集'], ['settings', '設定']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
+      ? ([['status', '狀態'], ['quest', '任務'], ['skills', '技能'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集'], ['settings', '設定']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
       : ([['buy', '購買'], ['sell', '賣出']] as const).map(([k, t]) => `<button class="kf-tab" data-stab="${k}" aria-selected="${this.shopTab === k}">${t}</button>`).join('');
     const title = this.mode === 'menu' ? '選單' : '鈴屋';
     const body = this.mode === 'menu'
-      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.menuTab === 'settings' ? this.settingsView() : this.bagView())
+      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.menuTab === 'settings' ? this.settingsView() : this.menuTab === 'skills' ? this.skillsView() : this.bagView())
       : (this.shopTab === 'buy' ? this.buyView() : this.sellView());
     this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}">
       <div class="kf-head"><span class="kf-title">${title}</span>${tabs}<span class="kf-spacer"></span>
@@ -264,11 +287,11 @@ export class GameOverlay {
   }
 
   private statusView(): string {
-    const s = gameState, st = statsOf(s), cls = classes[s.classId];
+    const s = gameState, st = statsOf(s);
     const next = s.level >= LEVEL_CAP ? 0 : expToNext(s.level);
     const pct = next ? Math.floor((s.exp / next) * 100) : 100;
     return `<div class="kf-col">
-        <div class="kf-card"><h3>燈・${cls.name}　Lv.${s.level}</h3>
+        <div class="kf-card"><h3>燈・${className(s)}　Lv.${s.level}</h3>
           <div class="kf-tag">經驗 ${next ? `${s.exp} / ${next}（還差 ${next - s.exp}）` : '已達目前等級上限'}</div>
           <div class="kf-bar"><i style="width:${pct}%"></i></div>
           <dl class="kf-grid">
@@ -405,9 +428,10 @@ export class GameOverlay {
 
   // ---------- 操作 ----------
   private onClick(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-slot0],[data-slot1],[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
     if (!el) { if (e.target === this.root) this.close(); return; }
     const d = el.dataset, s = gameState;
+    if (d.slot0 || d.slot1) { setSkillSlot(s, d.slot0 ? 0 : 1, (d.slot0 ?? d.slot1)!); this.msg = '換好了'; this.render(); return; }
     if (d.setting) {
       updateSettings({ [d.setting]: Number(d.value) } as Partial<Settings>);
       sound.applyVolume(); sound.sfx('select');

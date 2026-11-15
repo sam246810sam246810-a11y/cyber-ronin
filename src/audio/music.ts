@@ -34,6 +34,15 @@ export const TRACKS: Record<string, Track> = {
       { wave: 'sine', octave: 2, gain: 0.05, decay: 0.15, notes: [_, _, _, _, _, 6, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, 5, _, _, _, _, _, _] },
     ],
   },
+  // 河童沼澤：搖晃的水聲感，三拍子般的切分
+  swamp: {
+    bpm: 84,
+    voices: [
+      { wave: 'triangle', octave: 0, gain: 0.2, decay: 0.45, notes: [2, _, 4, _, _, 3, _, 1, 2, _, _, _, 0, _, 1, _, 2, _, 4, _, _, 5, _, 4, 3, _, _, _, _, _, _, _] },
+      { wave: 'sine', octave: -2, gain: 0.16, decay: 1.2, notes: [0, _, _, _, _, _, 0, _, _, _, _, _, 3, _, _, _, 0, _, _, _, _, _, 0, _, _, _, _, _, 1, _, _, _] },
+      { wave: 'sine', octave: 1, gain: 0.05, decay: 0.12, notes: [_, _, _, 7, _, _, _, _, _, _, _, 6, _, _, _, _, _, _, _, 7, _, _, _, _, _, 8, _, _, _, _, _, _] },
+    ],
+  },
   // 土蜘蛛：太鼓＋三味線般的快速頑固音型
   boss: {
     bpm: 148,
@@ -48,8 +57,9 @@ export const TRACKS: Record<string, Track> = {
 /** 地圖 → 音樂 */
 export function trackForMap(map: string): string {
   if (map === 'forest') return 'forest';
-  if (/^b\d$/.test(map)) return 'dungeon';
-  if (map === 'lair') return 'boss';
+  if (map === 'swamp') return 'swamp';
+  if (/^b\d$/.test(map) || /^suijin\d$/.test(map)) return 'dungeon';
+  if (map === 'lair' || map === 'kappa_lair') return 'boss';
   return 'village';
 }
 

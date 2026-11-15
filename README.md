@@ -13,10 +13,21 @@ npm run build:artifact # 另外產生可發佈成 Claude Artifact 的 dist-artif
 npm run assets         # 重新產生佔位素材（tileset、主角、狐火村地圖）
 ```
 
-## 目前進度：第一章 MVP 完成（M1–M7）
+## 目前進度：第一章＋第二章「河童沼澤」
 
 開新遊戲先選職業與難度，接著：
 燈的家 → 狐火村 → 神社找宮司爺爺 → 迷霧竹林 → 古井 → 回神社報告（序章完）→ 古井地城 B1 → B2 → B3 → 土蜘蛛的巢穴 → 第一章完。
+
+**第二章：河童沼澤**
+- 第一章結束後找宮司爺爺開始；狐火村南邊的注連繩解開，前往河童沼澤
+- 新地圖：河童沼澤（拉下三個拉桿打開水門）、水神祠 B1（拉桿＋推石頭＋裂牆）、水神祠 B2（燈籠順序「水→木→稻」、水虎守衛寶箱）、河童王的水殿
+- 新怪物：河童（衝撞）、泥田坊（丟泥巴，被打中會變慢）、青鬼火（會毒）、水虎（精英）
+- Boss 河童王：水砲、拍擊 → 召喚河童、扇形水彈 → 狂暴、橫掃一整排的大浪；打開四角的水閘讓頭上的皿乾掉（硬直 4 秒、傷害 ×1.5）
+- 夜叉丸首次登場；打倒河童王後選「解開詛咒」或「討伐」（羈絆值／怒火值）
+- 等級上限提高到 Lv20；Lv6、Lv9 各學會一個新技能；選單「技能」分頁可以選要裝在技能鈕上的 2 個技能
+- 轉職（Lv10＋第一章結束，找宮司爺爺）：劍聖／鬼武者、獵妖師／風隼、大陰陽師／式神使，屬性 +10%、各 2 個新技能
+- 第三階裝備 8 件、鍛冶屋新配方 2 張、支線「河太郎的皿」、告示板新委託與懸賞、新素材（河童的皿碎片、泥塊）
+- 新背景音樂「河童沼澤」
 
 **鍛冶屋、聲音與平衡（M7）**
 - 完成鐵心的支線後開放鍛冶屋：打造（6 張配方，用怪物素材）、強化（最多 +5，每級基礎能力 +8%，消耗玉鋼）、合成（3 件同稀有度 → 1 件高一級）
@@ -68,7 +79,7 @@ npm run assets         # 重新產生佔位素材（tileset、主角、狐火村
 
 **探索與劇情**
 - 10 張地圖、6 位 NPC（對話依劇情進度改變）、14 個寶箱、4 個隱藏地點
-- 之後：第二章（河童沼澤、轉職）、正式美術素材
+- 之後：第三章（天狗山）、正式美術素材
 
 ## 結構
 
@@ -77,11 +88,11 @@ src/
   main.ts          Phaser 設定
   config.ts        解析度、速度、場景名稱
   scenes/          Boot、Title、World、UI
-  entities/        Player、Enemy（AI）、Boss（土蜘蛛）
+  entities/        Player、Enemy（AI）、Boss（土蜘蛛）、KappaKing（河童王）
   combat/          CombatSystem（攻擊、技能、閃避、受傷）、特效
   audio/           音樂曲譜與 Web Audio 合成器
   systems/         純邏輯（combat、progression、equipment、inventory、collection、save、quests、forge、settings、boss、movement、dialogue、gameState、interaction），有單元測試
-  data/            職業、技能、怪物、裝備、配方、商店、任務、對話、NPC、地圖清單
+  data/            職業、轉職、技能、怪物、裝備、配方、商店、任務、對話、NPC、地圖清單
   ui/              VirtualJoystick、TouchButton、DialogueBox、camera 工具
   ui/dom/          選單與商店（HTML 疊加層）
 assets/            佔位素材（由 scripts/gen-placeholder-assets.mjs 產生）

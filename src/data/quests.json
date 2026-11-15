@@ -219,5 +219,96 @@
       },
       "exp": 45
     }
+  },
+  "kawataro_dish": {
+    "type": "side",
+    "name": "河太郎的皿",
+    "giver": "kawataro",
+    "requires": [
+      "visited:swamp"
+    ],
+    "desc": "河太郎頭上的皿被大人搶走丟掉了。在河童沼澤北邊找回來。",
+    "target": {
+      "pickup": "dish",
+      "count": 1
+    },
+    "reward": {
+      "money": 150,
+      "exp": 200,
+      "gear": {
+        "base": "kappa_dish",
+        "rarity": 1
+      }
+    },
+    "offer": [
+      [
+        "河太郎",
+        "……人、人類？你、你不要過來……"
+      ],
+      [
+        "河太郎",
+        "我的皿被大人們搶走丟掉了……沒有皿，頭上好乾……"
+      ],
+      [
+        "河太郎",
+        "皿好像被丟到沼澤北邊了。你……可以幫我找嗎？"
+      ]
+    ],
+    "remind": [
+      [
+        "河太郎",
+        "皿應該在沼澤北邊……亮亮的，很好認。"
+      ]
+    ],
+    "done": [
+      [
+        "河太郎",
+        "我的皿！頭上涼涼的，好舒服～"
+      ],
+      [
+        "河太郎",
+        "謝謝你，人類。這個舊皿給你，戴著會變結實喔！"
+      ]
+    ]
+  },
+  "hunt_kappa": {
+    "type": "hunt",
+    "name": "討伐：河童",
+    "giver": "board",
+    "requires": [
+      "ch2_started"
+    ],
+    "desc": "河童在沼澤搶劫旅人。打倒 5 隻河童。",
+    "target": {
+      "kill": "kappa",
+      "count": 5
+    },
+    "reward": {
+      "money": 200,
+      "exp": 150,
+      "items": {
+        "大回復丸": 1
+      }
+    }
+  },
+  "collect_mud": {
+    "type": "collect",
+    "name": "收集：泥塊",
+    "giver": "board",
+    "requires": [
+      "ch2_started"
+    ],
+    "desc": "村裡要補堤防。帶 4 份泥田坊的泥塊來。",
+    "target": {
+      "item": "泥塊",
+      "count": 4
+    },
+    "reward": {
+      "money": 180,
+      "exp": 120,
+      "items": {
+        "萬能符": 2
+      }
+    }
   }
 }

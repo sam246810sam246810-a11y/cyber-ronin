@@ -1,11 +1,46 @@
 {
   "rin": {
     "items": [
-      { "item": "回復丸", "price": 30 },
-      { "item": "靈水", "price": 40 },
-      { "item": "解毒草", "price": 20 },
-      { "item": "擴充布袋", "price": 200 }
+      {
+        "item": "回復丸",
+        "price": 30
+      },
+      {
+        "item": "大回復丸",
+        "price": 90
+      },
+      {
+        "item": "靈水",
+        "price": 40
+      },
+      {
+        "item": "解毒草",
+        "price": 20
+      },
+      {
+        "item": "萬能符",
+        "price": 60
+      },
+      {
+        "item": "擴充布袋",
+        "price": 200
+      }
     ],
-    "equipment": ["iron_sword", "half_bow", "talisman_fan", "hachigane", "leather_do", "iron_gloves", "tabi", "magatama", "bell"]
+    "equipment": [
+      "iron_sword",
+      "half_bow",
+      "talisman_fan",
+      "hachigane",
+      "leather_do",
+      "iron_gloves",
+      "tabi",
+      "magatama",
+      "bell",
+      "fox_sword",
+      "moon_bow",
+      "fox_fan",
+      "chainmail",
+      "fox_mask"
+    ]
   }
 }

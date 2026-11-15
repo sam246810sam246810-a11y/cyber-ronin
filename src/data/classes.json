@@ -1,5 +1,53 @@
 {
-  "swordsman": { "name": "劍士", "desc": "近戰三段斬。HP 和防禦高，適合正面硬拚。", "hp": 120, "mp": 50, "atk": 12, "def": 8, "spd": 100, "skills": ["spin", "thrust"] },
-  "archer":    { "name": "弓術師", "desc": "遠程射箭，長按攻擊鈕蓄力可射出貫穿箭。移動最快。", "hp": 90, "mp": 50, "atk": 10, "def": 5, "spd": 115, "skills": ["triple", "bind"] },
-  "onmyoji":   { "name": "陰陽師", "desc": "丟出符咒攻擊。技能強，但很吃 MP。", "hp": 80, "mp": 80, "atk": 9, "def": 4, "spd": 105, "skills": ["fire", "barrier"] }
+  "swordsman": {
+    "name": "劍士",
+    "desc": "近戰三段斬。HP 和防禦高，適合正面硬拚。",
+    "hp": 120,
+    "mp": 50,
+    "atk": 12,
+    "def": 8,
+    "spd": 100,
+    "skills": [
+      "spin",
+      "thrust"
+    ],
+    "later": {
+      "iron_wall": 6,
+      "iai": 9
+    }
+  },
+  "archer": {
+    "name": "弓術師",
+    "desc": "遠程射箭，長按攻擊鈕蓄力可射出貫穿箭。移動最快。",
+    "hp": 90,
+    "mp": 50,
+    "atk": 10,
+    "def": 5,
+    "spd": 115,
+    "skills": [
+      "triple",
+      "bind"
+    ],
+    "later": {
+      "backstep": 6,
+      "arrow_rain": 9
+    }
+  },
+  "onmyoji": {
+    "name": "陰陽師",
+    "desc": "丟出符咒攻擊。技能強，但很吃 MP。",
+    "hp": 80,
+    "mp": 80,
+    "atk": 9,
+    "def": 4,
+    "spd": 105,
+    "skills": [
+      "fire",
+      "barrier"
+    ],
+    "later": {
+      "shiki": 6,
+      "thunder": 9
+    }
+  }
 }

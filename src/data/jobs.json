@@ -1,0 +1,56 @@
+{
+  "kensei": {
+    "name": "劍聖",
+    "base": "swordsman",
+    "desc": "把劍術練到極致。速攻連擊、高速突進。",
+    "skills": [
+      "tsubame",
+      "issen"
+    ]
+  },
+  "oni": {
+    "name": "鬼武者",
+    "base": "swordsman",
+    "desc": "借用鬼的力量。狂暴與吸血，越打越勇。",
+    "skills": [
+      "kishin",
+      "rasetsu"
+    ]
+  },
+  "hunter": {
+    "name": "獵妖師",
+    "base": "archer",
+    "desc": "專門對付強大妖怪。破魔之箭與陷阱。",
+    "skills": [
+      "hama",
+      "trap"
+    ]
+  },
+  "hayabusa": {
+    "name": "風隼",
+    "base": "archer",
+    "desc": "像風一樣移動。衝刺與連射。",
+    "skills": [
+      "shippu",
+      "rapid"
+    ]
+  },
+  "daionmyoji": {
+    "name": "大陰陽師",
+    "base": "onmyoji",
+    "desc": "操縱天地之力。大範圍的強力法術。",
+    "skills": [
+      "gobosei",
+      "karyu"
+    ]
+  },
+  "shikigami": {
+    "name": "式神使",
+    "base": "onmyoji",
+    "desc": "與式神並肩作戰。召喚與守護。",
+    "skills": [
+      "twin",
+      "guardian"
+    ]
+  }
+}

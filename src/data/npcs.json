@@ -16,5 +16,11 @@
   },
   "taro": {
     "frame": 10
+  },
+  "kawataro": {
+    "frame": 12
+  },
+  "yashamaru": {
+    "frame": 14
   }
 }

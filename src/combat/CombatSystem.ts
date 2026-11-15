@@ -4,7 +4,7 @@ import { Player } from '../entities/Player';
 import { Enemy, type HitOptions } from '../entities/Enemy';
 import { applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, COMBO_MULT, hasStatus, nextComboStep, pickAimTarget, tickStatuses } from '../systems/combat';
 import { facingFromVector } from '../systems/movement';
-import { classStats, gainExp, gameState, gearLabel, giveRandomGear, statsOf } from '../systems/gameState';
+import { canChangeJob, classStats, gainExp, gameState, gearLabel, giveRandomGear, statsOf } from '../systems/gameState';
 import { canAddItem } from '../systems/inventory';
 import { onKill as questKill } from '../systems/quests';
 import { hudState } from '../systems/hudState';
@@ -25,11 +25,11 @@ const GEAR_DROP = 0.1;
 /** 可以被攻擊打破的東西（裂開的牆） */
 export interface Breakable { x: number; y: number; alive: boolean; onBreak: () => void }
 
-interface EnemyShot { sprite: Phaser.GameObjects.Sprite; dir: Vec2; speed: number; atk: number; poison: number; dieAt: number }
+interface EnemyShot { sprite: Phaser.GameObjects.Sprite; dir: Vec2; speed: number; atk: number; poison: number; slow: number; dieAt: number }
 
 interface Projectile {
   sprite: Phaser.Physics.Arcade.Sprite;
-  mult: number; dieAt: number; pierce: boolean; hit: Set<Enemy>; opts: HitOptions;
+  mult: number; dieAt: number; pierce: boolean; hit: Set<Enemy>; opts: HitOptions & { antiElite?: boolean };
 }
 
 /**
@@ -38,7 +38,8 @@ interface Projectile {
  */
 export class CombatSystem {
   private readonly cls = classStats(gameState.classId);
-  private readonly skillIds = this.cls.skills as SkillId[];
+  /** 技能鈕上裝的技能（選單可以換） */
+  private get skillIds(): SkillId[] { return gameState.skillSlots as SkillId[]; }
   private readonly skillReady = [0, 0];
   private attackReady = 0;
   private dodgeReady = 0;
@@ -62,8 +63,20 @@ export class CombatSystem {
   private readonly marker: Phaser.GameObjects.Graphics;
   private dotAccum = 0;
   private projectiles: Projectile[] = [];
+  // 第二章技能用
+  private dmgReduceUntil = 0;
+  private kishinUntil = 0;
+  private shieldHits = 0;
+  private shieldUntil = 0;
+  private nextCharged = false;
+  private thrustMult = 1.4;
+  private familiars: { sprite: Phaser.GameObjects.Sprite; until: number; next: number; offset: number }[] = [];
+  private traps: { sprite: Phaser.GameObjects.Graphics; x: number; y: number; until: number }[] = [];
+  private aura?: Phaser.GameObjects.Arc;
   private shots: EnemyShot[] = [];
   breakables: Breakable[] = [];
+  /** 這張地圖掉落裝備的階級（地圖屬性 tier） */
+  dropTier = 1;
   private dead = false;
 
   constructor(
@@ -147,7 +160,8 @@ export class CombatSystem {
 
   private shootArrow(heldMs: number): void {
     if (this.busy || this.now < this.attackReady) return;
-    const charged = heldMs >= 600;
+    const charged = heldMs >= 600 || this.nextCharged;
+    this.nextCharged = false;
     sound.sfx('arrow');
     this.autoAim(AIM_RANGE.ranged);
     this.attackReady = this.now + 320;
@@ -170,9 +184,12 @@ export class CombatSystem {
     if (this.busy || this.now < this.skillReady[i]) return;
     if (gameState.mp < s.mp) { this.cb.toast('MP 不足'); return; }
     gameState.mp -= s.mp;
-    sound.sfx(id === 'barrier' ? 'lantern' : id === 'spin' || id === 'thrust' ? 'swing' : id === 'fire' ? 'talisman' : 'arrow');
+    sound.sfx((['barrier', 'iron_wall', 'kishin', 'guardian', 'shiki', 'twin'] as string[]).includes(id) ? 'lantern'
+      : (['spin', 'thrust', 'iai', 'tsubame', 'issen', 'rasetsu'] as string[]).includes(id) ? 'swing'
+      : (['fire', 'thunder', 'gobosei', 'karyu'] as string[]).includes(id) ? 'talisman' : 'arrow');
     this.skillReady[i] = this.now + s.cd * 1000;
-    if (id !== 'spin' && id !== 'barrier') this.autoAim(id === 'thrust' ? AIM_RANGE.melee + 40 : AIM_RANGE.ranged);
+    const melee = (['thrust', 'iai', 'tsubame', 'issen'] as string[]).includes(id);
+    if (!(['spin', 'barrier', 'iron_wall', 'kishin', 'rasetsu', 'guardian', 'trap', 'shiki', 'twin'] as string[]).includes(id)) this.autoAim(melee ? AIM_RANGE.melee + 40 : AIM_RANGE.ranged);
     const p = this.player.center, a = this.player.aim;
     switch (id) {
       case 'spin':
@@ -183,7 +200,7 @@ export class CombatSystem {
         break;
       case 'thrust':
         this.thrustUntil = this.now + 180;
-        this.dashDir = { ...a }; this.dashSpeed = 400;
+        this.dashDir = { ...a }; this.dashSpeed = 400; this.thrustMult = s.mult;
         this.thrustHit.clear();
         slashArc(this.scene, p.x + a.x * 10, p.y + a.y * 10, Math.atan2(a.y, a.x), 10, 0.9, 0x9fd8ff, 4);
         break;
@@ -205,8 +222,166 @@ export class CombatSystem {
         this.barrier = this.scene.add.circle(p.x, p.y, 16, 0x9fd8ff, 0.15).setStrokeStyle(1.5, 0x9fd8ff, 0.9).setDepth(130000);
         this.scene.tweens.add({ targets: this.barrier, scale: 1.1, duration: 300, yoyo: true, repeat: -1 });
         break;
+      // ---------- 第二章：Lv6／Lv9 技能 ----------
+      case 'iron_wall':
+        this.dmgReduceUntil = this.now + 3000;
+        this.setAura(0xb8b8c8, 3000);
+        break;
+      case 'iai': {
+        this.lockUntil = this.now + 320;
+        const dir = { ...a };
+        ring(this.scene, p.x, p.y, 8, 0xffffff, 300);
+        this.scene.time.delayedCall(260, () => {
+          if (this.dead) return;
+          const c = this.player.center;
+          slashArc(this.scene, c.x + dir.x * 8, c.y + dir.y * 8, Math.atan2(dir.y, dir.x), 22, 1.2, 0xffffff, 5);
+          this.scene.cameras.main.shake(80, 0.004);
+          this.hitCircle({ x: c.x + dir.x * 18, y: c.y + dir.y * 18 }, 20, s.mult, { knock: 260 });
+        });
+        break;
+      }
+      case 'backstep':
+        this.dodgeUntil = this.now + 180;
+        this.invulnUntil = Math.max(this.invulnUntil, this.now + 180);
+        this.dashDir = { x: -a.x, y: -a.y }; this.dashSpeed = 280;
+        this.fire(0, a, 260, s.mult, 190, {});
+        break;
+      case 'arrow_rain': {
+        const t = this.aimTarget(AIM_RANGE.ranged)?.center ?? { x: p.x + a.x * 60, y: p.y + a.y * 60 };
+        const warn = this.scene.add.circle(t.x, t.y, 28, 0x9fd8ff, 0.12).setStrokeStyle(1, 0x9fd8ff, 0.8).setDepth(4);
+        for (let k = 0; k < 5; k++) this.scene.time.delayedCall(350 + k * 200, () => {
+          for (let j = 0; j < 4; j++) floatText(this.scene, t.x + Phaser.Math.Between(-24, 24), t.y + Phaser.Math.Between(-20, 20), '｜', '#cfe8ff', 9);
+          this.hitCircle(t, 28, s.mult, { knock: 40 });
+          if (k === 4) warn.destroy();
+        });
+        break;
+      }
+      case 'shiki': this.summonFamiliar(8000, 0); break;
+      case 'thunder': this.chainLightning(s.mult); break;
+      // ---------- 第二章：轉職技能 ----------
+      case 'tsubame': {
+        const dir = { ...a };
+        this.lockUntil = this.now + 300;
+        const cut = (sign: number) => {
+          const c = this.player.center, d = { x: dir.x * sign, y: dir.y * sign };
+          slashArc(this.scene, c.x, c.y, Math.atan2(d.y, d.x), 18, 2.4, 0xbfe8ff, 4);
+          this.hitCircle({ x: c.x + d.x * 13, y: c.y + d.y * 13 }, 18, s.mult, { knock: 150 });
+        };
+        cut(1); this.scene.time.delayedCall(140, () => { if (!this.dead) { sound.sfx('swing'); cut(-1); } });
+        break;
+      }
+      case 'issen':
+        this.thrustUntil = this.now + 220;
+        this.dashDir = { ...a }; this.dashSpeed = 480; this.thrustMult = s.mult;
+        this.thrustHit.clear();
+        slashArc(this.scene, p.x, p.y, Math.atan2(a.y, a.x), 14, 0.6, 0xffffff, 5);
+        break;
+      case 'kishin':
+        this.kishinUntil = this.now + 8000;
+        this.setAura(0xff3a3a, 8000);
+        break;
+      case 'rasetsu':
+        this.lockUntil = this.now + 300;
+        ring(this.scene, p.x, p.y, 34, 0xff3a3a, 320);
+        slashArc(this.scene, p.x, p.y, 0, 30, Math.PI * 2, 0xff5a5a, 4);
+        this.lifestealNext = 0.3;
+        this.hitCircle(p, 36, s.mult, { knock: 240 });
+        this.lifestealNext = 0;
+        break;
+      case 'hama':
+        this.fire(0, a, 320, s.mult, 230, { pierce: true, tint: 0xffe08a, antiElite: true });
+        break;
+      case 'trap': {
+        if (this.traps.length >= 2) this.traps.shift()!.sprite.destroy();
+        const g = this.scene.add.graphics().setDepth(3);
+        g.lineStyle(1.5, 0xc8c8d0, 1).strokeCircle(p.x, p.y + 4, 6).lineBetween(p.x - 6, p.y + 4, p.x + 6, p.y + 4);
+        this.traps.push({ sprite: g, x: p.x, y: p.y + 4, until: this.now + 10000 });
+        break;
+      }
+      case 'shippu':
+        this.dodgeUntil = this.now + 250;
+        this.invulnUntil = Math.max(this.invulnUntil, this.now + 250);
+        this.dashDir = { ...a }; this.dashSpeed = 320;
+        this.nextCharged = true;
+        this.setAura(0x9fffd8, 600);
+        break;
+      case 'rapid': {
+        const dir = { ...a };
+        for (let k = 0; k < 5; k++) this.scene.time.delayedCall(k * 100, () => {
+          if (this.dead) return;
+          const t = this.aimTarget(AIM_RANGE.ranged), c = this.player.center;
+          const d = t ? (() => { const dx = t.center.x - c.x, dy = t.center.y - c.y, l = Math.hypot(dx, dy) || 1; return { x: dx / l, y: dy / l }; })() : dir;
+          sound.sfx('arrow');
+          this.fire(0, d, 260, s.mult, 180, {});
+        });
+        this.attackReady = this.now + 500;
+        break;
+      }
+      case 'gobosei': {
+        const t = this.aimTarget(AIM_RANGE.ranged)?.center ?? { x: p.x + a.x * 50, y: p.y + a.y * 50 };
+        const g = this.scene.add.graphics().setDepth(4);
+        const pts = Array.from({ length: 5 }, (_, k) => ({ x: t.x + Math.cos(-Math.PI / 2 + k * 4 * Math.PI / 5) * 30, y: t.y + Math.sin(-Math.PI / 2 + k * 4 * Math.PI / 5) * 30 }));
+        g.lineStyle(1.5, 0xffe08a, 0.9).strokePoints([...pts, pts[0]]).strokeCircle(t.x, t.y, 32);
+        this.scene.time.delayedCall(500, () => {
+          g.destroy();
+          ring(this.scene, t.x, t.y, 34, 0xffe08a, 400);
+          this.scene.cameras.main.shake(100, 0.005);
+          sound.sfx('break');
+          this.hitCircle(t, 34, s.mult, { knock: 200 });
+        });
+        break;
+      }
+      case 'karyu':
+        this.fire(2, a, 220, s.mult, 200, { pierce: true, opts: { burn: true }, tint: 0xff6a3a, spin: true });
+        break;
+      case 'twin': this.summonFamiliar(10000, -1); this.summonFamiliar(10000, 1); break;
+      case 'guardian': {
+        const st = this.st;
+        this.shieldHits = 3; this.shieldUntil = this.now + 10000;
+        gameState.hp = Math.min(st.maxHp, gameState.hp + Math.round(st.maxHp * 0.2));
+        floatText(this.scene, this.player.x, this.player.y - 12, `+${Math.round(st.maxHp * 0.2)}`, '#7fe08a', 10);
+        this.setAura(0x9fd8ff, 10000);
+        break;
+      }
     }
     this.cb.onHudChange();
+  }
+
+  private lifestealNext = 0;
+
+  private setAura(color: number, ms: number): void {
+    this.aura?.destroy();
+    this.aura = this.scene.add.circle(this.player.x, this.player.y, 13, color, 0.12).setStrokeStyle(1.5, color, 0.8).setDepth(129000);
+    this.scene.tweens.add({ targets: this.aura, scale: 1.15, duration: 350, yoyo: true, repeat: -1 });
+    const a = this.aura;
+    this.scene.time.delayedCall(ms, () => { if (this.aura === a) { a.destroy(); this.aura = undefined; } });
+  }
+
+  private summonFamiliar(ms: number, offset: number): void {
+    const sprite = this.scene.add.sprite(this.player.x, this.player.y - 14, 'fx', 1).setDepth(131000).setTint(0xf8f8ff).setScale(0.8);
+    this.familiars.push({ sprite, until: this.now + ms, next: this.now + 300, offset });
+  }
+
+  /** 雷符：打最近的敵人，再跳到附近最多 2 隻 */
+  private chainLightning(mult: number): void {
+    const hit = new Set<Enemy>();
+    let from = this.player.center;
+    const g = this.scene.add.graphics().setDepth(132000);
+    for (let k = 0; k < 3; k++) {
+      const range = k === 0 ? AIM_RANGE.ranged : 70;
+      const cand = this.enemies.filter((e) => e.alive && !hit.has(e) && Math.hypot(e.center.x - from.x, e.center.y - from.y) <= range)
+        .sort((x, y) => Math.hypot(x.center.x - from.x, x.center.y - from.y) - Math.hypot(y.center.x - from.x, y.center.y - from.y))[0];
+      if (!cand) break;
+      const to = cand.center;
+      g.lineStyle(2, 0xfff27a, 1).beginPath().moveTo(from.x, from.y);
+      for (let j = 1; j < 4; j++) g.lineTo(from.x + (to.x - from.x) * j / 4 + Phaser.Math.Between(-4, 4), from.y + (to.y - from.y) * j / 4 + Phaser.Math.Between(-4, 4));
+      g.lineTo(to.x, to.y).strokePath();
+      hit.add(cand);
+      this.hitEnemy(cand, mult, from, { paralyze: k === 0 && Math.random() < 0.3 });
+      from = to;
+    }
+    if (!hit.size) floatText(this.scene, this.player.x, this.player.y - 12, '沒有目標', '#a39fb8', 8);
+    this.scene.tweens.add({ targets: g, alpha: 0, duration: 250, onComplete: () => g.destroy() });
   }
 
   private dodge(): void {
@@ -238,11 +413,17 @@ export class CombatSystem {
   private vitals() { const st = this.st; return { hp: gameState.hp, maxHp: st.maxHp, mp: gameState.mp, maxMp: st.maxMp, statuses: gameState.statuses }; }
 
   // ---------- 命中判定 ----------
-  private playerAtk(): number { return this.st.atk * atkModifier(gameState.statuses); }
+  private playerAtk(): number { return this.st.atk * atkModifier(gameState.statuses) * (this.now < this.kishinUntil ? 1.4 : 1); }
 
-  private hitEnemy(e: Enemy, mult: number, from: Vec2, opts: HitOptions): void {
-    const d = calcDamage(this.playerAtk(), mult, e.info.def, Math.random, this.st.crit / 100);
+  private hitEnemy(e: Enemy, mult: number, from: Vec2, opts: HitOptions & { antiElite?: boolean }): void {
+    const m = opts.antiElite && e.elite ? mult * 2 : mult;
+    const d = calcDamage(this.playerAtk(), m, e.info.def, Math.random, this.st.crit / 100);
     sound.sfx(d.crit ? 'crit' : 'hit');
+    const steal = Math.max(this.lifestealNext, this.now < this.kishinUntil ? 0.15 : 0);
+    if (steal > 0 && e.kind !== 'dummy') {
+      const heal = Math.max(1, Math.round(d.amount * steal));
+      gameState.hp = Math.min(this.st.maxHp, gameState.hp + heal);
+    }
     if (e.hit(d.amount, d.crit, from, opts)) this.onKill(e);
   }
 
@@ -282,7 +463,7 @@ export class CombatSystem {
     }
     for (const m of questKill(gameState, e.kind)) this.cb.toast(m);
     if (e.kind !== 'dummy' && Math.random() < GEAR_DROP) {
-      const g = giveRandomGear(gameState, Math.random, 1);
+      const g = giveRandomGear(gameState, Math.random, this.dropTier);
       this.cb.toast(g ? `獲得 ${gearLabel(g)}` : '背包滿了，裝備撿不起來');
     }
     if (money) {
@@ -295,6 +476,7 @@ export class CombatSystem {
 
   private onLevelUp(): void {
     sound.sfx('levelup');
+    if (canChangeJob(gameState)) this.scene.time.delayedCall(1500, () => this.cb.toast('可以轉職了！回神社找宮司爺爺'));
     this.syncStats();
     const p = this.player;
     ring(this.scene, p.x, p.y, 20, 0xffd84a, 500);
@@ -307,7 +489,7 @@ export class CombatSystem {
   refreshStats(): void { this.syncStats(); }
 
   private fire(frame: number, dir: Vec2, speed: number, mult: number, range: number,
-    o: { pierce?: boolean; opts?: HitOptions; tint?: number; spin?: boolean }): void {
+    o: { pierce?: boolean; opts?: HitOptions; tint?: number; spin?: boolean; antiElite?: boolean }): void {
     const p = this.player.center;
     const s = this.scene.physics.add.sprite(p.x + dir.x * 6, p.y - 3 + dir.y * 6, 'fx', frame).setDepth(130000);
     (s.body as Phaser.Physics.Arcade.Body).setSize(6, 6);
@@ -315,7 +497,7 @@ export class CombatSystem {
     if (o.tint) s.setTint(o.tint);
     if (o.spin) this.scene.tweens.add({ targets: s, angle: 360, duration: 400, repeat: -1 });
     this.scene.physics.add.collider(s, this.obstacles, () => this.removeProjectile(s));
-    this.projectiles.push({ sprite: s, mult, dieAt: this.now + (range / speed) * 1000, pierce: !!o.pierce, hit: new Set(), opts: o.opts ?? {} });
+    this.projectiles.push({ sprite: s, mult, dieAt: this.now + (range / speed) * 1000, pierce: !!o.pierce, hit: new Set(), opts: { ...(o.opts ?? {}), ...(o.antiElite ? { antiElite: true } : {}) } });
   }
 
   private removeProjectile(s: Phaser.Physics.Arcade.Sprite): void {
@@ -336,7 +518,14 @@ export class CombatSystem {
   /** 主角受傷（碰撞、毒絲、重擊共用）。回傳是否真的受傷。 */
   private damagePlayer(atk: number, from: Vec2, chance: { burn?: number; poison?: number } = {}, mult = 1): boolean {
     if (this.dead || this.isInvulnerable) return false;
-    const d = calcDamage(atk, mult, this.st.def);
+    if (this.shieldHits > 0 && this.now < this.shieldUntil) {
+      this.shieldHits--;
+      this.invulnUntil = this.now + 400;
+      floatText(this.scene, this.player.x, this.player.y - 10, `擋下（剩 ${this.shieldHits}）`, '#9fd8ff', 8);
+      if (!this.shieldHits && this.aura) { this.aura.destroy(); this.aura = undefined; }
+      return false;
+    }
+    const d = calcDamage(atk, mult * (this.now < this.dmgReduceUntil ? 0.5 : 1), this.st.def);
     sound.sfx('hurt');
     gameState.hp = Math.max(0, gameState.hp - d.amount);
     floatText(this.scene, this.player.x, this.player.y - 10, String(d.amount), '#ff6a6a', 10);
@@ -356,10 +545,11 @@ export class CombatSystem {
   enemyShoot(e: Enemy, dir: Vec2, speed = 105): void {
     const c = e.center;
     sound.sfx('web');
-    const sprite = this.scene.add.sprite(c.x, c.y, 'fx', 4).setDepth(130000);
+    const info = e.info as { poisonChance?: number; shot?: { frame: number; slow?: number } };
+    const sprite = this.scene.add.sprite(c.x, c.y, 'fx', info.shot?.frame ?? 4).setDepth(130000);
+    if (e.kind === 'kappaking') sprite.setTint(0x6ac8ff);
     this.scene.tweens.add({ targets: sprite, angle: 360, duration: 500, repeat: -1 });
-    const info = e.info as { poisonChance?: number };
-    this.shots.push({ sprite, dir, speed, atk: e.info.atk, poison: info.poisonChance ?? 0, dieAt: this.now + 2200 });
+    this.shots.push({ sprite, dir, speed, atk: e.info.atk, poison: info.poisonChance ?? 0, slow: info.shot?.slow ?? 0, dieAt: this.now + 2200 });
   }
 
   /** 提燈鬼的範圍重擊。 */
@@ -372,6 +562,15 @@ export class CombatSystem {
     if (this.now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); return; }
     const info = e.info as { burnChance?: number };
     this.damagePlayer(e.info.atk, a, { burn: info.burnChance }, a.mult ?? 1.6);
+  }
+
+  /** 河童王的大浪：一整排的範圍攻擊 */
+  enemyBand(e: Enemy, b: { y: number; h: number; mult: number }): void {
+    sound.sfx('slam');
+    const pc = this.player.center;
+    if (Math.abs(pc.y - b.y) > b.h / 2) return;
+    if (this.now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); return; }
+    this.damagePlayer(e.info.atk, { x: pc.x, y: b.y - 40 }, {}, b.mult);
   }
 
   /** 站在毒池裡：小傷害＋中毒 */
@@ -412,14 +611,14 @@ export class CombatSystem {
     else if (now < this.thrustUntil || now < this.dodgeUntil) this.player.drive(this.dashDir.x * this.dashSpeed, this.dashDir.y * this.dashSpeed);
     else if (now < this.knockUntil) this.player.drive(this.knock.x, this.knock.y);
     else if (hasStatus(gameState.statuses, 'paralyze') || now < this.lockUntil) this.player.move({ x: 0, y: 0 });
-    else this.player.move(move, now < this.slowUntil ? 0.35 : 1);
+    else this.player.move(move, (now < this.slowUntil ? 0.35 : 1) * (hasStatus(gameState.statuses, 'slow') ? 0.6 : 1));
 
     // 突刺途中命中
     if (now < this.thrustUntil) {
       for (const e of this.enemies) {
         if (!e.alive || this.thrustHit.has(e)) continue;
         const ec = e.center, pc = this.player.center;
-        if (Math.hypot(ec.x - pc.x, ec.y - pc.y) < 16) { this.thrustHit.add(e); this.hitEnemy(e, skills.thrust.mult, pc, { knock: 220 }); }
+        if (Math.hypot(ec.x - pc.x, ec.y - pc.y) < 16) { this.thrustHit.add(e); this.hitEnemy(e, this.thrustMult, pc, { knock: 220 }); }
       }
     }
 
@@ -448,7 +647,7 @@ export class CombatSystem {
       let gone = now > sh.dieAt || !!tile?.collides;
       if (!gone && Math.hypot(pc.x - sp.x, pc.y - sp.y) < 9) {
         if (now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); gone = true; }
-        else if (!this.isInvulnerable) { this.damagePlayer(sh.atk, { x: sp.x - sh.dir.x, y: sp.y - sh.dir.y }, { poison: sh.poison }, 0.9); gone = true; }
+        else if (!this.isInvulnerable) { if (this.damagePlayer(sh.atk, { x: sp.x - sh.dir.x, y: sp.y - sh.dir.y }, { poison: sh.poison }, 0.9) && sh.slow && Math.random() < sh.slow) { applyStatus(gameState.statuses, 'slow'); this.cb.toast('被泥巴黏住，腳步變慢了'); } gone = true; }
       }
       if (gone) { ring(this.scene, sp.x, sp.y, 4, 0xb04aff, 150); sp.destroy(); this.shots = this.shots.filter((x) => x !== sh); }
     }
@@ -462,6 +661,33 @@ export class CombatSystem {
           .setStrokeStyle(held >= 600 ? 2.5 : 1.5, held >= 600 ? 0xffd84a : 0x9fd8ff, 1).setScale(1.6 - 0.6 * hudState.charge);
       } else this.attack();
     } else hudState.charge = 0;
+
+    // 式神：跟在身邊，每 0.6 秒對附近的敵人丟符
+    for (const f of [...this.familiars]) {
+      if (now > f.until || this.dead) { ring(this.scene, f.sprite.x, f.sprite.y, 6, 0xffffff, 200); f.sprite.destroy(); this.familiars = this.familiars.filter((x) => x !== f); continue; }
+      const tx = this.player.x + f.offset * 14 + Math.sin(now / 300 + f.offset) * 4, ty = this.player.y - 14 + Math.cos(now / 250) * 3;
+      f.sprite.setPosition(f.sprite.x + (tx - f.sprite.x) * 0.2, f.sprite.y + (ty - f.sprite.y) * 0.2);
+      if (now >= f.next) {
+        f.next = now + 600;
+        const t = this.enemies.filter((e) => e.alive && e.kind !== 'dummy' && Math.hypot(e.center.x - f.sprite.x, e.center.y - f.sprite.y) < 120)
+          .sort((x, y) => Math.hypot(x.center.x - f.sprite.x, x.center.y - f.sprite.y) - Math.hypot(y.center.x - f.sprite.x, y.center.y - f.sprite.y))[0];
+        if (t) {
+          const dx = t.center.x - f.sprite.x, dy = t.center.y - f.sprite.y, l = Math.hypot(dx, dy) || 1;
+          const s = this.scene.physics.add.sprite(f.sprite.x, f.sprite.y, 'fx', 1).setDepth(130000).setScale(0.7);
+          s.setVelocity((dx / l) * 180, (dy / l) * 180);
+          this.projectiles.push({ sprite: s, mult: skills.shiki.mult, dieAt: now + 800, pierce: false, hit: new Set(), opts: {} });
+        }
+      }
+    }
+    // 捕獸夾
+    for (const t of [...this.traps]) {
+      const e = this.enemies.find((x) => x.alive && x.kind !== 'dummy' && Math.hypot(x.center.x - t.x, x.center.y - t.y) < 14);
+      if (e || now > t.until) {
+        if (e) { ring(this.scene, t.x, t.y, 10, 0xc8c8d0, 300); this.hitEnemy(e, skills.trap.mult, { x: t.x, y: t.y }, { paralyze: true, knock: 0 }); }
+        t.sprite.destroy(); this.traps = this.traps.filter((x) => x !== t);
+      }
+    }
+    this.aura?.setPosition(this.player.x, this.player.y);
 
     // 結界
     if (this.barrier) {

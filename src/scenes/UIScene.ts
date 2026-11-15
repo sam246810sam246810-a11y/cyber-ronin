@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { inputState, type Action } from '../systems/inputState';
 import { EV, type BannerInfo, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
-import { currentObjective, gameState, classStats } from '../systems/gameState';
+import { currentObjective, gameState, className } from '../systems/gameState';
 import { hudState } from '../systems/hudState';
 import { STATUS_NAME, type StatusKind } from '../systems/combat';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
@@ -150,7 +150,7 @@ export class UIScene extends Phaser.Scene {
   private drawBars(): void {
     const g = this.bars; g.clear();
     const w = 80, x = 14;
-    this.label.setText(`燈・${classStats(gameState.classId).name}　Lv.${gameState.level}`);
+    this.label.setText(`燈・${className(gameState)}　Lv.${gameState.level}`);
     const hp = Phaser.Math.Clamp(gameState.hp / hudState.maxHp, 0, 1), mp = Phaser.Math.Clamp(gameState.mp / hudState.maxMp, 0, 1);
     g.fillStyle(0x000000, 0.6).fillRect(x, 22, w, 6).fillRect(x, 33, w, 4);
     g.fillStyle(hp > 0.3 ? 0xd04848 : 0xff2a2a, 1).fillRect(x, 22, w * hp, 6);
@@ -227,7 +227,8 @@ export class UIScene extends Phaser.Scene {
     this.drawMinimap(_t);
     this.drawBossBar();
     this.dialogue.update(dt);
-    inputState.move = this.dialogue.isOpen ? { x: 0, y: 0 } : this.joystick.vector;
+    if (inputState.holdAfterWarp && !this.joystick.active) inputState.holdAfterWarp = false;
+    inputState.move = this.dialogue.isOpen || inputState.holdAfterWarp ? { x: 0, y: 0 } : this.joystick.vector;
     this.drawBars();
     hudState.skills.forEach((s, i) => {
       const b = this.buttons.skills[i];
