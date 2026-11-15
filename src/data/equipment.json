@@ -308,5 +308,89 @@
       "hp": 25,
       "mp": 10
     }
+  },
+  "amenomurakumo": {
+    "name": "天叢雲",
+    "slot": "weapon",
+    "class": "swordsman",
+    "tier": 4,
+    "price": 1300,
+    "stats": {
+      "atk": 16,
+      "crit": 4
+    }
+  },
+  "raijin_bow": {
+    "name": "雷神弓",
+    "slot": "weapon",
+    "class": "archer",
+    "tier": 4,
+    "price": 1300,
+    "stats": {
+      "atk": 16,
+      "spd": 5
+    }
+  },
+  "tengu_feather_fan": {
+    "name": "天狗羽扇",
+    "slot": "weapon",
+    "class": "onmyoji",
+    "tier": 4,
+    "price": 1300,
+    "stats": {
+      "atk": 15,
+      "mpRegen": 1.2
+    }
+  },
+  "tengu_mask": {
+    "name": "天狗面",
+    "slot": "head",
+    "tier": 4,
+    "price": 950,
+    "stats": {
+      "def": 7,
+      "hp": 25
+    }
+  },
+  "yamabushi_garb": {
+    "name": "修驗裝束",
+    "slot": "body",
+    "tier": 4,
+    "price": 1200,
+    "stats": {
+      "def": 12,
+      "hp": 30
+    }
+  },
+  "crow_gloves": {
+    "name": "鴉羽手甲",
+    "slot": "hands",
+    "tier": 4,
+    "price": 900,
+    "stats": {
+      "def": 6,
+      "atk": 3
+    }
+  },
+  "tengu_geta": {
+    "name": "天狗下駄",
+    "slot": "feet",
+    "tier": 4,
+    "price": 900,
+    "stats": {
+      "spd": 10,
+      "def": 3
+    }
+  },
+  "yata_mirror": {
+    "name": "八咫鏡",
+    "slot": "accessory",
+    "tier": 4,
+    "price": 1200,
+    "stats": {
+      "hp": 30,
+      "mp": 20,
+      "crit": 3
+    }
   }
 }

@@ -252,5 +252,113 @@
         "chance": 1
       }
     ]
+  },
+  "karasu": {
+    "name": "烏天狗",
+    "hp": 150,
+    "atk": 40,
+    "def": 14,
+    "speed": 40,
+    "exp": 70,
+    "money": [
+      12,
+      22
+    ],
+    "frame": 18,
+    "shot": {
+      "frame": 9
+    },
+    "drops": [
+      {
+        "item": "天狗的羽",
+        "chance": 0.5
+      }
+    ]
+  },
+  "yamawaro": {
+    "name": "山童",
+    "hp": 200,
+    "atk": 44,
+    "def": 16,
+    "speed": 120,
+    "exp": 80,
+    "money": [
+      14,
+      24
+    ],
+    "frame": 20,
+    "drops": [
+      {
+        "item": "玉鋼",
+        "chance": 0.3
+      }
+    ]
+  },
+  "kamaitachi": {
+    "name": "鎌鼬",
+    "hp": 110,
+    "atk": 38,
+    "def": 12,
+    "speed": 80,
+    "exp": 65,
+    "money": [
+      10,
+      20
+    ],
+    "frame": 22,
+    "drops": [
+      {
+        "item": "鎌鼬的爪",
+        "chance": 0.5
+      }
+    ]
+  },
+  "oogarasu": {
+    "name": "大鴉",
+    "hp": 800,
+    "atk": 52,
+    "def": 20,
+    "speed": 36,
+    "exp": 400,
+    "money": [
+      100,
+      150
+    ],
+    "frame": 18,
+    "elite": true,
+    "tint": 9075455,
+    "drops": [
+      {
+        "item": "天狗的羽",
+        "chance": 1
+      },
+      {
+        "item": "天狗的羽",
+        "chance": 1
+      }
+    ]
+  },
+  "daitengu": {
+    "name": "大天狗",
+    "hp": 3000,
+    "atk": 55,
+    "def": 20,
+    "speed": 40,
+    "exp": 1500,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 0,
+    "elite": true,
+    "shot": {
+      "frame": 9
+    },
+    "drops": [
+      {
+        "item": "天狗的羽",
+        "chance": 1
+      }
+    ]
   }
 }

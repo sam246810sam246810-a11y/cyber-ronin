@@ -15,5 +15,8 @@ import swamp from '../../assets/maps/swamp.json';
 import suijin1 from '../../assets/maps/suijin1.json';
 import suijin2 from '../../assets/maps/suijin2.json';
 import kappa_lair from '../../assets/maps/kappa_lair.json';
+import mountain from '../../assets/maps/mountain.json';
+import tengu_temple from '../../assets/maps/tengu_temple.json';
+import tengu_lair from '../../assets/maps/tengu_lair.json';
 
-export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3, lair, swamp, suijin1, suijin2, kappa_lair };
+export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3, lair, swamp, suijin1, suijin2, kappa_lair, mountain, tengu_temple, tengu_lair };

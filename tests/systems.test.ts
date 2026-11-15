@@ -22,7 +22,8 @@ describe('pickVariant', () => {
   it('每段對話資料在任何主線進度都有可用的台詞', () => {
     const stages = [[], ['talked_priest'], ['talked_priest', 'found_well'], ['talked_priest', 'found_well', 'prologue_done'],
       ['talked_priest', 'found_well', 'prologue_done', 'reached_boss_door'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done'],
-      ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'visited:swamp'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'kappa_defeated']];
+      ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'visited:swamp'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'kappa_defeated'],
+      ['chapter1_done', 'ch2_started', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'visited:mountain'], ['chapter1_done', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'tengu_defeated', 'chapter3_done']];
     for (const [id, variants] of Object.entries(dialogues)) {
       for (const s of stages) expect(pickVariant(variants as DialogueVariant[], new Set(s)), `${id} @ ${s}`).toBeDefined();
     }
@@ -126,6 +127,8 @@ describe('第二章目標', () => {
   it('章節結束後不會退回前一章的目標', () => {
     expect(currentObjective(new Set(['chapter1_done']))).toContain('第二章');
     expect(currentObjective(new Set(['chapter1_done', 'ch2_started', 'visited:swamp']))).toContain('拉桿');
-    expect(currentObjective(new Set(['chapter2_done']))).toContain('第二章完成');
+    expect(currentObjective(new Set(['chapter2_done']))).toContain('第三章');
+    expect(currentObjective(new Set(['chapter2_done', 'ch3_started', 'visited:mountain', 'trial:power']))).toContain('1/3');
+    expect(currentObjective(new Set(['chapter3_done']))).toContain('第三章完成');
   });
 });

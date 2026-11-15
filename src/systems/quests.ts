@@ -29,6 +29,9 @@ const BOUNTY_POOL: { kill: string; name: string; count: number; money: number; n
   { kill: 'kappa', name: '河童', count: 3, money: 150, needs: 'ch2_started' },
   { kill: 'dorotabou', name: '泥田坊', count: 2, money: 150, needs: 'ch2_started' },
   { kill: 'aokitsunebi', name: '青鬼火', count: 3, money: 120, needs: 'ch2_started' },
+  { kill: 'karasu', name: '烏天狗', count: 3, money: 260, needs: 'ch3_started' },
+  { kill: 'kamaitachi', name: '鎌鼬', count: 3, money: 240, needs: 'ch3_started' },
+  { kill: 'yamawaro', name: '山童', count: 2, money: 240, needs: 'ch3_started' },
 ];
 
 export function dateKey(d: Date): string {

@@ -4,6 +4,7 @@ import { Player } from '../entities/Player';
 import { Enemy, type EnemyKind } from '../entities/Enemy';
 import { Boss } from '../entities/Boss';
 import { KappaKing } from '../entities/KappaKing';
+import { Daitengu } from '../entities/Daitengu';
 import jobs from '../data/jobs.json';
 import { CombatSystem, type Breakable } from '../combat/CombatSystem';
 import { floatText, ring } from '../combat/fx';
@@ -25,17 +26,20 @@ import { hudState, type MapMarker } from '../systems/hudState';
 import { EV, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
 import type { Facing } from '../systems/movement';
 
-interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: 'ch1' | 'ch2' | boolean }
-type BossLike = Boss | KappaKing;
+type Chapter = 'ch1' | 'ch2' | 'ch3';
+interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: Chapter | boolean }
+type BossLike = Boss | KappaKing | Daitengu;
 /** 每個 Boss 的對話與旗標 */
-const BOSSES: Record<string, { name: string; intro: string; retry: string; seen: string; defeated: string; flags: string[]; outro: 'ch1' | 'ch2'; tip: string; reward: { money: number; item: string; tier: number } }> = {
+const BOSSES: Record<string, { name: string; intro: string; retry: string; seen: string; defeated: string; flags: string[]; outro: Chapter; tip: string; reward: { money: number; item: string; tier: number } }> = {
   tsuchigumo: { name: '土蜘蛛', intro: 'boss_intro', retry: 'boss_retry', seen: 'boss_seen', defeated: 'boss_defeated', flags: ['boss_defeated', 'chapter1_done'], outro: 'ch1',
     tip: '點亮四個角落的石燈籠，可以讓土蜘蛛動彈不得！', reward: { money: 500, item: '銀鑰匙', tier: 2 } },
   kappaking: { name: '河童王', intro: 'kappa_intro', retry: 'kappa_retry', seen: 'kappa_seen', defeated: 'kappa_defeated', flags: ['kappa_defeated', 'chapter2_done'], outro: 'ch2',
     tip: '打開四個角落的水閘，讓河童王頭上的皿乾掉！', reward: { money: 1200, item: '河童王的冠', tier: 3 } },
+  daitengu: { name: '大天狗', intro: 'tengu_intro', retry: 'tengu_retry', seen: 'tengu_seen', defeated: 'tengu_defeated', flags: ['tengu_defeated', 'chapter3_done'], outro: 'ch3',
+    tip: '敲響四個角落的神木之鈴，大天狗會從空中掉下來！', reward: { money: 2500, item: '大天狗的團扇', tier: 4 } },
 };
 
-type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice';
+type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice' | 'trial' | 'relay';
 interface Thing { id: string; kind: Kind; x: number; y: number; sprite: Phaser.GameObjects.Sprite; props: Record<string, unknown> }
 interface Block { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; dir: string; moving: boolean; pushMs: number }
 interface Plate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string }
@@ -45,9 +49,9 @@ interface Pool { x: number; y: number; until: number; next: number; gfx: Phaser.
 
 const FRAME = {
   chest: [25, 26], ironChest: [45, 46], goldChest: [47, 48], shimenawa: 27, well: 28, sign: 29,
-  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54, plank: 59, lever: [63, 64], waterGate: 65,
+  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54, plank: 59, lever: [63, 64], waterGate: 65, bell: 69, trial: [70, 71],
 };
-const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘' };
+const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘', trial: '挑戰', relay: '點燈' };
 const DIRS: Record<string, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const gateFlag = (group: string) => `gate:${group}`;
 
@@ -72,6 +76,12 @@ export class WorldScene extends Phaser.Scene {
   private pools: Pool[] = [];
   private boss?: BossLike;
   private cameo?: Phaser.GameObjects.Sprite;
+  private winds: { x: number; y: number; w: number; h: number; dx: number; dy: number; power: number }[] = [];
+  private tornadoes: { gfx: Phaser.GameObjects.Graphics; x: number; y: number; until: number; next: number }[] = [];
+  private trialEnemies: Enemy[] = [];
+  private trialWave = 0;
+  private speedUntil = 0;
+  private speedNextToast = 0;
   private mapKey = '';
   private areaName = '';
   private pickupObjs: Phaser.Types.Tilemaps.TiledObject[] = [];
@@ -93,6 +103,7 @@ export class WorldScene extends Phaser.Scene {
     this.things = []; this.enemies = []; this.blocks = []; this.plates = []; this.gates = []; this.cracks = [];
     this.webs = []; this.breakables = []; this.pools = []; this.boss = undefined;
     this.pickupObjs = []; this.icons = new Map(); this.cameo = undefined;
+    this.winds = []; this.tornadoes = []; this.trialEnemies = []; this.trialWave = 0; this.speedUntil = 0;
     hudState.boss = { visible: false, name: '', hp: 0, max: 1 };
     this.lanternNext = {};
     this.transitioning = false;
@@ -163,7 +174,7 @@ export class WorldScene extends Phaser.Scene {
     writeSave('auto', serialize(gameState, mapKey, spawnName, areaName));
 
     if (this.boss) this.time.delayedCall(600, () => this.bossIntro());
-    if (data.outro) this.time.delayedCall(600, () => this.chapterOutro(data.outro === 'ch2' ? 'ch2' : 'ch1'));
+    if (data.outro) this.time.delayedCall(600, () => this.chapterOutro(typeof data.outro === 'string' ? data.outro : 'ch1'));
     if (data.intro) this.time.delayedCall(700, () => this.say([
       ['燈', '……嗯，睡過頭了！'],
       ['燈', '爺爺好像留了字條在房間裡。先看看再出門吧。'],
@@ -221,6 +232,26 @@ export class WorldScene extends Phaser.Scene {
       case 'jizo': add('jizo', this.add.sprite(x, y, 'tilesheet', FRAME.jizo)); break;
       case 'lever': add('lever', this.add.sprite(x, y, 'tilesheet', FRAME.lever[gameState.flags.has(`lever:${o.name}`) ? 1 : 0])); break;
       case 'sluice': add('sluice', this.add.sprite(x, y, 'tilesheet', FRAME.lever[0])); break;
+      case 'trial': add('trial', this.add.sprite(x, y, 'tilesheet', FRAME.trial[gameState.flags.has(`trial:${props.trial}`) ? 1 : 0])); break;
+      case 'relay': add('relay', this.add.sprite(x, y, 'tilesheet', FRAME.lantern[0])); break;
+      case 'wind': {
+        const zone = { x, y, w: o.width ?? 16, h: o.height ?? 16, dx: Number(props.dx), dy: Number(props.dy), power: Number(props.power) };
+        this.winds.push(zone);
+        // 風的線條
+        for (let i = 0; i < Math.ceil((zone.w * zone.h) / 900); i++) {
+          const sx = x + Math.random() * zone.w, sy = y + Math.random() * zone.h;
+          const line = this.add.rectangle(sx, sy, zone.dx ? 8 : 1, zone.dy ? 8 : 1, 0xffffff, 0.35).setDepth(150000);
+          this.tweens.add({ targets: line, x: sx + zone.dx * 40, y: sy + zone.dy * 40, alpha: 0, duration: 900 + Math.random() * 500, repeat: -1, delay: Math.random() * 800 });
+        }
+        break;
+      }
+      case 'bell': {
+        const s2 = this.add.sprite(x, y, 'tilesheet', FRAME.bell).setDepth(y);
+        solid(s2);
+        const br: Breakable = { x, y, alive: true, onBreak: () => this.ringBell(br, s2) };
+        this.breakables.push(br);
+        break;
+      }
       case 'watergate': {
         const s = this.add.sprite(x, y, 'tilesheet', FRAME.waterGate).setDepth(1);
         solid(s, 16, 16, 0, 0);
@@ -228,7 +259,7 @@ export class WorldScene extends Phaser.Scene {
         break;
       }
       case 'cameo': {
-        if (gameState.flags.has('kappa_defeated')) break;
+        if (gameState.flags.has(String(props.hideFlag ?? 'kappa_defeated'))) break;
         const frame = (npcs as Record<string, { frame: number }>)[String(props.npc)]?.frame ?? 0;
         this.cameo = this.add.sprite(x, y, 'npcs', frame).setDepth(y);
         break;
@@ -245,7 +276,9 @@ export class WorldScene extends Phaser.Scene {
       case 'boss': {
         const kind = String(props.kind ?? 'tsuchigumo');
         if (gameState.flags.has(BOSSES[kind].defeated)) break;
-        const b = this.boss = kind === 'kappaking' ? new KappaKing(this, x, y, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
+        const b = this.boss = kind === 'kappaking' ? new KappaKing(this, x, y, gameState.difficulty) : kind === 'daitengu' ? new Daitengu(this, x, y, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
+        b.on('gale', (en: Enemy, g: { x: number; y: number; r: number }) => this.combat.enemyGale(en, g));
+        b.on('tornado', (_: Enemy, at: { x: number; y: number }) => this.addTornado(at.x, at.y));
         if (b instanceof KappaKing) b.arena = { x: 2 * T, y: 2 * T, w: 20 * T, h: 12 * T };
         b.on('band', (en: Enemy, band: { y: number; h: number; mult: number }) => this.combat.enemyBand(en, band));
         this.physics.add.collider(b, this.obstacles);
@@ -365,7 +398,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private openSluice(t: Thing): void {
-    if (t.sprite.frame.name === String(FRAME.lever[1])) { this.game.events.emit(EV.toast, '水閘還在關回去的途中……'); return; }
+    if (t.sprite.frame.name.toString() === String(FRAME.lever[1])) { this.game.events.emit(EV.toast, '水閘還在關回去的途中……'); return; }
     t.sprite.setFrame(FRAME.lever[1]);
     sound.sfx('gate');
     ring(this, t.x, t.y, 30, 0x5ab0e8, 500);
@@ -373,7 +406,86 @@ export class WorldScene extends Phaser.Scene {
     this.time.delayedCall(15000, () => { if (t.sprite.active) t.sprite.setFrame(FRAME.lever[0]); });
   }
 
+  // ---------- 天狗山的試煉 ----------
+  private startTrial(t: Thing): void {
+    const kind = String(t.props.trial);
+    if (gameState.flags.has(`trial:${kind}`)) { this.game.events.emit(EV.toast, '這個試煉已經通過了'); return; }
+    if (kind === 'wisdom') { this.runDialogue(String(t.props.dialogue), () => this.checkTrials()); return; }
+    if (kind === 'power') {
+      if (this.trialWave) { this.game.events.emit(EV.toast, '試煉進行中！打倒所有妖怪'); return; }
+      this.say([['天狗的聲音', '「力之試煉。打倒吾之眷屬，證明汝之力量！」']], () => this.spawnTrialWave(t, 1));
+      return;
+    }
+    if (kind === 'speed') {
+      if (this.time.now < this.speedUntil) return;
+      this.say([['天狗的聲音', '「速之試煉。25 息之內，點亮這片原野上的 4 座石燈籠！」']], () => {
+        for (const r of this.things.filter((x) => x.kind === 'relay')) r.sprite.setFrame(FRAME.lantern[0]);
+        this.speedUntil = this.time.now + 25000; this.speedNextToast = 20;
+        this.game.events.emit(EV.toast, '開始！剩 25 秒');
+      });
+    }
+  }
+
+  private spawnTrialWave(t: Thing, wave: number): void {
+    this.trialWave = wave;
+    const kinds: EnemyKind[] = wave === 1 ? ['karasu', 'kamaitachi', 'yamawaro'] : ['karasu', 'karasu', 'kamaitachi', 'yamawaro'];
+    sound.sfx('roar');
+    this.game.events.emit(EV.toast, `第 ${wave} 波！`);
+    kinds.forEach((k, i) => {
+      const a = (i / kinds.length) * Math.PI * 2, x = t.x + Math.cos(a) * 52, y = t.y + 40 + Math.sin(a) * 26;
+      ring(this, x, y, 12, 0xff5a3a, 400);
+      const e = new Enemy(this, x, y, k, gameState.difficulty);
+      this.physics.add.collider(e, this.obstacles);
+      this.physics.add.collider(e, this.solids);
+      e.on('shoot', (en: Enemy, dir: { x: number; y: number }) => this.combat.enemyShoot(en, dir));
+      e.on('killed', (en: Enemy) => this.onEnemyKilled(en));
+      this.enemies.push(e); this.trialEnemies.push(e);
+    });
+  }
+
+  private completeTrial(kind: string): void {
+    gameState.flags.add(`trial:${kind}`);
+    sound.sfx('levelup');
+    const stone = this.things.find((x) => x.kind === 'trial' && x.props.trial === kind);
+    if (stone) { stone.sprite.setFrame(FRAME.trial[1]); ring(this, stone.x, stone.y, 20, 0xffd84a, 600); }
+    this.game.events.emit(EV.toast, `${({ power: '力', wisdom: '智', speed: '速' } as Record<string, string>)[kind]}之試煉，通過！`);
+    this.checkTrials();
+  }
+
+  private checkTrials(): void {
+    if (gameState.flags.has('trial:wisdom')) this.things.filter((x) => x.kind === 'trial' && x.props.trial === 'wisdom').forEach((x) => x.sprite.setFrame(FRAME.trial[1]));
+    if (['power', 'wisdom', 'speed'].every((k) => gameState.flags.has(`trial:${k}`))) this.solveGroup('trials');
+    this.refreshHud(true);
+  }
+
+  private lightRelay(t: Thing): void {
+    if (this.time.now >= this.speedUntil) { this.game.events.emit(EV.toast, '先到速之試煉的石碑開始挑戰'); return; }
+    if (t.sprite.frame.name.toString() === String(FRAME.lantern[1])) return;
+    t.sprite.setFrame(FRAME.lantern[1]); sound.sfx('lantern'); ring(this, t.x, t.y - 4, 10, 0x7fd8ff, 300);
+    const relays = this.things.filter((x) => x.kind === 'relay'), lit = relays.filter((x) => x.sprite.frame.name.toString() === String(FRAME.lantern[1])).length;
+    if (lit >= relays.length) { this.speedUntil = 0; this.completeTrial('speed'); }
+    else this.game.events.emit(EV.toast, `${lit}/${relays.length}`);
+  }
+
+  private updateTrials(now: number): void {
+    if (this.speedUntil && now < this.speedUntil) {
+      const left = Math.ceil((this.speedUntil - now) / 1000);
+      if (left <= this.speedNextToast) { this.game.events.emit(EV.toast, `剩 ${left} 秒`); this.speedNextToast -= 5; }
+    } else if (this.speedUntil && now >= this.speedUntil) {
+      this.speedUntil = 0;
+      for (const r of this.things.filter((x) => x.kind === 'relay')) r.sprite.setFrame(FRAME.lantern[0]);
+      sound.sfx('wrong');
+      this.game.events.emit(EV.toast, '時間到了……燈籠全熄了。再挑戰一次吧');
+    }
+  }
+
   private onEnemyKilled(e: Enemy): void {
+    if (this.trialEnemies.includes(e) && this.trialEnemies.every((x) => !x.alive)) {
+      this.trialEnemies = [];
+      const stone = this.things.find((x) => x.kind === 'trial' && x.props.trial === 'power');
+      if (this.trialWave === 1 && stone) this.time.delayedCall(800, () => this.spawnTrialWave(stone, 2));
+      else { this.trialWave = 0; this.completeTrial('power'); }
+    }
     if (!e.guard) return;
     if (this.enemies.some((x) => x.alive && x.guard === e.guard)) return;
     const chest = this.things.find((t) => t.kind === 'chest' && t.props.guard === e.guard);
@@ -388,6 +500,7 @@ export class WorldScene extends Phaser.Scene {
   private restoreSolvedPuzzles(): void {
     for (const t of this.things) if (t.kind === 'chest' && this.isSealed(t) && !gameState.openedChests.has(t.id)) t.sprite.setTint(0xb08aff);
     for (const t of this.things) if (t.kind === 'lever' && gameState.flags.has(gateFlag(String(t.props.group)))) t.sprite.setFrame(FRAME.lever[1]);
+    for (const t of this.things) if (t.kind === 'relay' && gameState.flags.has('trial:speed')) t.sprite.setFrame(FRAME.lantern[1]);
     const groups = new Set([...this.gates.map((g) => g.group)]);
     for (const group of groups) {
       if (!gameState.flags.has(gateFlag(group))) continue;
@@ -488,7 +601,7 @@ export class WorldScene extends Phaser.Scene {
 
   private lightLantern(t: Thing): void {
     const group = String(t.props.group), order = Number(t.props.order);
-    if (gameState.flags.has(gateFlag(group)) || t.sprite.frame.name === String(FRAME.lantern[1])) { this.game.events.emit(EV.toast, `「${t.props.label}」的燈籠已經亮了`); return; }
+    if (gameState.flags.has(gateFlag(group)) || t.sprite.frame.name.toString() === String(FRAME.lantern[1])) { this.game.events.emit(EV.toast, `「${t.props.label}」的燈籠已經亮了`); return; }
     if (order === this.lanternNext[group]) {
       t.sprite.setFrame(FRAME.lantern[1]);
       sound.sfx('lantern');
@@ -572,7 +685,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   // ---------- Boss 戰 ----------
-  private get bossInfo() { return BOSSES[this.boss instanceof KappaKing ? 'kappaking' : 'tsuchigumo']; }
+  private get bossInfo() { return BOSSES[this.boss instanceof KappaKing ? 'kappaking' : this.boss instanceof Daitengu ? 'daitengu' : 'tsuchigumo']; }
 
   private bossIntro(): void {
     const info = this.bossInfo;
@@ -586,7 +699,7 @@ export class WorldScene extends Phaser.Scene {
 
   private summonSpiders(): void {
     if (!this.boss) return;
-    const kind = this.boss instanceof KappaKing ? 'kappa' : 'bonespider';
+    const kind = this.boss instanceof KappaKing ? 'kappa' : this.boss instanceof Daitengu ? 'karasu' : 'bonespider';
     for (const dx of [-48, 48]) {
       const x = Phaser.Math.Clamp(this.boss.x + dx, 3 * T, 21 * T), y = Phaser.Math.Clamp(this.boss.y + 16, 3 * T, 12 * T);
       ring(this, x, y, 14, 0xb04aff, 400);
@@ -596,6 +709,21 @@ export class WorldScene extends Phaser.Scene {
       e.on('shoot', (en: Enemy, dir: { x: number; y: number }) => this.combat.enemyShoot(en, dir));
       this.enemies.push(e);
     }
+  }
+
+  private addTornado(x: number, y: number): void {
+    const gfx = this.add.graphics().setDepth(140000);
+    this.tornadoes.push({ gfx, x, y, until: this.time.now + 5000, next: 0 });
+  }
+
+  /** 神木之鈴：敲響後大天狗掉下來 */
+  private ringBell(br: Breakable, sprite: Phaser.GameObjects.Sprite): void {
+    sound.sfx('lantern');
+    ring(this, br.x, br.y - 4, 30, 0xffd84a, 500);
+    this.tweens.add({ targets: sprite, angle: { from: -15, to: 15 }, duration: 120, yoyo: true, repeat: 3, onComplete: () => sprite.setAngle(0) });
+    if (this.boss?.alive && this.boss.started) { this.boss.stun(3500); this.game.events.emit(EV.toast, '鈴聲響徹山頂，大天狗掉下來了！'); }
+    sprite.setTint(0x8a8a9a);
+    this.time.delayedCall(12000, () => { if (sprite.active) { sprite.clearTint(); br.alive = true; } });
   }
 
   private addPool(x: number, y: number): void {
@@ -666,12 +794,12 @@ export class WorldScene extends Phaser.Scene {
     }));
   }
 
-  private chapterOutro(ch: 'ch1' | 'ch2'): void {
-    this.runDialogue(ch === 'ch2' ? 'chapter2_outro' : 'chapter1_outro', () => {
+  private chapterOutro(ch: Chapter): void {
+    this.runDialogue(`chapter${ch.slice(2)}_outro`, () => {
       const col = collectionReport(MAPS, gameState.openedChests, gameState.flags).percent;
       const m = Math.floor(gameState.playTime / 60);
       const path = gameState.bond >= gameState.anger ? '羈絆' : '怒火';
-      this.game.events.emit(EV.banner, { title: ch === 'ch2' ? '第二章　完' : '第一章　完', sub: `遊玩時間 ${m} 分・收集度 ${col}%・你走在「${path}」的路上`, duration: 6000 });
+      this.game.events.emit(EV.banner, { title: ({ ch1: '第一章　完', ch2: '第二章　完', ch3: '第三章　完' } as Record<Chapter, string>)[ch], sub: `遊玩時間 ${m} 分・收集度 ${col}%・你走在「${path}」的路上`, duration: 6000 });
       this.refreshHud(true);
     });
   }
@@ -714,6 +842,7 @@ export class WorldScene extends Phaser.Scene {
       if (t.kind === 'npc' || t.kind === 'board') mk.push({ ...tp(t.x, t.y), color: this.icons.get(t)?.text ? 0xffd84a : 0xffffff });
       if (t.kind === 'pickup') mk.push({ ...tp(t.x, t.y), color: 0xc7f0a0 });
       if (t.kind === 'lever' && !gameState.flags.has(`lever:${t.id}`)) mk.push({ ...tp(t.x, t.y), color: 0xff9a4a });
+      if (t.kind === 'trial' && !gameState.flags.has(`trial:${t.props.trial}`)) mk.push({ ...tp(t.x, t.y), color: 0xff9a4a });
       if (t.kind === 'well' || t.kind === 'bossdoor') mk.push({ ...tp(t.x, t.y), color: 0xff5ae0 });
     }
     for (const g of this.gates) if (!g.open) mk.push({ ...tp(g.sprite.x, g.sprite.y), color: 0x8a8aa0 });
@@ -768,6 +897,8 @@ export class WorldScene extends Phaser.Scene {
     if (t.kind === 'board') { this.game.events.emit(EV.board); return; }
     if (t.kind === 'lever') { this.pullLever(t); return; }
     if (t.kind === 'sluice') { this.openSluice(t); return; }
+    if (t.kind === 'trial') { this.startTrial(t); return; }
+    if (t.kind === 'relay') { this.lightRelay(t); return; }
     if (t.kind === 'npc' && t.props.npc === 'priest' && canChangeJob(gameState) && gameState.flags.has('ch2_started')) { this.runDialogue(`job_${gameState.classId}`); return; }
     if (t.kind === 'pickup') {
       gameState.flags.add(`pickup:${t.id}`);
@@ -864,6 +995,11 @@ export class WorldScene extends Phaser.Scene {
 
     const locked = inputState.locked || this.transitioning;
     this.combat.update(dt, locked ? { x: 0, y: 0 } : inputState.move);
+    if (!locked) {
+      const pc = this.player.center;
+      for (const w of this.winds) if (pc.x >= w.x && pc.x <= w.x + w.w && pc.y >= w.y && pc.y <= w.y + w.h) this.combat.windPush(w.dx * w.power, w.dy * w.power);
+      this.updateTrials(this.time.now);
+    }
     if (!locked) this.updatePushing(dt);
 
     const target = this.player.center;
@@ -871,13 +1007,24 @@ export class WorldScene extends Phaser.Scene {
       if (!e.alive) continue;
       if (locked) { e.setVelocity(0, 0); continue; }
       e.update(this.time.now, dt / 1000, target);
-      const ec = e.center, reach = e instanceof Boss || e instanceof KappaKing ? 18 : e.elite ? 14 : 11;
+      const ec = e.center, reach = e instanceof Boss || e instanceof KappaKing || e instanceof Daitengu ? 18 : e.elite ? 14 : 11;
       if (Math.abs(ec.x - target.x) < reach && Math.abs(ec.y - target.y) < reach - 1) this.combat.touchedBy(e);
     }
     this.playerGlow?.setPosition(this.player.x, this.player.y);
 
-    // 毒池
+    // 旋風：追著主角跑
     const now = this.time.now;
+    for (const tw of [...this.tornadoes]) {
+      if (now > tw.until || !this.boss?.alive) { tw.gfx.destroy(); this.tornadoes = this.tornadoes.filter((x) => x !== tw); continue; }
+      if (!locked) {
+        const dx = target.x - tw.x, dy = target.y - tw.y, d = Math.hypot(dx, dy) || 1;
+        tw.x += (dx / d) * 46 * (dt / 1000); tw.y += (dy / d) * 46 * (dt / 1000);
+        if (d < 14 && now >= tw.next) { tw.next = now + 700; this.combat.hazardHit(this.boss.info.atk, tw, 0.8); }
+      }
+      tw.gfx.clear().lineStyle(2, 0xd8e8ff, 0.8);
+      for (let i = 0; i < 4; i++) { const a = now / 120 + i * Math.PI / 2; tw.gfx.strokeEllipse(tw.x, tw.y - i * 3, 18 - i * 3, 6); tw.gfx.lineBetween(tw.x + Math.cos(a) * 8, tw.y - 6 + Math.sin(a) * 3, tw.x, tw.y - 12); }
+    }
+    // 毒池
     for (const p of [...this.pools]) {
       if (now > p.until) { p.gfx.destroy(); this.pools = this.pools.filter((x) => x !== p); continue; }
       if (!locked && now >= p.next && Math.hypot(target.x - p.x, target.y - p.y) < 20) { p.next = now + 600; this.combat.poolHit(this.boss?.info.atk ?? 10, p); }

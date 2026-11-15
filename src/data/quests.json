@@ -310,5 +310,92 @@
         "萬能符": 2
       }
     }
+  },
+  "santa_kaki": {
+    "type": "side",
+    "name": "山太的柿子",
+    "giver": "santa",
+    "requires": [
+      "visited:mountain"
+    ],
+    "desc": "山童的孩子山太肚子餓了。在天狗山找 3 顆柿子給他。",
+    "target": {
+      "pickup": "kaki",
+      "count": 3
+    },
+    "reward": {
+      "money": 300,
+      "exp": 400,
+      "gear": {
+        "base": "tengu_geta",
+        "rarity": 1
+      }
+    },
+    "offer": [
+      [
+        "山太",
+        "……人類。你身上有吃的嗎？"
+      ],
+      [
+        "山太",
+        "山上的柿子熟了，可是烏天狗老是搶……幫我摘 3 顆好不好？"
+      ]
+    ],
+    "remind": [
+      [
+        "山太",
+        "柿子長在山的各個角落，橘色的，很好找。"
+      ]
+    ],
+    "done": [
+      [
+        "山太",
+        "好甜！謝謝你，人類！"
+      ],
+      [
+        "山太",
+        "這雙下駄是天狗大人丟掉的舊鞋，穿上去跑很快喔！"
+      ]
+    ]
+  },
+  "hunt_karasu": {
+    "type": "hunt",
+    "name": "討伐：烏天狗",
+    "giver": "board",
+    "requires": [
+      "ch3_started"
+    ],
+    "desc": "烏天狗在山路上搶劫香客。打倒 5 隻烏天狗。",
+    "target": {
+      "kill": "karasu",
+      "count": 5
+    },
+    "reward": {
+      "money": 400,
+      "exp": 300,
+      "items": {
+        "大回復丸": 2
+      }
+    }
+  },
+  "collect_claw": {
+    "type": "collect",
+    "name": "收集：鎌鼬的爪",
+    "giver": "board",
+    "requires": [
+      "ch3_started"
+    ],
+    "desc": "鍛冶屋想試試新材料。帶 4 份鎌鼬的爪來。",
+    "target": {
+      "item": "鎌鼬的爪",
+      "count": 4
+    },
+    "reward": {
+      "money": 350,
+      "exp": 250,
+      "items": {
+        "萬能符": 2
+      }
+    }
   }
 }

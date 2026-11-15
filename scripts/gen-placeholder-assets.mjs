@@ -61,6 +61,8 @@ const TILES = [
   // 55– 第二章：河童沼澤、水神祠
   { name: 'mud' }, { name: 'reeds' }, { name: 'lily' }, { name: 'swamp_water', collides: true }, { name: 'plank' },
   { name: 'moss_wall', collides: true }, { name: 'moss_floor' }, { name: 'shallow' }, { name: 'lever_off' }, { name: 'lever_on' }, { name: 'water_gate' },
+  // 66– 第三章：天狗山
+  { name: 'cliff', collides: true }, { name: 'pine', collides: true }, { name: 'steps' }, { name: 'bell' }, { name: 'trial_stone' }, { name: 'trial_stone_done' },
 ];
 const COLS = 8;
 const ts = new Canvas(COLS * T, Math.ceil(TILES.length / COLS) * T);
@@ -373,6 +375,33 @@ const draw = {
     ts.rect(ox + 3, oy + 11, 10, 4, 0x5a5a66); ts.rect(ox + 4, oy + 10, 8, 1, 0x7a7a88);
     ts.rect(ox + 9, oy + 3, 2, 8, C.wood); ts.rect(ox + 8, oy + 2, 4, 2, 0x4fd84f);
   },
+  cliff(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x6a6258);
+    for (let y = 0; y < T; y += 5) { ts.rect(ox, oy + y, T, 1, 0x4e4840); ts.rect(ox + ((y * 3) % 11), oy + y + 1, 4, 3, 0x7e766a); }
+    ts.rect(ox, oy, T, 1, 0x8a8276);
+  },
+  pine(ox, oy) {
+    grassBase(ox, oy);
+    ts.rect(ox + 7, oy + 12, 2, 4, C.trunk);
+    ts.rect(ox + 6, oy + 1, 4, 3, 0x1f4a2e); ts.rect(ox + 4, oy + 4, 8, 4, 0x245634); ts.rect(ox + 2, oy + 8, 12, 4, 0x2a6238);
+    ts.px(ox + 7, oy + 2, 0x3a7a48); ts.rect(ox + 5, oy + 5, 2, 1, 0x3a7a48); ts.rect(ox + 4, oy + 9, 3, 1, 0x3a7a48);
+  },
+  steps(ox, oy) {
+    ts.rect(ox, oy, T, T, 0x9a9488);
+    for (let y = 0; y < T; y += 4) { ts.rect(ox, oy + y, T, 1, 0x6a6458); ts.rect(ox, oy + y + 1, T, 1, 0xb8b2a6); }
+  },
+  bell(ox, oy) {
+    ts.rect(ox + 2, oy, 12, 2, C.wood); ts.rect(ox + 2, oy, 2, 16, C.wood); ts.rect(ox + 12, oy, 2, 16, C.wood);
+    ts.rect(ox + 5, oy + 3, 6, 8, 0xb87333); ts.rect(ox + 4, oy + 10, 8, 2, 0xd89353); ts.rect(ox + 6, oy + 4, 2, 5, 0xe8b373); ts.rect(ox + 7, oy + 12, 2, 2, 0x8a5a2a);
+  },
+  trial_stone(ox, oy) {
+    ts.rect(ox + 3, oy + 2, 10, 13, 0x77776f); ts.rect(ox + 4, oy + 1, 8, 1, 0x9a9a92); ts.rect(ox + 2, oy + 14, 12, 2, 0x5e5e58);
+    ts.rect(ox + 6, oy + 4, 4, 1, 0x3a3a34); ts.rect(ox + 7, oy + 5, 2, 6, 0x3a3a34); ts.rect(ox + 5, oy + 8, 6, 1, 0x3a3a34);
+  },
+  trial_stone_done(ox, oy) {
+    ts.rect(ox + 3, oy + 2, 10, 13, 0x9a9a92); ts.rect(ox + 4, oy + 1, 8, 1, 0xb8b8ae); ts.rect(ox + 2, oy + 14, 12, 2, 0x77776f);
+    ts.rect(ox + 6, oy + 4, 4, 1, C.yellow); ts.rect(ox + 7, oy + 5, 2, 6, C.yellow); ts.rect(ox + 5, oy + 8, 6, 1, C.yellow);
+  },
   water_gate(ox, oy) {
     ts.rect(ox, oy, T, T, 0x1e4a5a);
     for (const [x, y] of [[1, 2], [8, 5], [3, 9], [10, 12]]) ts.rect(ox + x, oy + y, 4, 1, 0x4a8aa0);
@@ -426,6 +455,7 @@ const NPCS = [
   ['taro', { hair: 0x1a1a1a, skin: 0xf0c8a0, top: 0xe8823a, bottom: 0x5a5a8a, feet: 0x3a3a5a }],
   ['kawataro', 'kappa'],
   ['yashamaru', { hair: 0xe8e8f0, skin: 0xe0d0c8, top: 0x1a1a24, bottom: 0x2a2a3a, feet: 0x101018, lips: 0x8a2a4a }],
+  ['santa', { hair: 0x6a4a2a, skin: 0xc89a6a, top: 0x8a6a3a, bottom: 0x6a5a2a, feet: 0x4a3a1a }],
 ];
 const npc = new Canvas(2 * T, NPCS.length * T);
 function drawKappaKid(cv, ox, oy) {
@@ -460,7 +490,7 @@ NPCS.forEach(([, pal], r) => {
 
 // ---------- 怪物：每列一種，2 欄動畫 ----------
 // 順序要和 src/data/enemies.json 的 frame 對應：kitsunebi 0、karakasa 2、nogitsune 4、dummy 6
-const en = new Canvas(2 * T, 9 * T);
+const en = new Canvas(2 * T, 12 * T);
 function kitsunebi(ox, oy, f) {
   const B = 0x4fb8ff, L = 0xbfe8ff, W = 0xffffff, D = 0x1f6fbf;
   const s = f ? 1 : 0;
@@ -528,6 +558,33 @@ function suiko(ox, oy, f) {
   en.rect(ox + 1, oy + 1 + s, 2, 3, W); en.rect(ox + 13, oy + 1 + s, 2, 3, W); // 角
   en.rect(ox + 3, oy + 14, 3, 2, B); en.rect(ox + 10, oy + 14, 3, 2, B); en.rect(ox + 13, oy + 10, 3, 2, B);
 }
+function karasu(ox, oy, f) {
+  const K = 0x1a1a24, B = 0x2a2a3a, Y = 0xf2c94c, R = 0xc23b2f, W = 0xe8e8f0;
+  const s = f ? 1 : 0;
+  en.rect(ox + 1, oy + 5 - s, 4, 6, K); en.rect(ox + 11, oy + 5 - s, 4, 6, K); // 翅膀
+  en.rect(ox + 4, oy + 6, 8, 7, B); en.rect(ox + 5, oy + 7, 6, 5, R); // 修驗服
+  en.rect(ox + 5, oy + 1 + s, 6, 5, K); en.rect(ox + 6, oy + 4 + s, 4, 2, Y); en.px(ox + 6, oy + 3 + s, W); en.px(ox + 9, oy + 3 + s, W);
+  en.rect(ox + 6, oy, 4, 1, R); // 頭巾
+  en.rect(ox + 5, oy + 13, 2, 3, K); en.rect(ox + 9, oy + 13, 2, 3, K);
+}
+function yamawaro(ox, oy, f) {
+  const H = 0x8a6a3a, S = 0xc89a6a, D = 0x5a4a2a;
+  const s = f ? 1 : 0;
+  en.rect(ox + 3, oy + 2 + s, 10, 12, H); en.rect(ox + 4, oy + 1 + s, 8, 1, H);
+  en.rect(ox + 5, oy + 4 + s, 6, 5, S); en.rect(ox + 7, oy + 5 + s, 2, 2, 0x1a1a1a); // 一隻眼
+  en.rect(ox + 6, oy + 8 + s, 4, 1, D);
+  en.rect(ox + 1, oy + 7, 2, 5, H); en.rect(ox + 13, oy + 7 - s, 2, 5, H); en.rect(ox + 12, oy + 4 - s, 3, 3, 0x9a9a92); // 拿石頭
+  en.rect(ox + 4, oy + 14, 3, 2, D); en.rect(ox + 9, oy + 14, 3, 2, D);
+}
+function kamaitachi(ox, oy, f) {
+  const W = 0xe8e0d0, G = 0xb8b0a0, S = 0xd8d8e8;
+  const s = f ? 1 : 0;
+  en.rect(ox + 2, oy + 7, 10, 4, W); en.rect(ox + 10, oy + 5, 4, 4, W); en.px(ox + 12, oy + 6, 0xc23b2f); en.rect(ox + 13, oy + 4, 1, 2, W);
+  en.rect(ox, oy + 6 + s, 3, 2, G); // 尾巴
+  en.rect(ox + 3, oy + 11, 2, 2 - s, G); en.rect(ox + 9, oy + 11, 2, 1 + s, G);
+  en.rect(ox + 4, oy + 3, 1, 4, S); en.rect(ox + 5, oy + 2, 3, 1, S); // 鐮刀
+  en.rect(ox + 11, oy + 10, 4, 1, S); en.rect(ox + 14, oy + 9, 1, 2, S);
+}
 function chochin(ox, oy, f) {
   const P = 0xf2e0b0, L = 0xe8823a, R = 0xc23b2f, K = 0x2a1e1e;
   const s = f ? 1 : 0;
@@ -541,6 +598,7 @@ for (let f = 0; f < 2; f++) {
   kitsunebi(f * T, 0, f); karakasa(f * T, T, f); nogitsune(f * T, 2 * T, f); dummy(f * T, 3 * T);
   bonespider(f * T, 4 * T, f); chochin(f * T, 5 * T, f);
   kappa(f * T, 6 * T, f); dorotabou(f * T, 7 * T, f); suiko(f * T, 8 * T, f);
+  karasu(f * T, 9 * T, f); yamawaro(f * T, 10 * T, f); kamaitachi(f * T, 11 * T, f);
 }
 
 // ---------- 土蜘蛛（32×32，4 格：待機 0、待機 1、舉腳 2、發光 3）----------
@@ -587,8 +645,26 @@ function drawKappaKing(ox, f) {
 }
 for (let f = 0; f < 4; f++) drawKappaKing(f * BS, f);
 
+// ---------- 大天狗（32×32，4 格）----------
+const dt = new Canvas(4 * BS, BS);
+function drawDaitengu(ox, f) {
+  const R = f === 3 ? 0xff5a3a : 0xc23b2f, RD = 0x8a2a22, W = 0xe8e8f0, K = 0x1a1a24, B = 0x2a2a3a, Y = 0xf2c94c;
+  const bob = f === 1 ? 1 : 0, wing = f === 2 ? -4 : 0;
+  dt.rect(ox + 0, 8 + wing, 8, 14, K); dt.rect(ox + 24, 8 + wing, 8, 14, K); // 黑色大翅膀
+  dt.rect(ox + 1, 10 + wing, 6, 1, B); dt.rect(ox + 25, 10 + wing, 6, 1, B); dt.rect(ox + 1, 14 + wing, 6, 1, B); dt.rect(ox + 25, 14 + wing, 6, 1, B);
+  dt.rect(ox + 8, 13 + bob, 16, 15, W); dt.rect(ox + 10, 15 + bob, 12, 3, Y); dt.rect(ox + 15, 13 + bob, 2, 15, 0xb8b8c8); // 修驗服
+  dt.rect(ox + 10, 3 + bob, 12, 11, R); dt.rect(ox + 11, 2 + bob, 10, 1, R); // 紅臉
+  dt.rect(ox + 15, 6 + bob, 3, 7, RD); dt.rect(ox + 16, 12 + bob, 3, 2, RD); // 長鼻子
+  dt.rect(ox + 11, 6 + bob, 3, 1, W); dt.rect(ox + 19, 6 + bob, 3, 1, W); dt.px(ox + 12, 6 + bob, K); dt.px(ox + 20, 6 + bob, K);
+  dt.rect(ox + 10, 1 + bob, 12, 2, W); // 白眉白髮
+  dt.rect(ox + 13, 0 + bob, 6, 2, K); // 頭巾
+  dt.rect(ox + 26, 18, 4, 10, 0x8a6a42); dt.rect(ox + 25, 16, 6, 3, 0x3a7a3a); // 羽扇
+  dt.rect(ox + 10, 28, 4, 4, K); dt.rect(ox + 18, 28, 4, 4, K);
+}
+for (let f = 0; f < 4; f++) drawDaitengu(f * BS, f);
+
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
-const fx = new Canvas(9 * T, T);
+const fx = new Canvas(11 * T, T);
 fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
 fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
 fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
@@ -600,6 +676,10 @@ fx.rect(5 * T + 4, 8, 1, 3, 0x2a1a10); fx.rect(5 * T + 11, 8, 1, 3, 0x2a1a10); f
 fx.rect(6 * T + 5, 4, 6, 9, 0xc23b2f); fx.rect(6 * T + 6, 5, 4, 7, 0xe04848); fx.rect(6 * T + 7, 2, 2, 3, C.yellow); fx.rect(6 * T + 6, 7, 4, 2, C.yellow);
 fx.rect(7 * T + 5, 5, 6, 6, 0x6a5a3a); fx.rect(7 * T + 4, 6, 8, 4, 0x6a5a3a); fx.rect(7 * T + 6, 6, 3, 2, 0x8a7a52);
 fx.rect(8 * T + 3, 6, 10, 5, 0xdfe8ef); fx.rect(8 * T + 4, 5, 8, 1, 0xdfe8ef); fx.rect(8 * T + 5, 7, 6, 2, 0x9ad0e8);
+// 9：羽毛（烏天狗、大天狗的投射物）
+fx.rect(9 * T + 3, 7, 10, 2, 0x1a1a24); fx.rect(9 * T + 5, 6, 6, 1, 0x2a2a3a); fx.rect(9 * T + 5, 9, 6, 1, 0x2a2a3a); fx.px(9 * T + 13, 7, 0xe8e8f0);
+// 10：柿子（任務物品）
+fx.rect(10 * T + 4, 5, 8, 8, 0xe8823a); fx.rect(10 * T + 5, 4, 6, 10, 0xe8823a); fx.rect(10 * T + 6, 3, 4, 2, 0x3a6a2a); fx.px(10 * T + 6, 6, 0xffb06a);
 fx.rect(4 * T + 5, 5, 6, 6, 0xb04aff); fx.rect(4 * T + 4, 6, 8, 4, 0xb04aff); fx.rect(4 * T + 6, 6, 4, 4, 0xe8d8ff); fx.px(4 * T + 3, 8, 0xe8d8ff); fx.px(4 * T + 12, 8, 0xe8d8ff);
 
 // ---------- 地圖工具 ----------
@@ -737,6 +817,11 @@ const maps = {};
   exit(m, tileRect(18, H - 1, 3, 1), 'swamp', 'north', 'down');
   spawn(m, 'south', 19, H - 3);
   for (let x = 18; x <= 20; x++) obj(m, 'blocker', `rope_s_${x}`, tilePoint(x, H - 2), { flag: 'ch2_started', dialogue: 'blocker_swamp' });
+  // 西邊：往天狗山（第三章）
+  m.fill('obst', 0, 15, 1, 3, 0); m.fill('ground', 0, 15, 1, 3, gid.path);
+  exit(m, tileRect(0, 15, 1, 3), 'mountain', 'south', 'right');
+  spawn(m, 'west', 2, 16);
+  for (let y = 15; y <= 17; y++) obj(m, 'blocker', `rope_w_${y}`, tilePoint(1, y), { flag: 'ch3_started', dialogue: 'blocker_mountain' });
   obj(m, 'jizo', 'village_jizo', tilePoint(23, 12)); spawn(m, 'jizo', 23, 13);
   chest(m, 'village_chest', 36, 3, { money: 30, gearTier: 1 });
 
@@ -1074,10 +1159,96 @@ const shallow = (m, x, y, w, h) => m.fill('ground', x, y, w, h, gid.shallow);
   for (let y = 4; y < 12; y += 3) for (let x = 5; x < 20; x += 5) m.set('ground', x, y, gid.moss_floor);
   spawn(m, 'entry', 12, 12);
   obj(m, 'boss', 'kappa_king', tilePoint(12, 5), { kind: 'kappaking' });
-  obj(m, 'cameo', 'yashamaru', tilePoint(12, 3), { npc: 'yashamaru' });
+  obj(m, 'cameo', 'yashamaru', tilePoint(12, 3), { npc: 'yashamaru', hideFlag: 'kappa_defeated' });
   for (const [x, y] of [[3, 3], [20, 3], [3, 12], [20, 12]]) obj(m, 'sluice', `sluice_${x}_${y}`, tilePoint(x, y));
   m.torch(6, 1); m.torch(17, 1); m.torch(1, 8); m.torch(22, 8);
   maps.kappa_lair = toTiled(m, { displayName: '河童王的水殿', dark: true, boss: true, tier: 3 });
+}
+
+
+// ================= 第三章 =================
+// 天狗山（44×32）：三個試煉、山風
+{
+  const W = 44, H = 32;
+  const m = newMap(W, H, 'grass');
+  seed = 333;
+  m.fill('obst', 0, 0, W, H, gid.cliff);
+  const carve = (x, y, w, h, g = 'grass') => { m.fill('obst', x, y, w, h, 0); m.fill('ground', x, y, w, h, gid[g]); };
+  carve(1, 26, 10, 4);                 // 登山口
+  m.fill('obst', 0, 27, 1, 2, 0); m.fill('ground', 0, 27, 1, 2, gid.path);
+  exit(m, tileRect(0, 27, 1, 2), 'village', 'west', 'left'); spawn(m, 'south', 2, 27);
+  carve(8, 18, 4, 9); m.fill('ground', 9, 18, 2, 9, gid.steps);   // 往上的石階
+  carve(8, 13, 3, 6); m.fill('ground', 9, 13, 1, 6, gid.steps);
+  carve(4, 4, 12, 9);                  // 力之試煉的平台
+  carve(12, 20, 16, 3);                // 山風步道（往西吹）
+  carve(22, 22, 14, 8);                // 速之試煉的原野
+  carve(30, 8, 4, 14); m.fill('ground', 31, 8, 2, 14, gid.steps);  // 往北的山道（往南吹）
+  carve(26, 3, 14, 6);                 // 智之試煉的崖邊
+  carve(24, 3, 2, 1); carve(18, 1, 6, 3);   // 山頂
+  carve(36, 26, 4, 1); carve(40, 25, 3, 4); // 祕密的小平台
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!m.get('obst', x, y) && m.get('ground', x, y) === gid.grass && rnd() < 0.1) m.set('ground', x, y, gid.grass_flower);
+  for (const [x, y] of [[5, 11], [15, 5], [13, 12], [25, 28], [35, 23], [28, 7], [39, 3], [2, 29], [10, 28]]) m.set('obst', x, y, gid.pine);
+  gateAt(m, 'summit_gate', 24, 3, 'trials');
+  m.set('ground', 20, 1, gid.stairs_up); exit(m, tileRect(20, 1), 'tengu_temple', 'up', 'down'); spawn(m, 'summit', 20, 2);
+  obj(m, 'wind', 'wind_ledge', tileRect(14, 20, 12, 3), { dx: -1, dy: 0, power: 55 });
+  obj(m, 'wind', 'wind_path', tileRect(30, 10, 4, 9), { dx: 0, dy: 1, power: 60 });
+  obj(m, 'trial', 'trial_power', tilePoint(10, 5), { trial: 'power', group: 'trials' });
+  obj(m, 'trial', 'trial_wisdom', tilePoint(36, 4), { trial: 'wisdom', dialogue: 'trial_wisdom', group: 'trials' });
+  obj(m, 'trial', 'trial_speed', tilePoint(24, 24), { trial: 'speed', group: 'trials' });
+  for (const [x, y, i] of [[34, 23, 1], [34, 28, 2], [23, 28, 3], [29, 25, 4]]) obj(m, 'relay', `relay_${i}`, tilePoint(x, y));
+  obj(m, 'jizo', 'mountain_jizo', tilePoint(6, 27), { spawn: 'jizo' }); spawn(m, 'jizo', 6, 28);
+  sign(m, 'mountain_sign', 4, 27, 'sign_mountain');
+  npcAt(m, 'santa', 10, 24);
+  obj(m, 'secret', 'mountain_ledge', tileRect(40, 25, 3, 4));
+  chest(m, 'mt_chest_1', 5, 5, { item: '大回復丸', count: 2, money: 200 });
+  chest(m, 'mt_chest_2', 38, 7, { gearTier: 4, money: 150 });
+  chest(m, 'mt_chest_3', 35, 29, { item: '萬能符', count: 2, gearTier: 4 });
+  chest(m, 'mt_chest_secret', 41, 26, { gearTier: 4, minRarity: 2, money: 300 });
+  for (const [x, y, i] of [[14, 7, 1], [32, 13, 2], [27, 21, 3]]) obj(m, 'pickup', `kaki_${i}`, tilePoint(x, y), { group: 'kaki', frame: 10, label: '柿子' });
+  const es = [['karasu', 12, 9], ['karasu', 28, 25], ['karasu', 33, 5], ['yamawaro', 9, 20], ['yamawaro', 31, 16], ['yamawaro', 26, 27], ['kamaitachi', 6, 10], ['kamaitachi', 20, 21], ['kamaitachi', 32, 24]];
+  es.forEach(([k, x, y], i) => obj(m, 'enemy', `${k}_${i}`, tilePoint(x, y), { kind: k }));
+  maps.mountain = toTiled(m, { displayName: '天狗山', tier: 4 });
+}
+
+// 天狗寺（30×20）
+{
+  const m = newMap(30, 20, 'wood_floor');
+  m.fill('obst', 0, 0, 30, 20, gid.inner_wall);
+  m.carve = (x, y, w, h) => m.fill('obst', x, y, w, h, 0);
+  m.torch = (x, y) => { obj(m, 'light', `light_${x}_${y}`, tilePoint(x, y + 1)); };
+  m.carve(1, 1, 6, 6); m.carve(7, 3, 4, 1); m.carve(11, 1, 10, 10); m.carve(22, 1, 7, 10); m.carve(22, 12, 7, 5);
+  m.carve(15, 11, 1, 1); m.carve(11, 12, 9, 6); m.carve(1, 8, 4, 3);
+  m.fill('ground', 11, 4, 10, 4, gid.tatami);
+  gateAt(m, 't_gate_a', 21, 5, 'ta'); gateAt(m, 't_gate_b', 25, 11, 'tb'); cracked(m, 't_crack', 3, 7);
+  stairs(m, 2, 2, true, 'mountain', 'summit', 'down'); spawn(m, 'up', 2, 3);
+  obj(m, 'jizo', 't_jizo_entry', tilePoint(5, 2), { spawn: 'jizo_entry' }); spawn(m, 'jizo_entry', 5, 3);
+  obj(m, 'jizo', 't_jizo', tilePoint(23, 13), { spawn: 'jizo' }); spawn(m, 'jizo', 23, 14);
+  lever(m, 't_lever', 12, 9, 'ta');
+  block(m, 't_block', 24, 4, 'tb', 'down'); plate(m, 't_plate', 24, 7, 'tb');
+  sign(m, 't_sign', 13, 2, 'sign_temple');
+  m.set('obst', 25, 17, 0); obj(m, 'bossdoor', 't_tengu_door', tilePoint(25, 17), { dialogue: 'tengu_door' });
+  chest(m, 't_chest', 19, 2, { item: '大回復丸', count: 2, money: 200 });
+  chest(m, 't_chest_b', 27, 2, { gearTier: 4, minRarity: 1 });
+  chest(m, 't_secret_chest', 2, 9, { gearTier: 4, minRarity: 2, money: 250 });
+  chest(m, 't_guard_chest', 18, 16, { guard: 't_elite', gearTier: 4, minRarity: 3, money: 400 });
+  enemy(m, 'oogarasu', 14, 15, { guard: 't_elite' }); enemy(m, 'kamaitachi', 12, 13);
+  enemy(m, 'karasu', 14, 3); enemy(m, 'yamawaro', 18, 8); enemy(m, 'kamaitachi', 16, 6); enemy(m, 'karasu', 27, 9);
+  m.torch(3, 0); m.torch(15, 0); m.torch(25, 0); m.torch(13, 11); m.torch(18, 11);
+  maps.tengu_temple = toTiled(m, { displayName: '天狗寺', tier: 4 });
+}
+
+// 大天狗的山頂（Boss）
+{
+  const W = 24, H = 16;
+  const m = newMap(W, H, 'stone_floor');
+  m.fill('obst', 0, 0, W, H, gid.cliff);
+  m.fill('obst', 2, 2, 20, 12, 0);
+  for (const [x, y] of [[2, 2], [21, 2], [2, 13], [21, 13], [7, 7], [16, 8]]) m.set('ground', x, y, gid.grass);
+  spawn(m, 'entry', 12, 12);
+  obj(m, 'boss', 'daitengu', tilePoint(12, 5), { kind: 'daitengu' });
+  obj(m, 'cameo', 'yashamaru2', tilePoint(12, 3), { npc: 'yashamaru', hideFlag: 'tengu_defeated' });
+  for (const [x, y] of [[3, 3], [20, 3], [3, 12], [20, 12]]) obj(m, 'bell', `bell_${x}_${y}`, tilePoint(x, y));
+  maps.tengu_lair = toTiled(m, { displayName: '大天狗的山頂', boss: true, tier: 4 });
 }
 
 mkdirSync('assets/tiles', { recursive: true }); mkdirSync('assets/sprites', { recursive: true }); mkdirSync('assets/maps', { recursive: true });
@@ -1087,6 +1258,7 @@ npc.save('assets/sprites/npcs.png');
 en.save('assets/sprites/enemies.png');
 boss.save('assets/sprites/boss.png');
 kk.save('assets/sprites/kappaking.png');
+dt.save('assets/sprites/daitengu.png');
 fx.save('assets/sprites/fx.png');
 for (const [k, v] of Object.entries(maps)) writeFileSync(`assets/maps/${k}.json`, JSON.stringify(v));
 writeFileSync('src/data/npcs.json', JSON.stringify(Object.fromEntries(NPCS.map(([id], i) => [id, { frame: i * 2 }])), null, 2) + '\n');

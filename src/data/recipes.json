@@ -85,5 +85,29 @@
       "河童的皿碎片": 4,
       "泥塊": 3
     }
+  },
+  "class_weapon4": {
+    "name": "神器（依職業）",
+    "out": {
+      "swordsman": "amenomurakumo",
+      "archer": "raijin_bow",
+      "onmyoji": "tengu_feather_fan"
+    },
+    "rarity": 2,
+    "money": 1200,
+    "mats": {
+      "玉鋼": 6,
+      "天狗的羽": 4
+    }
+  },
+  "yamabushi_garb": {
+    "name": "修驗裝束",
+    "out": "yamabushi_garb",
+    "rarity": 2,
+    "money": 800,
+    "mats": {
+      "天狗的羽": 5,
+      "鎌鼬的爪": 3
+    }
   }
 }

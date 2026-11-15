@@ -10,6 +10,7 @@ import enemiesUrl from '../../assets/sprites/enemies.png';
 import fxUrl from '../../assets/sprites/fx.png';
 import bossUrl from '../../assets/sprites/boss.png';
 import kappaKingUrl from '../../assets/sprites/kappaking.png';
+import daitenguUrl from '../../assets/sprites/daitengu.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super(SCENES.boot); }
@@ -30,6 +31,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('fx', fxUrl, frame);
     this.load.spritesheet('boss', bossUrl, { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet('kappaking', kappaKingUrl, { frameWidth: 32, frameHeight: 32 });
+    this.load.spritesheet('daitengu', daitenguUrl, { frameWidth: 32, frameHeight: 32 });
     for (const [key, data] of Object.entries(MAPS)) this.load.tilemapTiledJSON(key, data);
   }
 

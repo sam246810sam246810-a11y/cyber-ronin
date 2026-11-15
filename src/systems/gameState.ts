@@ -191,7 +191,18 @@ export function className(s: GameState): string {
 /** 目前的主線目標（顯示在畫面上方）。 */
 export function currentObjective(flags: ReadonlySet<string>): string {
   // 先看章節：已經結束的章節不再回頭看裡面的旗標
-  if (flags.has('chapter2_done')) return '第二章完成！感謝遊玩（第三章製作中）';
+  if (flags.has('chapter3_done')) return '第三章完成！感謝遊玩（第四章製作中）';
+  if (flags.has('chapter2_done')) {
+    if (!flags.has('ch3_started')) return '第三章：到神社找宮司爺爺';
+    if (!flags.has('visited:mountain')) return '從狐火村西邊前往天狗山';
+    if (!flags.has('gate:trials')) {
+      const t = ['power', 'wisdom', 'speed'].filter((k) => flags.has(`trial:${k}`)).length;
+      return `天狗山：通過三個試煉（${t}/3）`;
+    }
+    if (!flags.has('visited:tengu_temple')) return '登上山頂，進入天狗寺';
+    if (!flags.has('reached_tengu_door')) return '天狗寺：找到大天狗';
+    return '通過大天狗的考驗';
+  }
   if (flags.has('chapter1_done')) {
     if (!flags.has('ch2_started')) return '第二章：到神社找宮司爺爺';
     if (!flags.has('visited:swamp')) return '從狐火村南邊前往河童沼澤';

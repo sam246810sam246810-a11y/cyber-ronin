@@ -11,6 +11,7 @@ type Behaviour = 'chase' | 'hop' | 'dash' | 'shooter' | 'slam' | 'none';
 const BEHAVIOUR: Record<string, Behaviour> = {
   kitsunebi: 'chase', aokitsunebi: 'chase', karakasa: 'hop', nogitsune: 'dash', kappa: 'dash',
   bonespider: 'shooter', dorotabou: 'shooter', chochin: 'slam', suiko: 'slam', dummy: 'none',
+  karasu: 'shooter', yamawaro: 'hop', kamaitachi: 'dash', oogarasu: 'slam',
 };
 
 const SIGHT = 100;   // 進入視野開始追擊
@@ -97,7 +98,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    const dashTele = this.kind === 'kappa' ? 500 : 600, dashSpeed = this.kind === 'kappa' ? 230 : 190;
+    const dashTele = ({ kappa: 500, kamaitachi: 380 } as Record<string, number>)[this.kind] ?? 600;
+    const dashSpeed = ({ kappa: 230, kamaitachi: 280 } as Record<string, number>)[this.kind] ?? 190;
     switch (this.behaviour) {
       case 'chase': {
         if (dist < SIGHT) this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
@@ -159,7 +161,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
           const k = 1 - (this.stateUntil - time) / 750;
           this.warn?.setPosition(this.center.x, this.center.y).setFillStyle(0xff3a3a, 0.15 + 0.3 * k);
           if (time >= this.stateUntil) {
-            this.emit('aoe', this, { x: this.center.x, y: this.center.y, r: this.kind === 'suiko' ? 36 : 30 });
+            this.emit('aoe', this, { x: this.center.x, y: this.center.y, r: this.kind === 'chochin' ? 30 : 36 });
             this.warn?.destroy(); this.warn = undefined;
             this.ai = 'rest'; this.stateUntil = time + 700; this.dashReadyAt = time + 2200;
           }
@@ -169,7 +171,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
         } else if (dist < SIGHT + 20) {
           if (dist < 36 && time >= this.dashReadyAt) {
             this.ai = 'tele'; this.stateUntil = time + 750;
-            this.warn = this.scene.add.circle(me.x, me.y, this.kind === 'suiko' ? 36 : 30, 0xff3a3a, 0.15).setStrokeStyle(1.5, 0xff3a3a, 0.9).setDepth(5);
+            this.warn = this.scene.add.circle(me.x, me.y, this.kind === 'chochin' ? 30 : 36, 0xff3a3a, 0.15).setStrokeStyle(1.5, 0xff3a3a, 0.9).setDepth(5);
           } else this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);
         } else this.setVelocity(0, 0);
         break;

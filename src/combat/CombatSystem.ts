@@ -132,8 +132,13 @@ export class CombatSystem {
   /** 攻擊前自動轉向最近的敵人（手機上用搖桿很難精準瞄準）。 */
   private autoAim(range: number): void {
     const t = this.aimTarget(range);
-    if (!t) return;
-    const p = this.player.center, c = t.center, dx = c.x - p.x, dy = c.y - p.y, d = Math.hypot(dx, dy) || 1;
+    const p = this.player.center;
+    // 身邊有可以打的機關（鈴、燈籠、裂牆）而且比敵人近：先瞄準機關
+    const near = this.breakables.filter((b) => b.alive && Math.hypot(b.x - p.x, b.y - p.y) < 30)
+      .sort((x, y) => Math.hypot(x.x - p.x, x.y - p.y) - Math.hypot(y.x - p.x, y.y - p.y))[0];
+    const c = near && (!t || Math.hypot(near.x - p.x, near.y - p.y) < Math.hypot(t.center.x - p.x, t.center.y - p.y)) ? near : t?.center;
+    if (!c) return;
+    const dx = c.x - p.x, dy = c.y - p.y, d = Math.hypot(dx, dy) || 1;
     this.player.aim = { x: dx / d, y: dy / d };
     this.player.facing = facingFromVector(this.player.aim, this.player.facing);
   }
@@ -571,6 +576,31 @@ export class CombatSystem {
     if (Math.abs(pc.y - b.y) > b.h / 2) return;
     if (this.now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); return; }
     this.damagePlayer(e.info.atk, { x: pc.x, y: b.y - 40 }, {}, b.mult);
+  }
+
+  /** 大天狗的狂風：把主角吹離，太近會受傷 */
+  enemyGale(e: Enemy, g: { x: number; y: number; r: number }): void {
+    sound.sfx('dodge');
+    const pc = this.player.center, dx = pc.x - g.x, dy = pc.y - g.y, d = Math.hypot(dx, dy) || 1;
+    if (this.now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); return; }
+    if (d > 140) return;
+    this.knock = { x: (dx / d) * 260, y: (dy / d) * 260 };
+    this.knockUntil = this.now + 350;
+    if (d <= g.r) this.damagePlayer(e.info.atk, g, {}, 1.2);
+  }
+
+  /** 旋風等移動中的危險物碰到主角 */
+  hazardHit(atk: number, at: Vec2, mult: number): void {
+    if (this.now < this.barrierUntil) return;
+    this.damagePlayer(atk, at, {}, mult);
+  }
+
+  /** 山風：在風區裡被推著走（閃避、突刺中不受影響） */
+  windPush(dx: number, dy: number): void {
+    const now = this.now;
+    if (this.dead || now < this.dodgeUntil || now < this.thrustUntil || now < this.knockUntil) return;
+    const b = this.player.body as Phaser.Physics.Arcade.Body;
+    b.velocity.x += dx; b.velocity.y += dy;
   }
 
   /** 站在毒池裡：小傷害＋中毒 */
