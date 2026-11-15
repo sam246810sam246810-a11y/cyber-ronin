@@ -68,6 +68,25 @@ export interface SaveData extends UnlockStats {
   autoBattle: boolean;
   /** 付費特權（月卡／通行證，M3 接上） */
   premium: boolean;
+  /** 掃蕩：每天 3 次 */
+  sweepDay: string;
+  sweepUsed: number;
+  /** 7 日登入：已領到第幾天、上次領取日期 */
+  loginStreak: number;
+  loginDay: string;
+  /** 無盡模式最佳紀錄 */
+  endlessBest: { time: number; kills: number };
+  /** 每週 Boss：週次與最高傷害、已領的獎勵階段 */
+  weeklyKey: string;
+  weeklyBest: number;
+  weeklyClaimed: number[];
+  /** 新手教學已看過的提示 */
+  tips: string[];
+  /** 介面設定 */
+  showDamage: boolean;
+  screenShake: boolean;
+  /** 每關各自解鎖的最高通緝等級 */
+  stageWanted: Record<string, number>;
 }
 
 const EMPTY: SaveData = {
@@ -124,6 +143,18 @@ const EMPTY: SaveData = {
   gameSpeed: 1,
   autoBattle: false,
   premium: false,
+  sweepDay: '',
+  sweepUsed: 0,
+  loginStreak: 0,
+  loginDay: '',
+  endlessBest: { time: 0, kills: 0 },
+  weeklyKey: '',
+  weeklyBest: 0,
+  weeklyClaimed: [],
+  tips: [],
+  showDamage: true,
+  screenShake: true,
+  stageWanted: {},
 };
 
 export function loadSave(): SaveData {

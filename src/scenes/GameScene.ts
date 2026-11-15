@@ -32,12 +32,14 @@ import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, Z, snapFont, textStyle } from '../game/layout';
 import { SpatialGrid } from '../game/SpatialGrid';
 import { TEX } from '../game/textures';
-import { SaveData, loadSave, writeSave } from '../game/storage';
+import { SaveData, formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
 import { applyRunToDaily, equippedStats } from '../game/meta';
 import { charStats, mergeStats, spiritStats, starOf } from '../game/gacha';
-import { STAGES, StageDef, stageById } from '../config/stages';
+import { SPIRITS, spiritLevel } from '../config/gacha';
+import { STAGES, StageDef, stageById, stageWantedMax } from '../config/stages';
+import { ENDLESS, GameMode, WEEKLY, weekKey, weeklyBoss } from '../config/modes';
 import { MOD_RARITY, MODULE_BASES, ModuleItem, StatKey, dailyChallenge, dropRarity, makeModule, mulberry32, todayKey } from '../config/meta';
 import {
   AFFIXES,
@@ -238,6 +240,9 @@ export interface RunResult {
   modules: ModuleItem[];
   chips: number;
   daily: boolean;
+  mode: GameMode;
+  /** 每週 Boss：這一局造成的傷害 */
+  weeklyDmg: number;
   wanted: number;
   wantedUnlocked: number | null;
   victory: boolean;
@@ -357,6 +362,13 @@ export class GameScene extends Phaser.Scene {
   maxCombo = 0;
   moduleDrops: ModuleItem[] = [];
   isDaily = false;
+  /** 神樂的式神助戰 */
+  private familiar: { img: Phaser.GameObjects.Image; t: number; hitT: number; lv: number; ang: number } | null = null;
+  private familiarT = 8;
+  mode: GameMode = 'normal';
+  weeklyBossE: Enemy | null = null;
+  weeklyDmg = 0;
+  private nextEndlessBoss = 0;
   private origRandom: (() => number) | null = null;
 
   // M2.5：暴擊、幸運、遺物、羈絆、通緝等級
@@ -480,15 +492,27 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------- 初始化 ----------
-  create(data: { char?: CharId; wanted?: number; daily?: boolean; stage?: string }) {
+  create(data: { char?: CharId; wanted?: number; daily?: boolean; stage?: string; mode?: GameMode }) {
     this.resetState();
     this.save = loadSave();
     this.modStats = equippedStats(this.save);
     this.gameSpeed = Math.min(this.save.premium ? 3 : 2, Math.max(1, this.save.gameSpeed ?? 1));
     this.auto = !!this.save.autoBattle && this.autoUnlocked();
+    // 設定關掉畫面震動時，把鏡頭震動換成什麼都不做
+    {
+      const cam = this.cameras.main as Phaser.Cameras.Scene2D.Camera & { shake: Phaser.Cameras.Scene2D.Camera['shake'] };
+      if (this.save.screenShake === false) cam.shake = (() => cam) as typeof cam.shake;
+      else delete (cam as unknown as Record<string, unknown>).shake;
+    }
     this.lastManual = -99;
     this.isDaily = !!data?.daily;
-    this.stage = this.isDaily ? STAGES[0] : stageById(data?.stage);
+    this.mode = this.isDaily ? 'normal' : data?.mode ?? 'normal';
+    this.weeklyBossE = null;
+    this.weeklyDmg = 0;
+    this.familiar = null;
+    this.familiarT = 8;
+    this.nextEndlessBoss = RUN.duration + ENDLESS.bossEvery;
+    this.stage = this.isDaily ? STAGES[0] : this.mode === 'weekly' ? stageById(weeklyBoss().stage) : stageById(data?.stage);
     if (this.isDaily) {
       // 每日挑戰：固定角色、通緝等級與隨機種子
       const dc = dailyChallenge(todayKey());
@@ -497,7 +521,7 @@ export class GameScene extends Phaser.Scene {
       this.origRandom = Math.random;
       Math.random = mulberry32(dc.seed);
     } else {
-      this.wanted = Math.max(0, Math.min(data?.wanted ?? 0, this.save.wantedUnlocked ?? 0));
+      this.wanted = this.mode === 'weekly' ? 0 : Math.max(0, Math.min(data?.wanted ?? 0, stageWantedMax(this.save, this.stage.id)));
       const charId = data?.char && this.save.chars.includes(data.char) ? data.char : this.save.lastChar;
       this.char = CHARACTERS[this.save.chars.includes(charId) ? charId : 'jin'];
     }
@@ -821,6 +845,7 @@ export class GameScene extends Phaser.Scene {
 
     this.updateEnemies(dt);
     this.updateWeapons(dt);
+    if (this.char.id === 'kagura') this.updateFamiliar(dt);
     this.updateProjectiles(dt);
     this.updateHooks(dt);
     this.updateStrikes(dt);
@@ -834,7 +859,11 @@ export class GameScene extends Phaser.Scene {
     this.render();
 
     if (this.ended || this.modal) return;
-    if (this.t >= RUN.duration && this.finalKilled) {
+    if (this.mode === 'weekly' && (this.t >= WEEKLY.duration || (this.weeklyBossE && !this.weeklyBossE.active))) {
+      this.endRun(true);
+      return;
+    }
+    if (this.mode === 'normal' && this.t >= RUN.duration && this.finalKilled) {
       this.endRun(true);
       return;
     }
@@ -847,6 +876,36 @@ export class GameScene extends Phaser.Scene {
   private updateTimeline(dt: number) {
     const seg = currentWave(this.t);
     const alive = this.activeEnemies.length;
+    if (this.mode === 'weekly') {
+      // 每週 Boss：只有一隻超大血量的 Boss＋少量雜兵，限時 3 分鐘
+      this.spawnAcc += seg.rate * RUN.spawnScale * 0.5 * dt;
+      while (this.spawnAcc >= 1) {
+        this.spawnAcc -= 1;
+        if (alive < 80) this.spawnEnemy(pickWeighted(seg.weights));
+      }
+      if (!this.weeklyBossE && this.t >= 1) {
+        const wb = weeklyBoss();
+        this.spawnBoss({ ...BOSSES[0], tex: wb.tex, title: wb.title, variant: wb.variant, final: false });
+        const e = this.bosses[this.bosses.length - 1];
+        e.maxHp = e.hp = WEEKLY.hp;
+        this.weeklyBossE = e;
+        this.ui.banner(`每週 Boss：${wb.title}`, '#ff2244', 2.4);
+        Audio.play('sfx-bosswarn', 0.6);
+        Audio.playMusic('bgm-boss');
+      }
+      return;
+    }
+    if (this.mode === 'endless' && this.t >= this.nextEndlessBoss) {
+      // 無盡模式：10 分鐘後每 150 秒來一隻 Boss，越來越強
+      this.nextEndlessBoss += ENDLESS.bossEvery;
+      const pool = BOSSES.filter((b) => !b.final);
+      const b = pool[Math.floor(Math.random() * pool.length)];
+      this.spawnBoss({ ...b, final: false });
+      const e = this.bosses[this.bosses.length - 1];
+      e.maxHp = e.hp = e.maxHp * (1 + (this.t - RUN.duration) / 200);
+      this.ui.banner(T.bossWarn(b.title), '#ff2244', 2.4);
+      Audio.play('sfx-bosswarn', 0.6);
+    }
     this.spawnAcc += seg.rate * RUN.spawnScale * this.spawnMult * this.wmods.spawn * dt;
     while (this.spawnAcc >= 1) {
       this.spawnAcc -= 1;
@@ -887,7 +946,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (!this.dawnAnnounced && this.t >= RUN.duration) {
       this.dawnAnnounced = true;
-      if (!this.finalKilled) this.ui.banner(T.finalPush, '#ff2244', 2.6);
+      if (!this.finalKilled && this.mode === 'normal') this.ui.banner(T.finalPush, '#ff2244', 2.6);
+      if (this.mode === 'endless') this.ui.banner('無盡模式：撐越久越好', '#ffd84d', 2.6);
     }
   }
 
@@ -913,7 +973,8 @@ export class GameScene extends Phaser.Scene {
     const e = this.obtainEnemy();
     const [x, y] = at ?? this.spawnPoint(def.radius + 30);
     const grunt = kind !== 'boss' && kind !== 'elite';
-    const mult = (kind === 'boss' ? 1 : enemyHpMult(this.t) * this.wmods.hp * (grunt ? RUN.gruntHpScale : 1)) * this.stage.hpMult;
+    const endlessMul = this.mode === 'endless' && this.t > RUN.duration ? 1 + (ENDLESS.hpPerMin * (this.t - RUN.duration)) / 60 : 1;
+    const mult = (kind === 'boss' ? 1 : enemyHpMult(this.t) * this.wmods.hp * (grunt ? RUN.gruntHpScale : 1) * endlessMul) * this.stage.hpMult;
     Object.assign(e, {
       active: true,
       def,
@@ -1737,6 +1798,7 @@ export class GameScene extends Phaser.Scene {
         return;
       }
     }
+    if (e === this.weeklyBossE) this.weeklyDmg += Math.min(dmg, Math.max(0, e.hp));
     e.hp -= dmg;
     e.flash = 0.08;
     if (crit && (e.def.kind === 'boss' || e.def.kind === 'elite') && this.t - this.lastHitStop > 0.3) {
@@ -2072,7 +2134,8 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         }
-        case 'shadow': {
+        case 'shadow':
+        case 'shadowx': {
           // 影分身：分身瞬移到附近敵人身邊斬擊
           w.timer -= dt;
           if (w.timer <= 0) {
@@ -2086,12 +2149,13 @@ export class GameScene extends Phaser.Scene {
             this.playerAttack(targets[0].x - this.px, targets[0].y - this.py);
             for (let i = 0; i < s.amount; i++) {
               const t = targets[i % targets.length];
-              this.time.delayedCall(i * 70, () => this.shadowStrike(t.x, t.y, 58 * s.area, dmg));
+              this.time.delayedCall(i * (w.id === 'shadowx' ? 45 : 70), () => this.shadowStrike(t.x, t.y, 58 * s.area, dmg));
             }
           }
           break;
         }
-        case 'railgun': {
+        case 'railgun':
+        case 'railx': {
           // 電磁狙擊槍：瞄準血量最高的敵人，貫穿光束
           w.timer -= dt;
           if (w.timer <= 0) {
@@ -2109,13 +2173,19 @@ export class GameScene extends Phaser.Scene {
                 const a = a0 + (i > 0 ? (Math.random() - 0.5) * 0.12 : 0);
                 Audio.play('sfx-laser', 0.36, 60, 200);
                 this.fireLaser(Math.cos(a), Math.sin(a), 620, 11 * s.area, dmg, 'rail');
+                if (w.id === 'railx') {
+                  // 進化：光束一分為三，主光束上再落雷
+                  for (const da of [-0.22, 0.22]) this.fireLaser(Math.cos(a + da), Math.sin(a + da), 620, 9 * s.area, dmg * 0.6, 'rail');
+                  this.lightning(1, 420, dmg * 0.8);
+                }
                 this.playFx('hit', this.px + Math.cos(a) * 26, this.py + Math.sin(a) * 26, 46, 0, 0xffb06a, 30, 12);
               });
             }
           }
           break;
         }
-        case 'talisman': {
+        case 'talisman':
+        case 'talismanx': {
           // 追蹤符咒：會轉向追敵人，命中後櫻花爆炸
           w.timer -= dt;
           if (w.timer <= 0) {
@@ -2129,7 +2199,7 @@ export class GameScene extends Phaser.Scene {
             this.playerAttack(targets[0].x - this.px, targets[0].y - this.py);
             for (let i = 0; i < s.amount; i++) {
               const a = Math.atan2(targets[i % targets.length].y - this.py, targets[i % targets.length].x - this.px) + (i - (s.amount - 1) / 2) * 0.5;
-              this.fireProjectile('talisman', Math.cos(a) * s.speed, Math.sin(a) * s.speed, dmg, 0, s.area);
+              this.fireProjectile('talisman', Math.cos(a) * s.speed, Math.sin(a) * s.speed, dmg, w.id === 'talismanx' ? 1 : 0, s.area);
             }
           }
           break;
@@ -2544,6 +2614,14 @@ export class GameScene extends Phaser.Scene {
         }
         if (p.kind === 'talisman') {
           this.talismanBurst(p.x, p.y, 54 * (p.area ?? 1), p.damage);
+          if (p.bounces > 0) {
+            // 進化：爆炸後再放出狐火
+            const bx = p.x;
+            const by = p.y;
+            const dmg2 = p.damage * 0.6;
+            const r2 = 70 * (p.area ?? 1);
+            this.time.delayedCall(220, () => this.talismanBurst(bx, by, r2, dmg2));
+          }
           p.active = false;
           p.img.setVisible(false);
           break;
@@ -3119,33 +3197,64 @@ export class GameScene extends Phaser.Scene {
     this.modal = true;
     const wasRunning = this.scene.isActive();
     const save = this.save;
-    const newBest = this.t > save.bestTime || (victory && this.kills > save.bestKills);
+    const normal = this.mode === 'normal';
+    const newBest = normal && (this.t > save.bestTime || (victory && this.kills > save.bestKills));
     const bonus = Math.round(runReward({ time: this.t, kills: this.kills, bossKills: this.bossKills, victory }) * this.wmods.reward * (this.isDaily ? 1 : this.stage.rewardMult));
     let wantedUnlocked: number | null = null;
-    if (victory && !this.isDaily) {
+    if (victory && !this.isDaily && normal) {
       save.bestWanted = Math.max(save.bestWanted ?? 0, this.wanted);
       const next = Math.min(10, this.wanted + 1);
-      if (next > (save.wantedUnlocked ?? 0)) {
-        save.wantedUnlocked = next;
+      if (next > stageWantedMax(save, this.stage.id)) {
+        save.stageWanted = { ...(save.stageWanted ?? {}), [this.stage.id]: next };
+        if (this.stage.id === 'slums') save.wantedUnlocked = next;
         wantedUnlocked = next;
       }
     }
-    save.bestTime = Math.max(save.bestTime, this.t);
-    save.bestKills = Math.max(save.bestKills, this.kills);
+    if (normal) {
+      save.bestTime = Math.max(save.bestTime, this.t);
+      save.bestKills = Math.max(save.bestKills, this.kills);
+    }
     save.bestLevel = Math.max(save.bestLevel, this.level);
     save.totalKills += this.kills;
     save.bossKills += this.bossKills;
     save.iaiTotal += this.iaiCount;
     save.runs++;
-    if (victory) save.wins++;
+    if (victory && normal) save.wins++;
     save.credits += this.credits + bonus;
     save.totalCredits += this.credits + bonus;
     save.lastChar = this.char.id;
     for (const k of this.seenEnemies) if (!save.seenEnemies.includes(k)) save.seenEnemies.push(k);
     // 檢查新解鎖
     const unlocked: string[] = [];
+    // 無盡模式紀錄
+    if (this.mode === 'endless') {
+      const eb = save.endlessBest ?? { time: 0, kills: 0 };
+      if (this.t > eb.time) {
+        save.endlessBest = { time: this.t, kills: this.kills };
+        unlocked.push(`無盡模式新紀錄：存活 ${formatTime(this.t)}`);
+      }
+    }
+    // 每週 Boss：最高傷害與傷害門檻獎勵
+    if (this.mode === 'weekly') {
+      const wk = weekKey();
+      if (save.weeklyKey !== wk) {
+        save.weeklyKey = wk;
+        save.weeklyBest = 0;
+        save.weeklyClaimed = [];
+      }
+      save.weeklyBest = Math.max(save.weeklyBest, Math.round(this.weeklyDmg));
+      WEEKLY.tiers.forEach((tier, i) => {
+        if (save.weeklyBest >= tier.dmg && !save.weeklyClaimed.includes(i)) {
+          save.weeklyClaimed.push(i);
+          save.chips += tier.chips;
+          save.tickets.char += tier.char;
+          save.tickets.spirit += tier.spirit;
+          unlocked.push(`傷害 ${tier.dmg / 1000}k 獎勵：${tier.label}`);
+        }
+      });
+    }
     // 關卡紀錄、首次通關獎勵與解鎖下一關
-    if (!this.isDaily) {
+    if (!this.isDaily && this.mode === 'normal') {
       const sid = this.stage.id;
       save.lastStage = sid;
       const sb = save.stageBest[sid];
@@ -3202,7 +3311,7 @@ export class GameScene extends Phaser.Scene {
     if (wasRunning) this.scene.pause();
     Audio.stopMusic();
     Audio.play(victory ? 'sfx-victory' : 'sfx-defeat', 0.6);
-    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked, modules: this.moduleDrops, chips, daily: this.isDaily };
+    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked, modules: this.moduleDrops, chips, daily: this.isDaily, mode: this.mode, weeklyDmg: Math.round(this.weeklyDmg) };
     this.ui.showResults(result);
   }
 
@@ -3237,6 +3346,7 @@ export class GameScene extends Phaser.Scene {
 
   // ---------- 特效與繪製 ----------
   showDamage(x: number, y: number, v: number, crit = false, shield = false) {
+    if (this.save.showDamage === false) return;
     const d = this.dmgTexts.find((q) => q.life <= 0);
     if (!d) return;
     const big = v >= 100 || crit;
@@ -3275,6 +3385,45 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 播放特效動畫（有生成的影格才播；回傳是否播放） */
+  /** 神樂被動：每 20 秒召喚一隻擁有的式神助戰 10 秒 */
+  private updateFamiliar(dt: number) {
+    if (!this.familiar) {
+      this.familiarT -= dt;
+      if (this.familiarT > 0) return;
+      this.familiarT = 20;
+      const owned = SPIRITS.filter((sp) => (this.save.spirits[sp.id] ?? 0) > 0);
+      const sp = owned.length ? owned[Math.floor(Math.random() * owned.length)] : SPIRITS[0];
+      const lv = Math.max(1, spiritLevel(this.save.spirits[sp.id] ?? 0));
+      const img = this.add.image(this.px, this.py - 60, `spirit-${sp.id}`).setDepth(11).setScale(0);
+      this.tweens.add({ targets: img, scale: 0.42, duration: 300, ease: 'Back.Out' });
+      this.playFx('hit', this.px, this.py - 60, 90, 0, 0xffd84d, 30, 12);
+      this.ui.banner(`式神助戰：${sp.name}`, '#ff8ac8', 1.2);
+      this.familiar = { img, t: 10, hitT: 0.5, lv, ang: 0 };
+      return;
+    }
+    const f = this.familiar;
+    f.t -= dt;
+    f.ang += dt * 2.2;
+    const fx = this.px + Math.cos(f.ang) * 70;
+    const fy = this.py - 40 + Math.sin(f.ang) * 30;
+    f.img.setPosition(fx, fy).setAlpha(f.t < 1 ? f.t : 1);
+    f.hitT -= dt;
+    if (f.hitT <= 0) {
+      f.hitT = 0.6;
+      const t = this.nearestEnemyTo(fx, fy, 320);
+      if (t) {
+        const dmg = (24 + f.lv * 6) * this.might;
+        this.curTag = 'hack';
+        this.damageEnemy(t, dmg, (t.x - fx) * 0.8, (t.y - fy) * 0.8);
+        this.playFx('hit', t.x, t.y, 60, 0, 0xff8ac8, 30, 12);
+      }
+    }
+    if (f.t <= 0) {
+      f.img.destroy();
+      this.familiar = null;
+    }
+  }
+
   /** 閃避：紫色殘影往旁邊滑開，並顯示「閃避」 */
   private showDodge() {
     const g = this.add

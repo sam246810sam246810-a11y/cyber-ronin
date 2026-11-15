@@ -11,7 +11,12 @@ import { Audio } from '../game/audio';
 import { claimableCount } from '../game/meta';
 import { TAB_H, TOP_H, enter, goTo, lobbyBackground, openSettings, tabBar, topBar } from '../game/chrome';
 import { dailyChallenge, todayKey } from '../config/meta';
-import { STAGES } from '../config/stages';
+import { STAGES, stageWantedMax } from '../config/stages';
+import { showLoginBonus } from '../game/login';
+import { WEEKLY, weekKey, weeklyBoss } from '../config/modes';
+import type { GameMode } from '../config/modes';
+import { runReward } from '../config/balance';
+import { rewardPopup } from '../game/chrome';
 
 /** 大廳：角色、出擊卡、側邊功能鈕 */
 export class MenuScene extends Phaser.Scene {
@@ -29,9 +34,57 @@ export class MenuScene extends Phaser.Scene {
     const s = loadSave();
     this.charIdx = Math.max(0, CHAR_ORDER.indexOf(s.lastChar));
     this.stageIdx = Math.max(0, STAGES.findIndex((x) => x.id === s.lastStage));
-    this.wanted = Math.min(this.wanted, s.wantedUnlocked ?? 0);
+    this.wanted = Math.min(this.wanted, stageWantedMax(s, STAGES[this.stageIdx].id));
     this.draw();
     enter(this);
+    this.time.delayedCall(450, () => showLoginBonus(this, () => this.draw()));
+  }
+
+  /** 無盡模式／每週 Boss 的說明與出擊視窗 */
+  private openMode(mode: GameMode) {
+    const s = loadSave();
+    const unlocked = s.stagesCleared.length > 0 || s.wins > 0;
+    const layer = this.add.container(0, 0).setDepth(120);
+    layer.add(this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.85).setInteractive());
+    const top = H * 0.24;
+    layer.add(this.add.rectangle(W / 2, top + 220, 480, 500, 0x0d0a1c, 0.97).setStrokeStyle(2, mode === 'weekly' ? 0xff2244 : COLORS.gold, 0.8));
+    const id = CHAR_ORDER[this.charIdx];
+    let lines: string[];
+    if (mode === 'endless') {
+      const eb = s.endlessBest ?? { time: 0, kills: 0 };
+      layer.add(this.add.text(W / 2, top + 10, '無盡模式', textStyle(30, '#ffd84d')).setOrigin(0.5).setStroke('#07060d', 6));
+      lines = [
+        `關卡：${STAGES[this.stageIdx].name}（用大廳選的關卡與角色）`,
+        '10 分鐘後不會結束，每 2 分 30 秒來一隻 Boss',
+        '敵人每分鐘再變強，看你能撐多久',
+        '',
+        eb.time > 0 ? `最佳紀錄：存活 ${formatTime(eb.time)}、擊殺 ${eb.kills}` : '還沒有紀錄',
+      ];
+    } else {
+      const wb = weeklyBoss();
+      const best = s.weeklyKey === weekKey() ? s.weeklyBest : 0;
+      layer.add(this.add.text(W / 2, top + 10, `每週 Boss：${wb.title}`, textStyle(26, '#ff6b80')).setOrigin(0.5).setStroke('#07060d', 6));
+      if (this.textures.exists(wb.tex)) {
+        const img = this.add.image(W / 2, top + 110, wb.tex);
+        img.setScale(220 / img.width);
+        layer.add(img);
+      }
+      const claimed = s.weeklyKey === weekKey() ? s.weeklyClaimed : [];
+      lines = [
+        '3 分鐘內對 Boss 造成越多傷害越好（每週一換 Boss）',
+        `本週最高傷害：${best.toLocaleString()}`,
+        ...WEEKLY.tiers.map((t, i) => `${claimed.includes(i) ? '◆' : '・'} ${(t.dmg / 1000).toFixed(0)}k 傷害：${t.label}${claimed.includes(i) ? '（已領）' : ''}`),
+      ];
+    }
+    layer.add(this.add.text(W / 2, top + (mode === 'weekly' ? 190 : 70), lines.join('\n'), { ...textStyle(15, '#c9c6e0', false), align: 'center', lineSpacing: 8, wordWrap: { width: 440 } }).setOrigin(0.5, 0));
+    const go = makeButton(this, W / 2, top + 400, 280, 64, unlocked ? '出擊' : '通關第一關後解鎖', mode === 'weekly' ? COLORS.magenta : COLORS.gold, () => {
+      if (!unlocked || !s.chars.includes(id)) return;
+      Audio.stopMusic();
+      goTo(this, 'Game', { char: id, stage: STAGES[this.stageIdx].id, mode });
+    }, unlocked ? 26 : 18);
+    go.setEnabled(unlocked && s.chars.includes(id));
+    layer.add(go);
+    layer.add(makeButton(this, W / 2, top + 480, 200, 50, '關閉', COLORS.cyan, () => layer.destroy(), 18));
   }
 
   private draw() {
@@ -122,6 +175,8 @@ export class MenuScene extends Phaser.Scene {
       { x: 38, y: TOP_H + 230, icon: 'ui-ic-trophy', label: '成就', dot: claim, act: () => goTo(this, 'Missions', { tab: 'ach' }) },
       { x: W - 38, y: TOP_H + 150, icon: 'ui-ic-settings', label: '設定', dot: false, act: () => openSettings(this) },
       { x: W - 38, y: TOP_H + 230, icon: 'ui-ic-codex', label: '圖鑑', dot: false, act: () => goTo(this, 'Codex') },
+      { x: 38, y: TOP_H + 310, icon: 'icon-fuma', label: '無盡模式', dot: false, act: () => this.openMode('endless') },
+      { x: W - 38, y: TOP_H + 310, icon: 'relic-executioner', label: '週 Boss', dot: s.weeklyKey !== weekKey() && s.stagesCleared.length > 0, act: () => this.openMode('weekly') },
     ];
     void dc;
     for (const b of sides) {
@@ -180,7 +235,8 @@ export class MenuScene extends Phaser.Scene {
     stArrow(-1);
     stArrow(1);
     // 通緝等級
-    const maxW = s.wantedUnlocked ?? 0;
+    const maxW = stageWantedMax(s, STAGES[this.stageIdx].id);
+    this.wanted = Math.min(this.wanted, maxW);
     const wy = cardY - chh / 2 - 22;
     if (maxW > 0) {
       const mods = wantedMods(this.wanted);
@@ -214,6 +270,31 @@ export class MenuScene extends Phaser.Scene {
         goTo(this, 'Game', { char: id, wanted: this.wanted, stage: st0.id });
       }, open ? 32 : 24);
       start.setEnabled(open);
+      // 掃蕩：已通關的關卡直接領 70% 獎勵，每天 3 次
+      if (s.stagesCleared.includes(st0.id)) {
+        const today = todayKey();
+        const used = s.sweepDay === today ? s.sweepUsed : 0;
+        const left = 3 - used;
+        const sw = makeButton(this, W - 52, by, 88, 62, `掃蕩${left}`, COLORS.gold, () => {
+          const sv = loadSave();
+          const usedNow = sv.sweepDay === today ? sv.sweepUsed : 0;
+          if (usedNow >= 3) return;
+          const best = sv.stageBest[st0.id] ?? { time: 600, kills: 1500 };
+          const credits = Math.round(runReward({ time: Math.max(600, best.time), kills: best.kills, bossKills: 3, victory: true }) * st0.rewardMult * 0.7);
+          const chips = Math.round(60 * 0.7 * st0.rewardMult);
+          sv.sweepDay = today;
+          sv.sweepUsed = usedNow + 1;
+          sv.credits += credits;
+          sv.totalCredits += credits;
+          sv.chips += chips;
+          writeSave(sv);
+          rewardPopup(this, `掃蕩完成：${st0.name}`, [
+            { icon: 'ui-ic-coin', label: `信用點 ${credits}`, color: '#ffd84d' },
+            { icon: 'ui-ic-chip', label: `晶片 ${chips}`, color: '#7fd4ff' },
+          ], () => this.draw());
+        }, 15);
+        sw.setEnabled(left > 0);
+      }
       if (open) this.tweens.add({ targets: start, scale: 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.InOut' });
     } else {
       if (canUnlock(s, id))

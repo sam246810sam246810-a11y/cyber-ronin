@@ -138,3 +138,9 @@ export const STAGES: StageDef[] = [
 export function stageById(id: string | undefined): StageDef {
   return STAGES.find((s) => s.id === id) ?? STAGES[0];
 }
+
+/** 這一關已解鎖的最高通緝等級（第一關沿用舊存檔的紀錄） */
+export function stageWantedMax(s: { wantedUnlocked?: number; stageWanted?: Record<string, number> }, id: StageId): number {
+  const v = s.stageWanted?.[id] ?? 0;
+  return id === 'slums' ? Math.max(v, s.wantedUnlocked ?? 0) : v;
+}

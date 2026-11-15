@@ -137,6 +137,9 @@ export const WEAPON_TAG: Partial<Record<WeaponId, Tag>> = {
   shadow: 'blade',
   railgun: 'volt',
   talisman: 'hack',
+  shadowx: 'blade',
+  railx: 'volt',
+  talismanx: 'hack',
 };
 
 // ---------- A4 精英詞綴 ----------

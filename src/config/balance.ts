@@ -48,7 +48,10 @@ export type WeaponId =
   // 新角色的專屬武器（不會出現在一般升級選項裡）
   | 'shadow'
   | 'railgun'
-  | 'talisman';
+  | 'talisman'
+  | 'shadowx'
+  | 'railx'
+  | 'talismanx';
 
 export interface WeaponStats {
   damage: number;
@@ -304,6 +307,35 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
       { delta: { amount: 2 }, desc: '符咒 +2' },
     ],
   },
+  // 專屬武器的進化
+  shadowx: {
+    id: 'shadowx',
+    name: '百影・朧月',
+    desc: '進化武器：大量分身同時瞬移斬擊，斬擊範圍更大。',
+    color: 0xc48bff,
+    base: S({ damage: 34, cooldown: 0.75, area: 1.5, amount: 6 }),
+    levels: [],
+    evolved: true,
+  },
+  railx: {
+    id: 'railx',
+    name: '天之雷槍',
+    desc: '進化武器：光束一分為三，貫穿全畫面並帶雷電。',
+    color: 0xffb06a,
+    base: S({ damage: 110, cooldown: 1.1, area: 1.6, amount: 2 }),
+    levels: [],
+    evolved: true,
+  },
+  talismanx: {
+    id: 'talismanx',
+    name: '百鬼符',
+    desc: '進化武器：大量追蹤符咒，爆炸時再放出狐火。',
+    color: 0xff4fa0,
+    base: S({ damage: 32, cooldown: 0.8, area: 1.7, amount: 6, speed: 340 }),
+    projectile: true,
+    levels: [],
+    evolved: true,
+  },
 };
 
 export const WEAPON_POOL: WeaponId[] = ['katana', 'drones', 'shuriken', 'field', 'laser', 'virus', 'orbital', 'hook'];
@@ -338,6 +370,9 @@ export const EVOLUTIONS: { weapon: WeaponId; passive: PassiveId; result: WeaponI
   { weapon: 'drones', passive: 'camo', result: 'crows' },
   { weapon: 'shuriken', passive: 'overclock', result: 'fuma' },
   { weapon: 'field', passive: 'armor', result: 'raijin' },
+  { weapon: 'shadow', passive: 'camo', result: 'shadowx' },
+  { weapon: 'railgun', passive: 'overclock', result: 'railx' },
+  { weapon: 'talisman', passive: 'intent', result: 'talismanx' },
 ];
 
 // ---------- 角色 ----------
@@ -440,7 +475,7 @@ export const CHARACTERS: Record<CharId, CharDef> = {
     id: 'kagura',
     name: '陰陽師・神樂',
     role: '式神召喚型',
-    trait: '攻擊 +15%、移動 +5%、大招能量 +25%、式神加成 ×1.5、生命 110',
+    trait: '攻擊 +15%、大招能量 +25%、式神加成 ×1.5、每 20 秒召喚式神助戰',
     weapon: 'talisman',
     maxHp: 110,
     speedMult: 1.05,

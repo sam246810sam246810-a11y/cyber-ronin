@@ -3,7 +3,7 @@ import { CharId, PASSIVES, WEAPONS } from '../config/balance';
 import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, textStyle } from '../game/layout';
 import { makeButton, setupLogicalCamera } from '../game/ui';
-import { formatTime, loadSave } from '../game/storage';
+import { formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { Choice, GameScene, RunResult } from './GameScene';
 import { RARITY, RelicDef, RelicId, RELICS, ShopItem, TAGS, Tag, ULTIMATES } from '../config/expansion';
@@ -111,6 +111,46 @@ export class UIScene extends Phaser.Scene {
     this.setupInput();
     if (location.hash === '#debug') this.setupDebug();
     this.ready = true;
+    // 第一次出擊：新手教學
+    const sv = loadSave();
+    if (!(sv.tips ?? []).includes('basics') && !this.g.isDaily) {
+      this.g.modal = true;
+      this.g.scene.pause();
+      this.showTutorial();
+    }
+  }
+
+  /** 新手教學：一張說明卡 */
+  private showTutorial() {
+    this.openModal(0.86);
+    const top = Math.max(130, H * 0.16);
+    this.title(top, '戰鬥說明', '#3df5ff', 32);
+    const tips: [string, string, string][] = [
+      ['ui-ic-battle', '移動', '在畫面任何地方按住拖曳就是搖桿，躲開敵人'],
+      ['icon-katana', '自動攻擊', '武器會自己攻擊，你只要專心走位'],
+      ['gem3', '升級', '撿經驗晶片升級，從三張卡裡選一張強化'],
+      ['icon-intent', '大招', '擊殺累積能量，集滿會自動放出角色專屬大招'],
+      ['ui-ic-upgrade', '加速與自動', '右上角可以切換 2 倍速；通關第一關後解鎖自動戰鬥'],
+    ];
+    tips.forEach(([icon, name, desc], i) => {
+      const y = top + 80 + i * 96;
+      this.modalLayer.add(this.add.rectangle(W / 2, y, 480, 84, COLORS.panel, 0.96).setStrokeStyle(1, 0x3a3168));
+      if (this.textures.exists(icon)) {
+        const img = this.add.image(W / 2 - 200, y, icon);
+        img.setScale(52 / Math.max(img.width, img.height));
+        this.modalLayer.add(img);
+      }
+      this.modalLayer.add(this.add.text(W / 2 - 160, y - 28, name, textStyle(19, '#ffffff')).setOrigin(0, 0));
+      this.modalLayer.add(this.add.text(W / 2 - 160, y + 2, desc, { ...textStyle(14, '#c9c6e0', false), wordWrap: { width: 370 } }).setOrigin(0, 0));
+    });
+    const go = makeButton(this, W / 2, top + 80 + tips.length * 96 + 20, 280, 64, '開始戰鬥', COLORS.magenta, () => {
+      const save = loadSave();
+      save.tips = [...(save.tips ?? []), 'basics'];
+      writeSave(save);
+      this.closeModalUI();
+      this.g.closeModal();
+    }, 24);
+    this.modalLayer.add(go);
   }
 
   // ---------- 輸入 ----------
@@ -647,8 +687,14 @@ export class UIScene extends Phaser.Scene {
           card.setScale(1);
           onCard(i);
         });
-        card.setAlpha(0);
-        this.tweens.add({ targets: card, alpha: 1, x: { from: W / 2 + 30, to: W / 2 }, duration: 200, delay: i * 50 });
+        // 翻牌入場；傳說卡多一道金色光柱
+        card.setScale(0, 1);
+        this.tweens.add({ targets: card, scaleX: 1, duration: 220, delay: i * 90, ease: 'Back.Out' });
+        if (info.rarity === 3) {
+          const pillar = this.add.rectangle(W / 2, y, 480, H, 0xffc83d, 0.25).setBlendMode(Phaser.BlendModes.ADD);
+          cardLayer.addAt(pillar, 0);
+          this.tweens.add({ targets: pillar, alpha: 0, scaleY: 0.2, duration: 700, delay: i * 90 });
+        }
         cardLayer.add(card);
         this.cardKeys[i] = () => onCard(i);
       });
@@ -860,9 +906,22 @@ export class UIScene extends Phaser.Scene {
     if (!this.ready) return;
     this.openModal(0.88);
     const top = Math.max(150, H * 0.2);
-    this.title(top, r.victory ? T.victory : T.defeat, r.victory ? '#ffc83d' : '#ff6b80', 44);
-    const sub = this.add.text(W / 2, top + 46, r.victory ? T.victorySub : T.defeatSub, textStyle(18, COLORS.dim, false)).setOrigin(0.5);
+    const title = r.mode === 'weekly' ? '挑戰結束' : r.mode === 'endless' ? '無盡模式結束' : r.victory ? T.victory : T.defeat;
+    this.title(top, title, r.victory || r.mode !== 'normal' ? '#ffc83d' : '#ff6b80', 44);
+    const subText = r.mode === 'weekly' ? `對 Boss 造成 ${r.weeklyDmg.toLocaleString()} 傷害` : r.mode === 'endless' ? `存活 ${formatTime(r.time)}` : r.victory ? T.victorySub : T.defeatSub;
+    const sub = this.add.text(W / 2, top + 46, subText, textStyle(18, r.mode === 'normal' ? COLORS.dim : '#ffd84d', false)).setOrigin(0.5);
     this.modalLayer.add(sub);
+    // 評價星級：撐過 5 分鐘 1 星、通關 2 星、通關且擊殺 1500 以上或有通緝等級 3 星
+    if (r.mode === 'normal') {
+      const stars = r.victory ? (r.kills >= 1500 || r.wanted > 0 ? 3 : 2) : r.time >= 300 ? 1 : 0;
+      for (let i = 0; i < 3; i++) {
+        const st = this.add.text(W / 2 + (i - 1) * 54, top - 58, '★', textStyle(44, i < stars ? '#ffd84d' : '#3a3452')).setOrigin(0.5).setStroke('#07060d', 6);
+        st.setScale(0);
+        this.modalLayer.add(st);
+        this.tweens.add({ targets: st, scale: 1, delay: 300 + i * 220, duration: 280, ease: 'Back.Out' });
+        if (i < stars) this.time.delayedCall(300 + i * 220, () => Audio.play('sfx-gem', 0.5, 0, 200 * i));
+      }
+    }
 
     const rows: [string, string][] = [
       [T.statTime, formatTime(r.time)],
@@ -875,8 +934,14 @@ export class UIScene extends Phaser.Scene {
     this.modalLayer.add(panel);
     rows.forEach(([k, v], i) => {
       const y = panelY + 28 + i * 46;
-      this.modalLayer.add(this.add.text(W / 2 - 180, y, k, textStyle(18, '#a9a5c8', false)).setOrigin(0, 0));
-      this.modalLayer.add(this.add.text(W / 2 + 180, y - 2, v, textStyle(22)).setOrigin(1, 0));
+      const kt = this.add.text(W / 2 - 180, y, k, textStyle(18, '#a9a5c8', false)).setOrigin(0, 0);
+      const vt = this.add.text(W / 2 + 180, y - 2, v, textStyle(22)).setOrigin(1, 0);
+      this.modalLayer.add([kt, vt]);
+      // 一行一行飛入
+      for (const o of [kt, vt]) {
+        o.setAlpha(0);
+        this.tweens.add({ targets: o, alpha: 1, x: { from: o.x - 40, to: o.x }, delay: 200 + i * 120, duration: 260, ease: 'Cubic.Out' });
+      }
     });
     if (r.newBest) {
       const nb = this.add.text(W / 2, panelY + 222, T.newBest, textStyle(20, '#ffc83d')).setOrigin(0.5);
@@ -917,8 +982,10 @@ export class UIScene extends Phaser.Scene {
     const char = this.g.char.id;
     const wanted = this.g.wanted;
     const daily = this.g.isDaily;
+    const stage = this.g.stage.id;
+    const mode = this.g.mode;
     this.scene.stop('Game');
-    this.scene.start('Game', { char, wanted, daily });
+    this.scene.start('Game', { char, wanted, daily, stage, mode });
   }
 
   private toMenu() {

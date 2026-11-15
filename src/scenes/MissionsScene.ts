@@ -5,11 +5,10 @@ import { WANTED_RULES } from '../config/expansion';
 import { POOLS, POOL_ORDER, PoolId } from '../config/gacha';
 import { COLORS, W, textStyle } from '../game/layout';
 import { makeButton, setupLogicalCamera } from '../game/ui';
-import { CONTENT_BOTTOM, CONTENT_TOP, enter, goTo, lobbyBackground, tabBar, topBar } from '../game/chrome';
+import { CONTENT_BOTTOM, CONTENT_TOP, RewardItem, enter, goTo, lobbyBackground, rewardPopup, tabBar, topBar } from '../game/chrome';
 
 import { formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
-import { vibrate } from '../game/haptics';
 import { achStats, ensureDaily } from '../game/meta';
 
 type Tab = 'daily' | 'ach' | 'challenge';
@@ -130,10 +129,10 @@ export class MissionsScene extends Phaser.Scene {
       return;
     }
     const b = makeButton(this, rx, cy + 24, 108, 44, done ? '領取' : '未完成', done ? COLORS.gold : 0x888899, () => {
-      Audio.play('sfx-chest', 0.5);
-      vibrate(30);
       onClaim();
-      this.draw();
+      const items: RewardItem[] = [{ icon: 'ui-ic-chip', label: `晶片 ${reward}`, color: '#7fd4ff' }];
+      if (ticket) items.push({ icon: 'ui-ic-gacha', label: `${POOLS[ticket].ticket} ×1`, color: POOLS[ticket].css });
+      rewardPopup(this, '領取獎勵', items, () => this.draw());
     }, 16);
     b.setEnabled(done);
     if (ready) this.tweens.add({ targets: b, scale: 1.06, yoyo: true, repeat: -1, duration: 600, ease: 'Sine.InOut' });

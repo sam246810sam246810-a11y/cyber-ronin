@@ -172,9 +172,9 @@ export function openSettings(scene: Phaser.Scene) {
   const layer = scene.add.container(0, 0).setDepth(200);
   const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.8).setInteractive();
   layer.add(dim);
-  const panel = panelBox(scene, W / 2, H / 2, 420, 420);
+  const panel = panelBox(scene, W / 2, H / 2, 420, 560);
   layer.add(panel);
-  const title = scene.add.text(W / 2, H / 2 - 160, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
+  const title = scene.add.text(W / 2, H / 2 - 230, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
   title.setStroke('#07060d', 5);
   layer.add(title);
   const rows: [string, () => boolean, (v: boolean) => void][] = [
@@ -187,9 +187,19 @@ export function openSettings(scene: Phaser.Scene) {
       setVibrate(v);
       if (v) vibrate(40);
     }],
+    ['傷害數字', () => loadSave().showDamage !== false, (v) => {
+      const s = loadSave();
+      s.showDamage = v;
+      writeSave(s);
+    }],
+    ['畫面震動', () => loadSave().screenShake !== false, (v) => {
+      const s = loadSave();
+      s.screenShake = v;
+      writeSave(s);
+    }],
   ];
   rows.forEach(([name, get, set], i) => {
-    const y = H / 2 - 90 + i * 80;
+    const y = H / 2 - 160 + i * 74;
     layer.add(scene.add.text(W / 2 - 160, y, name, textStyle(22)).setOrigin(0, 0.5));
     const b = makeButton(scene, W / 2 + 110, y, 140, 52, '', COLORS.cyan, () => {
       set(!get());
@@ -198,7 +208,7 @@ export function openSettings(scene: Phaser.Scene) {
     b.setLabel(get() ? '開' : '關').setActive2(get());
     layer.add(b);
   });
-  const close = makeButton(scene, W / 2, H / 2 + 160, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
+  const close = makeButton(scene, W / 2, H / 2 + 220, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
   layer.add(close);
   layer.setScale(0.9).setAlpha(0);
   scene.tweens.add({ targets: layer, scale: 1, alpha: 1, duration: 180, ease: 'Back.Out' });
@@ -246,4 +256,81 @@ export function lobbyBackground(scene: Phaser.Scene, dim = 0) {
   };
   scene.events.on('update', fn);
   rain.once('destroy', () => scene.events.off('update', fn));
+}
+
+export interface RewardItem {
+  /** 圖示貼圖名稱（沒有就畫一個色塊） */
+  icon: string;
+  label: string;
+  color?: string;
+}
+
+/** 獎勵彈窗：放射光芒＋物品逐一彈出，點一下後物品飛向頂部資源列 */
+export function rewardPopup(scene: Phaser.Scene, title: string, items: RewardItem[], onClose?: () => void) {
+  const layer = scene.add.container(0, 0).setDepth(200);
+  const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.85).setInteractive();
+  layer.add(dim);
+  const cy = H * 0.42;
+  // 放射光芒
+  const rays = scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+  rays.fillStyle(0xffd84d, 0.12);
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    rays.slice(0, 0, 420, a - 0.12, a + 0.12, false).fillPath();
+  }
+  rays.setPosition(W / 2, cy);
+  layer.add(rays);
+  scene.tweens.add({ targets: rays, angle: 360, duration: 12000, repeat: -1 });
+  const halo = scene.add.circle(W / 2, cy, 120, 0xffd84d, 0.15).setBlendMode(Phaser.BlendModes.ADD);
+  layer.add(halo);
+  scene.tweens.add({ targets: halo, scale: 1.2, alpha: 0.3, yoyo: true, repeat: -1, duration: 700 });
+  const t = scene.add.text(W / 2, cy - 190, title, textStyle(30, '#ffd84d')).setOrigin(0.5).setStroke('#07060d', 6);
+  layer.add(t);
+  t.setScale(0.4);
+  scene.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'Back.Out' });
+  const cell = 104;
+  const cols = Math.min(4, items.length);
+  const nodes: Phaser.GameObjects.Container[] = [];
+  items.forEach((it, i) => {
+    const x = W / 2 + ((i % cols) - (cols - 1) / 2) * (cell + 10);
+    const y = cy + Math.floor(i / cols) * (cell + 40) - (items.length > 4 ? 40 : 0);
+    const c = scene.add.container(x, y);
+    c.add(scene.add.rectangle(0, 0, cell, cell, 0x110d1f, 0.95).setStrokeStyle(2, 0xffd84d, 0.9));
+    if (scene.textures.exists(it.icon)) {
+      const img = scene.add.image(0, -6, it.icon);
+      const src = img.texture.getSourceImage();
+      img.setScale((cell * 0.6) / Math.max(src.width, src.height));
+      c.add(img);
+    } else c.add(scene.add.circle(0, -6, cell * 0.25, 0x5dff7a));
+    c.add(scene.add.text(0, cell / 2 + 14, it.label, textStyle(13, it.color ?? '#ffffff')).setOrigin(0.5).setStroke('#07060d', 4));
+    c.setScale(0);
+    scene.tweens.add({ targets: c, scale: 1, delay: 250 + i * 140, duration: 260, ease: 'Back.Out' });
+    layer.add(c);
+    nodes.push(c);
+  });
+  const hint = scene.add.text(W / 2, H * 0.82, '點一下領取', textStyle(15, COLORS.dim, false)).setOrigin(0.5).setAlpha(0);
+  layer.add(hint);
+  scene.tweens.add({ targets: hint, alpha: 1, delay: 500 + items.length * 140, duration: 300 });
+  Audio.play('sfx-chest', 0.6);
+  vibrate(40);
+  const openedAt = scene.time.now;
+  let closing = false;
+  dim.on('pointerup', () => {
+    if (closing || scene.time.now - openedAt < 500) return;
+    closing = true;
+    Audio.play('sfx-gem', 0.5);
+    // 物品飛向頂部資源列
+    nodes.forEach((n, i) => scene.tweens.add({ targets: n, x: W - 120, y: TOP_H / 2, scale: 0.2, alpha: 0, delay: i * 60, duration: 420, ease: 'Cubic.In' }));
+    scene.tweens.add({
+      targets: [rays, halo, t, hint, dim],
+      alpha: 0,
+      delay: 200,
+      duration: 400,
+      onComplete: () => {
+        layer.destroy();
+        onClose?.();
+      },
+    });
+  });
+  return layer;
 }
