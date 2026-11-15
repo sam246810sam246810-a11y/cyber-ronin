@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { COLORS, H, W, Z, textStyle } from './layout';
 import { Audio } from './audio';
+import { MOD_RARITY, ModuleItem } from '../config/meta';
 
 /** 讓場景用 540 寬的邏輯座標作畫（畫布本身是 Z 倍解析度） */
 export function setupLogicalCamera(scene: Phaser.Scene): void {
@@ -89,4 +90,31 @@ export function menuBackground(scene: Phaser.Scene) {
     tile.once('destroy', () => scene.events.off('update', fn));
   }
   scene.add.rectangle(W / 2, H / 2, W, H, 0x07060d, 0.35);
+}
+
+/** 義體模組圖示：稀有度外框＋強化等級 */
+export function moduleIcon(scene: Phaser.Scene, x: number, y: number, size: number, m: ModuleItem, equipped = false) {
+  const c = scene.add.container(x, y);
+  const r = MOD_RARITY[m.rarity];
+  const bg = scene.add.rectangle(0, 0, size, size, 0x0d0a18, 1).setStrokeStyle(m.rarity >= 2 ? 3 : 2, r.color, 1);
+  const glow = scene.add.rectangle(0, 0, size - 6, size - 6, r.color, m.rarity === 3 ? 0.18 : m.rarity === 2 ? 0.1 : 0.04);
+  const key = scene.textures.exists(`mod-${m.base}`) ? `mod-${m.base}` : 'icon-might';
+  const img = scene.add.image(0, 0, key);
+  const src = img.texture.getSourceImage();
+  img.setScale((size * 0.78) / Math.max(src.width, src.height));
+  const rt = scene.add.text(-size / 2 + 4, -size / 2 + 2, r.name, textStyle(11, r.css)).setOrigin(0, 0);
+  rt.setStroke('#07060d', 3);
+  c.add([glow, bg, img, rt]);
+  if (m.level > 0) {
+    const lv = scene.add.text(size / 2 - 4, size / 2 - 2, `+${m.level}`, textStyle(12, '#ffffff')).setOrigin(1, 1);
+    lv.setStroke('#07060d', 3);
+    c.add(lv);
+  }
+  if (equipped) {
+    const e = scene.add.text(size / 2 - 4, -size / 2 + 2, 'E', textStyle(12, '#5dff7a')).setOrigin(1, 0);
+    e.setStroke('#07060d', 3);
+    c.add(e);
+  }
+  c.setSize(size, size);
+  return c;
 }

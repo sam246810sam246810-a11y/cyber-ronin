@@ -7,6 +7,7 @@ import { formatTime, loadSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { Choice, GameScene, RunResult } from './GameScene';
 import { RARITY, RelicDef, RelicId, RELICS, ShopItem, TAGS, Tag } from '../config/expansion';
+import { MOD_RARITY, MODULE_BASES } from '../config/meta';
 
 const JOY_R = 56;
 
@@ -689,6 +690,12 @@ export class UIScene extends Phaser.Scene {
     }
 
     let extra = r.unlocked.length ? 40 : 0;
+    // 戰利品：晶片與義體模組
+    const loot = [`晶片 +${r.chips}`, ...r.modules.map((m) => `${MOD_RARITY[m.rarity].name} ${MODULE_BASES.find((b) => b.id === m.base)?.name ?? ''}`)];
+    this.modalLayer.add(
+      this.add.text(W / 2, panelY + 282 + extra, loot.join('　'), { ...textStyle(15, '#7fd4ff'), align: 'center', wordWrap: { width: 460 } }).setOrigin(0.5, 0),
+    );
+    extra += r.modules.length > 3 ? 56 : 32;
     if (r.wanted > 0 || r.wantedUnlocked) {
       const txt = (r.wanted > 0 ? `通緝等級 ${r.wanted}（獎勵 ×${(1 + 0.2 * r.wanted).toFixed(1)}）` : '') + (r.wantedUnlocked ? `　解鎖通緝等級 ${r.wantedUnlocked}！` : '');
       this.modalLayer.add(this.add.text(W / 2, panelY + 282 + extra, txt, textStyle(16, '#ff8a5d')).setOrigin(0.5, 0));
@@ -705,8 +712,9 @@ export class UIScene extends Phaser.Scene {
     this.closeModalUI();
     const char = this.g.char.id;
     const wanted = this.g.wanted;
+    const daily = this.g.isDaily;
     this.scene.stop('Game');
-    this.scene.start('Game', { char, wanted });
+    this.scene.start('Game', { char, wanted, daily });
   }
 
   private toMenu() {

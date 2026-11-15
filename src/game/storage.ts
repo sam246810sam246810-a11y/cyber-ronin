@@ -1,5 +1,6 @@
 // 本機存檔；在無痕模式或沙盒中可能無法使用，所以全部包在 try/catch 裡。
 import type { CharId, PassiveId, UnlockStats, UpgradeId, WeaponId } from '../config/balance';
+import type { ModuleItem, Slot } from '../config/meta';
 
 const KEY = 'cyber-ronin.save.v1';
 
@@ -22,6 +23,23 @@ export interface SaveData extends UnlockStats {
   /** 已解鎖的最高通緝等級（0＝尚未通關） */
   wantedUnlocked: number;
   bestWanted: number;
+  // 第二期：義體模組、抽卡、任務
+  modules: ModuleItem[];
+  equipped: Record<Slot, string | null>;
+  parts: number;
+  chips: number;
+  pity: number;
+  gachaPulls: number;
+  ssrCount: number;
+  relicsTotal: number;
+  maxCombo: number;
+  dailyDay: string;
+  dailyProgress: Record<string, number>;
+  dailyClaimed: string[];
+  achClaimed: string[];
+  dailyClears: number;
+  dailyChallengeDay: string;
+  dailyChallengeBest: { day: string; time: number; kills: number; victory: boolean } | null;
 }
 
 const EMPTY: SaveData = {
@@ -47,6 +65,22 @@ const EMPTY: SaveData = {
   vibrate: true,
   wantedUnlocked: 0,
   bestWanted: 0,
+  modules: [],
+  equipped: { head: null, body: null, arm: null },
+  parts: 0,
+  chips: 300,
+  pity: 0,
+  gachaPulls: 0,
+  ssrCount: 0,
+  relicsTotal: 0,
+  maxCombo: 0,
+  dailyDay: '',
+  dailyProgress: {},
+  dailyClaimed: [],
+  achClaimed: [],
+  dailyClears: 0,
+  dailyChallengeDay: '',
+  dailyChallengeBest: null,
 };
 
 export function loadSave(): SaveData {

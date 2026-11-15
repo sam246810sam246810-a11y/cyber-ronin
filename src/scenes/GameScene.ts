@@ -35,6 +35,8 @@ import { TEX } from '../game/textures';
 import { SaveData, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
+import { applyRunToDaily, equippedStats } from '../game/meta';
+import { MOD_RARITY, MODULE_BASES, ModuleItem, StatKey, dailyChallenge, dropRarity, makeModule, mulberry32, todayKey } from '../config/meta';
 import {
   AFFIXES,
   Affix,
@@ -223,6 +225,9 @@ export function choiceKey(c: Choice): string {
 }
 
 export interface RunResult {
+  modules: ModuleItem[];
+  chips: number;
+  daily: boolean;
   wanted: number;
   wantedUnlocked: number | null;
   victory: boolean;
@@ -310,6 +315,15 @@ export class GameScene extends Phaser.Scene {
   regen = 0;
   intentMult = 1;
   xpMult = 1;
+
+  // 第二期：義體模組、每日挑戰
+  modStats: Partial<Record<StatKey, number>> = {};
+  tagDmg: Record<Tag, number> = { blade: 0, volt: 0, hack: 0, fire: 0 };
+  tagKills: Record<string, number> = {};
+  maxCombo = 0;
+  moduleDrops: ModuleItem[] = [];
+  isDaily = false;
+  private origRandom: (() => number) | null = null;
 
   // M2.5：暴擊、幸運、遺物、羈絆、通緝等級
   luck = 0;
@@ -420,13 +434,24 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------- 初始化 ----------
-  create(data: { char?: CharId; wanted?: number }) {
+  create(data: { char?: CharId; wanted?: number; daily?: boolean }) {
     this.resetState();
     this.save = loadSave();
-    this.wanted = Math.max(0, Math.min(data?.wanted ?? 0, this.save.wantedUnlocked ?? 0));
+    this.modStats = equippedStats(this.save);
+    this.isDaily = !!data?.daily;
+    if (this.isDaily) {
+      // 每日挑戰：固定角色、通緝等級與隨機種子
+      const dc = dailyChallenge(todayKey());
+      this.wanted = dc.wanted;
+      this.char = CHARACTERS[dc.char];
+      this.origRandom = Math.random;
+      Math.random = mulberry32(dc.seed);
+    } else {
+      this.wanted = Math.max(0, Math.min(data?.wanted ?? 0, this.save.wantedUnlocked ?? 0));
+      const charId = data?.char && this.save.chars.includes(data.char) ? data.char : this.save.lastChar;
+      this.char = CHARACTERS[this.save.chars.includes(charId) ? charId : 'jin'];
+    }
     this.wmods = wantedMods(this.wanted);
-    const charId = data?.char && this.save.chars.includes(data.char) ? data.char : this.save.lastChar;
-    this.char = CHARACTERS[this.save.chars.includes(charId) ? charId : 'jin'];
 
     const cam = this.cameras.main;
     cam.setZoom(Z);
@@ -483,6 +508,10 @@ export class GameScene extends Phaser.Scene {
     document.addEventListener('visibilitychange', this.onVisibility);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       document.removeEventListener('visibilitychange', this.onVisibility);
+      if (this.origRandom) {
+        Math.random = this.origRandom;
+        this.origRandom = null;
+      }
     });
 
     this.scene.launch('UI');
@@ -495,6 +524,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resetState() {
+    this.tagKills = {};
+    this.maxCombo = 0;
+    this.moduleDrops = [];
     this.luck = 0;
     this.critChance = CRIT.base;
     this.critDmg = CRIT.mult;
@@ -612,7 +644,7 @@ export class GameScene extends Phaser.Scene {
     this.might = (1 + 0.1 * this.pp('might') + 0.05 * (up.might ?? 0)) * (has('blood') ? 1.6 : 1);
     this.cdMult = Math.max(0.35, (1 - 0.07 * this.pp('haste')) * (has('battery') ? 0.88 : 1) * (has('berserk') ? 0.75 : 1));
     this.armor = PLAYER.armor + this.char.armor + this.pp('armor');
-    let newMax = this.char.maxHp + 10 * this.pp('armor') + 10 * (up.hp ?? 0) + (has('heart') ? 40 : 0);
+    let newMax = this.char.maxHp + 10 * this.pp('armor') + 10 * (up.hp ?? 0) + (has('heart') ? 40 : 0) + Math.round(this.modStats.maxHp ?? 0);
     if (has('blood')) newMax = Math.round(newMax * 0.5);
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
     this.maxHp = Math.round(newMax);
@@ -631,6 +663,21 @@ export class GameScene extends Phaser.Scene {
     this.spawnMult = has('bounty') ? 1.5 : 1;
     this.creditMult = (has('goldhack') ? 2 : 1) * (has('bounty') ? 1.5 : 1);
     this.iaiBossMult = has('finaliai') ? 2 : 1;
+    // 義體模組加成
+    const m = this.modStats;
+    this.might *= 1 + (m.might ?? 0);
+    this.critChance += m.crit ?? 0;
+    this.critDmg += m.critDmg ?? 0;
+    this.cdMult = Math.max(0.3, this.cdMult * (1 - (m.cdr ?? 0)));
+    this.armor += m.armor ?? 0;
+    this.regen += m.regen ?? 0;
+    this.speed *= 1 + (m.speed ?? 0);
+    this.pickupR *= 1 + (m.pickup ?? 0);
+    this.xpMult *= 1 + (m.xp ?? 0);
+    this.luck += m.luck ?? 0;
+    this.intentMult *= 1 + (m.intent ?? 0);
+    this.tagDmg = { blade: m.blade ?? 0, volt: m.volt ?? 0, hack: m.hack ?? 0, fire: m.fire ?? 0 };
+
     for (const w of this.weapons) w.stats = this.computeStats(w.id, w.level);
     this.inventoryVersion++;
   }
@@ -1310,6 +1357,7 @@ export class GameScene extends Phaser.Scene {
     let crit = false;
     if (!fromIai) {
       const tag = this.curTag;
+      if (tag) raw *= 1 + this.tagDmg[tag];
       if (tag === 'blade') raw *= 1 + this.bladeBonus;
       if (tag === 'volt') raw *= 1 + this.voltBonus;
       if (this.hackMark && e.hackT > 0) raw *= 1.15;
@@ -1375,6 +1423,8 @@ export class GameScene extends Phaser.Scene {
     e.img.setVisible(false);
     this.kills++;
     this.combo = this.comboT > 0 ? this.combo + 1 : 1;
+    if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+    if (this.curTag && !fromIai) this.tagKills[this.curTag] = (this.tagKills[this.curTag] ?? 0) + 1;
     this.comboT = 1.6;
     if (e.label) {
       e.label.destroy();
@@ -1433,6 +1483,13 @@ export class GameScene extends Phaser.Scene {
     this.dropGem(e.x, e.y, e.xp);
     if (kind === 'elite' || kind === 'boss') {
       this.dropPickup('chest', e.x + 12, e.y);
+      // 義體模組掉落：Boss 必掉、精英 20%
+      if (kind === 'boss' || Math.random() < 0.2) {
+        const mod = makeModule(dropRarity(this.wanted, kind === 'boss'));
+        this.moduleDrops.push(mod);
+        const base = MODULE_BASES.find((b) => b.id === mod.base)!;
+        this.ui.banner(`取得義體模組：${MOD_RARITY[mod.rarity].name} ${base.name}`, MOD_RARITY[mod.rarity].css, 2.2);
+      }
       if (kind === 'boss') {
         this.bossKills++;
         this.cameras.main.shake(300, 0.012);
@@ -2445,7 +2502,7 @@ export class GameScene extends Phaser.Scene {
     const newBest = this.t > save.bestTime || (victory && this.kills > save.bestKills);
     const bonus = Math.round(runReward({ time: this.t, kills: this.kills, bossKills: this.bossKills, victory }) * this.wmods.reward);
     let wantedUnlocked: number | null = null;
-    if (victory) {
+    if (victory && !this.isDaily) {
       save.bestWanted = Math.max(save.bestWanted ?? 0, this.wanted);
       const next = Math.min(10, this.wanted + 1);
       if (next > (save.wantedUnlocked ?? 0)) {
@@ -2472,11 +2529,41 @@ export class GameScene extends Phaser.Scene {
       save.unlocked.push(u.id);
       unlocked.push(u.kind === 'weapon' ? WEAPONS[u.id as WeaponId].name : PASSIVES[u.id as PassiveId].name);
     }
+    // 第二期：模組、晶片、每日任務、每日挑戰
+    let chips = this.bossKills * 10 + (victory ? 30 : 0);
+    if (this.isDaily) {
+      const firstClear = victory && save.dailyChallengeDay !== todayKey();
+      if (firstClear) {
+        chips += 100;
+        save.dailyClears = (save.dailyClears ?? 0) + 1;
+        save.dailyChallengeDay = todayKey();
+      }
+      const best = save.dailyChallengeBest;
+      if (!best || best.day !== todayKey() || this.t > best.time) save.dailyChallengeBest = { day: todayKey(), time: this.t, kills: this.kills, victory };
+    }
+    save.chips = (save.chips ?? 0) + chips;
+    save.modules = [...(save.modules ?? []), ...this.moduleDrops];
+    save.relicsTotal = (save.relicsTotal ?? 0) + this.relics.length;
+    save.maxCombo = Math.max(save.maxCombo ?? 0, this.maxCombo);
+    applyRunToDaily(save, {
+      kills: this.kills,
+      time: this.t,
+      bossKills: this.bossKills,
+      iai: this.iaiCount,
+      relics: this.relics.length,
+      victory,
+      level: this.level,
+      maxCombo: this.maxCombo,
+      wanted: this.wanted,
+      tagKills: this.tagKills,
+      evolved: [],
+      daily: this.isDaily,
+    });
     writeSave(save);
     if (wasRunning) this.scene.pause();
     Audio.stopMusic();
     Audio.play(victory ? 'sfx-victory' : 'sfx-defeat', 0.6);
-    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked };
+    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked, modules: this.moduleDrops, chips, daily: this.isDaily };
     this.ui.showResults(result);
   }
 
