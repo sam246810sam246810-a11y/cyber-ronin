@@ -52,13 +52,30 @@ export class MenuScene extends Phaser.Scene {
     const ring = this.add.ellipse(W / 2, heroY + 6, 170, 40, COLORS.cyan, 0.18).setStrokeStyle(2, COLORS.cyan, 0.7);
     this.tweens.add({ targets: ring, alpha: 0.5, scaleX: 1.08, yoyo: true, repeat: -1, duration: 1300 });
     let hero: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
-    if (this.anims.exists(`char-${id}-idle`)) {
+    if (this.textures.exists(`hd-${id}`)) {
+      // 高清立繪＋程式做的呼吸起伏
+      hero = this.add.image(W / 2, heroY + 22, `hd-${id}`).setOrigin(0.5, 1);
+      const hs = 330 / hero.texture.getSourceImage().height;
+      hero.setScale(hs);
+      this.tweens.add({ targets: hero, scaleY: hs * 1.012, scaleX: hs * 0.995, yoyo: true, repeat: -1, duration: 1500, ease: 'Sine.InOut' });
+    } else if (this.anims.exists(`char-${id}-idle`)) {
       hero = this.add.sprite(W / 2, heroY + 18, `char-${id}-idle-0`).setOrigin(0.5, 0.9).setScale(2.1);
       (hero as Phaser.GameObjects.Sprite).play(`char-${id}-idle`);
     } else hero = this.add.image(W / 2, heroY - 80, `char-${id}`).setScale(1.6);
     if (!owned) hero.setTint(0x222233);
     // 點角色：做出攻擊動作
     hero.setInteractive({ useHandCursor: true }).on('pointerup', () => {
+      if (!(hero instanceof Phaser.GameObjects.Sprite)) {
+        // 立繪：前衝一下並揮出刀光
+        this.tweens.add({ targets: hero, x: W / 2 + 14, yoyo: true, duration: 90 });
+        if (this.anims.exists('fx-slash')) {
+          const fx = this.add.sprite(W / 2 + 40, heroY - 140, 'fx-slash-0').setBlendMode(Phaser.BlendModes.ADD).setScale(1.6);
+          fx.play('fx-slash');
+          fx.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => fx.destroy());
+        }
+        Audio.play('sfx-slash', 0.4);
+        return;
+      }
       if (hero instanceof Phaser.GameObjects.Sprite && this.anims.exists(`char-${id}-atk`)) {
         hero.play(`char-${id}-atk`);
         hero.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => hero instanceof Phaser.GameObjects.Sprite && hero.play(`char-${id}-idle`));

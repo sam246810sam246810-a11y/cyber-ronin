@@ -6,7 +6,7 @@ import { makeButton, setupLogicalCamera } from '../game/ui';
 import { formatTime, loadSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { Choice, GameScene, RunResult } from './GameScene';
-import { RARITY, RelicDef, RelicId, RELICS, ShopItem, TAGS, Tag } from '../config/expansion';
+import { RARITY, RelicDef, RelicId, RELICS, ShopItem, TAGS, Tag, ULTIMATES } from '../config/expansion';
 import { MOD_RARITY, MODULE_BASES } from '../config/meta';
 
 const JOY_R = 56;
@@ -69,7 +69,7 @@ export class UIScene extends Phaser.Scene {
     this.killText = this.add.text(14, 48, '', textStyle(15, COLORS.dim)).setOrigin(0, 0);
     this.timeText = this.add.text(W / 2, 20, '00:00', textStyle(32)).setOrigin(0.5, 0);
     this.timeText.setStroke('#07060d', 5);
-    this.add.text(W / 2 - 122, 72, T.intent, textStyle(14, '#ff7ab0')).setOrigin(1, 0.5);
+    this.add.text(W / 2 - 122, 72, ULTIMATES[this.g.char.id]?.gauge ?? T.intent, textStyle(14, ULTIMATES[this.g.char.id]?.css ?? '#ff7ab0')).setOrigin(1, 0.5);
     this.bossText = this.add.text(W / 2, 172, '', textStyle(15, '#ff6b80')).setOrigin(0.5, 1).setVisible(false);
     this.comboText = this.add.text(W - 16, 196, '', textStyle(22, '#ffd84d')).setOrigin(1, 0.5).setVisible(false);
     this.comboText.setStroke('#6a0020', 5);
@@ -362,6 +362,138 @@ export class UIScene extends Phaser.Scene {
         delay: 160,
         onComplete: () => layer.removeAll(true),
       });
+    });
+  }
+
+  /** 大招：斜切橫幅特寫切入 → 招式名稱 → 各角色收尾特效 */
+  playUltimate(charId: 'jin' | 'zero' | 'tetsu') {
+    if (!this.ready) return;
+    const u = ULTIMATES[charId];
+    const layer = this.iaiLayer;
+    layer.removeAll(true);
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0);
+    this.tweens.add({ targets: dim, fillAlpha: 0.65, duration: 120 });
+    layer.add(dim);
+
+    // 斜切橫幅
+    const band = this.add.container(-W * 1.3, H * 0.42).setRotation(-0.2);
+    const bh = 230;
+    const bg = this.add.graphics();
+    bg.fillStyle(0x07060d, 0.95);
+    bg.fillRect(-W * 1.2, -bh / 2, W * 2.4, bh);
+    bg.fillStyle(u.color, 0.55);
+    bg.fillRect(-W * 1.2, -bh / 2, W * 2.4, bh * 0.18);
+    bg.fillRect(-W * 1.2, bh / 2 - bh * 0.18, W * 2.4, bh * 0.18);
+    bg.lineStyle(4, 0xffffff, 0.9);
+    bg.lineBetween(-W * 1.2, -bh / 2, W * 1.2, -bh / 2);
+    bg.lineBetween(-W * 1.2, bh / 2, W * 1.2, bh / 2);
+    const speed = this.add.graphics();
+    band.add([bg, speed]);
+    // 速度線
+    const lines = Array.from({ length: 26 }, () => ({ y: (Math.random() - 0.5) * bh * 0.9, x: Math.random() * W * 2 - W, len: 60 + Math.random() * 160, v: 1400 + Math.random() * 1600 }));
+    const drawSpeed = (dt: number) => {
+      speed.clear();
+      speed.lineStyle(2, 0xffffff, 0.5);
+      for (const l of lines) {
+        l.x -= (l.v * dt) / 1000;
+        if (l.x < -W * 1.2) l.x = W * 1.2;
+        speed.lineBetween(l.x, l.y, l.x + l.len, l.y);
+      }
+    };
+    // 角色特寫（有生成的高清立繪就用立繪）
+    const key = this.textures.exists(`hd-${charId}`) ? `hd-${charId}` : this.textures.exists(`portrait-${charId}`) ? `portrait-${charId}` : `char-${charId}`;
+    const face = this.add.image(W * 0.12, 30, key).setOrigin(0.5, 0.32);
+    const fs = face.texture.getSourceImage();
+    face.setScale((bh * 2.6) / fs.height);
+    face.setCrop(0, 0, fs.width, fs.height * 0.55);
+    band.add(face);
+    const name = this.add.text(-W * 0.22, bh * 0.18, u.name, textStyle(49.5, '#ffffff')).setOrigin(0.5);
+    name.setStroke(u.css, 10);
+    name.setShadow(0, 0, u.css, 16, true, true);
+    name.setScale(2.2).setAlpha(0);
+    band.add(name);
+    layer.add(band);
+
+    const ticker = (_t: number, dt: number) => drawSpeed(dt);
+    this.events.on('update', ticker);
+    this.tweens.add({ targets: band, x: W / 2, duration: 160, ease: 'Cubic.Out' });
+    this.tweens.add({ targets: face, x: W * 0.2, duration: 700, ease: 'Sine.Out' });
+    this.tweens.add({ targets: name, scale: 1, alpha: 1, delay: 180, duration: 160, ease: 'Back.Out' });
+    // 0.65 秒後橫幅飛出，接著收尾特效
+    this.time.delayedCall(650, () => {
+      this.tweens.add({ targets: band, x: W * 2.3, duration: 160, ease: 'Cubic.In' });
+      const flash = this.add.rectangle(W / 2, H / 2, W, H, u.finisher === 'thunder' ? 0xbfd4ff : 0xffffff, 0.85);
+      layer.add(flash);
+      this.tweens.add({ targets: flash, alpha: 0, duration: 300 });
+      if (u.finisher === 'slash') this.finisherSlash(layer);
+      else if (u.finisher === 'code') this.finisherCode(layer);
+      else this.finisherThunder(layer);
+      this.tweens.add({
+        targets: dim,
+        fillAlpha: 0,
+        duration: 500,
+        delay: 350,
+        onComplete: () => {
+          this.events.off('update', ticker);
+          layer.removeAll(true);
+        },
+      });
+    });
+  }
+
+  private finisherSlash(layer: Phaser.GameObjects.Container) {
+    const lines = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    const cuts = [
+      [-40, H * 0.2, W + 40, H * 0.75],
+      [W + 40, H * 0.1, -40, H * 0.55],
+      [-40, H * 0.6, W + 40, H * 0.35],
+    ];
+    for (const [x1, y1, x2, y2] of cuts) {
+      lines.lineStyle(16, 0xff3d81, 0.6);
+      lines.lineBetween(x1, y1, x2, y2);
+      lines.lineStyle(5, 0xffffff, 1);
+      lines.lineBetween(x1, y1, x2, y2);
+    }
+    layer.add(lines);
+    this.tweens.add({ targets: lines, alpha: 0, duration: 600, delay: 150 });
+  }
+
+  private finisherCode(layer: Phaser.GameObjects.Container) {
+    // 綠色程式碼雨＋畫面故障
+    const cols = 18;
+    for (let i = 0; i < cols; i++) {
+      const x = (i + 0.5) * (W / cols);
+      const str = Array.from({ length: 14 }, () => (Math.random() < 0.5 ? '0' : '1')).join('\n');
+      const t = this.add.text(x, -H * 0.6 - Math.random() * 300, str, { ...textStyle(16.5, '#5dff7a'), align: 'center', lineSpacing: 4 }).setOrigin(0.5, 0);
+      t.setShadow(0, 0, '#2bd96b', 8, true, true);
+      layer.add(t);
+      this.tweens.add({ targets: t, y: H + 50, duration: 700 + Math.random() * 400, ease: 'Linear' });
+      this.tweens.add({ targets: t, alpha: 0, delay: 700, duration: 300 });
+    }
+    for (let i = 0; i < 6; i++) {
+      const r = this.add.rectangle(W / 2 + (Math.random() - 0.5) * 60, Math.random() * H, W, 8 + Math.random() * 30, Math.random() < 0.5 ? 0x5dff7a : 0xff3d81, 0.35);
+      layer.add(r);
+      this.tweens.add({ targets: r, alpha: 0, x: r.x + (Math.random() - 0.5) * 120, delay: i * 60, duration: 200 });
+    }
+  }
+
+  private finisherThunder(layer: Phaser.GameObjects.Container) {
+    const g = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+    layer.add(g);
+    const o = { r: 20 };
+    this.tweens.add({
+      targets: o,
+      r: H * 0.8,
+      duration: 600,
+      ease: 'Cubic.Out',
+      onUpdate: () => {
+        g.clear();
+        const a = Math.max(0, 1 - o.r / (H * 0.8));
+        g.lineStyle(14, 0x6d7cff, a);
+        g.strokeCircle(W / 2, H / 2, o.r);
+        g.lineStyle(4, 0xffffff, a);
+        g.strokeCircle(W / 2, H / 2, o.r * 0.9);
+      },
     });
   }
 

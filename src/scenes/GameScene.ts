@@ -54,6 +54,8 @@ import {
   TAGS,
   WEAPON_TAG,
   WantedMods,
+  ULTIMATES,
+  ULT_FREEZE,
   rollRarity,
   wantedMods,
 } from '../config/expansion';
@@ -66,6 +68,8 @@ interface Enemy {
   img: Phaser.GameObjects.Sprite;
   animBase: string;
   affixes: Affix[];
+  /** 系統崩潰：承受傷害 +50% 的剩餘秒數 */
+  vuln: number;
   shield: number;
   stun: number;
   hackT: number;
@@ -728,7 +732,7 @@ export class GameScene extends Phaser.Scene {
 
     if (this.iaiFreeze > 0) {
       this.iaiFreeze -= dt;
-      if (this.iaiFreeze <= 0) this.executeIai();
+      if (this.iaiFreeze <= 0) this.executeUltimate();
       this.render();
       return;
     }
@@ -877,6 +881,7 @@ export class GameScene extends Phaser.Scene {
       aimY: 0,
       title: def.name,
       affixes: [],
+      vuln: 0,
       shield: 0,
       stun: 0,
       hackT: 0,
@@ -1224,6 +1229,7 @@ export class GameScene extends Phaser.Scene {
       if (e.slow > 0) e.slow -= dt;
       if (e.stun > 0) e.stun -= dt;
       if (e.hackT > 0) e.hackT -= dt;
+      if (e.vuln > 0) e.vuln -= dt;
       if (e.flash > 0) e.flash -= dt;
       if (e.virusT > 0) {
         e.virusT -= dt;
@@ -1361,6 +1367,7 @@ export class GameScene extends Phaser.Scene {
       if (tag === 'blade') raw *= 1 + this.bladeBonus;
       if (tag === 'volt') raw *= 1 + this.voltBonus;
       if (this.hackMark && e.hackT > 0) raw *= 1.15;
+      if (e.vuln > 0) raw *= 1.5;
       if (this.hasRelic('executioner') && e.hp < e.maxHp * 0.3) raw *= 2;
       if (Math.random() < this.critChance) {
         crit = true;
@@ -2285,10 +2292,83 @@ export class GameScene extends Phaser.Scene {
     if (this.intent >= this.intentThreshold() && !this.ended) {
       this.intent = 0;
       this.iaiCount++;
-      this.iaiFreeze = INTENT.freeze;
-      this.ui.playIai();
+      this.iaiFreeze = ULT_FREEZE;
+      this.ui.playUltimate(this.char.id);
       Audio.play('sfx-iai', 0.7);
     }
+  }
+
+  /** 依角色發動專屬大招 */
+  private executeUltimate() {
+    const fin = ULTIMATES[this.char.id].finisher;
+    if (fin === 'slash') {
+      this.executeIai();
+      return;
+    }
+    const x0 = this.px - W / 2 - 40;
+    const x1 = this.px + W / 2 + 40;
+    const y0 = this.py - H / 2 - 40;
+    const y1 = this.py + H / 2 + 40;
+    const onScreen = this.activeEnemies.filter((e) => e.active && e.x > x0 && e.x < x1 && e.y > y0 && e.y < y1);
+    if (fin === 'code') {
+      // 系統崩潰：全部停住 3 秒、感染病毒、承受傷害 +50%
+      for (const e of onScreen) {
+        if (e.def.kind === 'boss') {
+          e.vuln = 6;
+          this.damageEnemy(e, e.maxHp * 0.05 * this.iaiBossMult, 0, 0, true, true);
+          continue;
+        }
+        e.stun = 3;
+        e.vuln = 6;
+        this.infect(e, 18 * this.might, 5, 1);
+      }
+    } else {
+      // 雷神降臨：衝擊波擊退並麻痺、連續落雷、自己 3 秒無敵
+      for (const e of onScreen) {
+        const dx = e.x - this.px;
+        const dy = e.y - this.py;
+        const d = Math.hypot(dx, dy) || 1;
+        if (e.def.kind === 'boss') {
+          this.damageEnemy(e, e.maxHp * 0.06 * this.iaiBossMult, 0, 0, true, true);
+          continue;
+        }
+        e.stun = 2;
+        this.damageEnemy(e, 40 * this.might, (dx / d) * 520, (dy / d) * 520, true, true);
+      }
+      this.invuln = Math.max(this.invuln, 3);
+      for (let i = 0; i < 8; i++) {
+        this.time.delayedCall(i * 110, () => this.lightning(1, 420, 140 * this.might));
+      }
+      const g = this.add.graphics().setDepth(9).setBlendMode(Phaser.BlendModes.ADD);
+      let r = 10;
+      const ev = this.time.addEvent({
+        delay: 16,
+        repeat: 30,
+        callback: () => {
+          r += 22;
+          g.clear();
+          g.lineStyle(10, 0x6d7cff, Math.max(0, 1 - r / 700));
+          g.strokeCircle(this.px, this.py, r);
+          g.lineStyle(3, 0xffffff, Math.max(0, 1 - r / 700));
+          g.strokeCircle(this.px, this.py, r * 0.92);
+          if (ev.getOverallProgress() >= 1) g.destroy();
+        },
+      });
+    }
+    this.cameras.main.shake(260, 0.012);
+    vibrate(80);
+    if (this.hasRelic('finaliai')) this.invuln = Math.max(this.invuln, 3);
+    for (const p of this.pickups) {
+      if (!p.active || p.kind !== 'gem' || p.flying) continue;
+      if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
+      p.flying = true;
+      p.speed = 250;
+    }
+    for (const b of this.bullets)
+      if (b.active) {
+        b.active = false;
+        b.img.setVisible(false);
+      }
   }
 
   private executeIai() {
@@ -2761,6 +2841,7 @@ export class GameScene extends Phaser.Scene {
       if (e.flash > 0) e.img.setTintFill(0xffffff);
       else if (e.virusT > 0) e.img.setTint(0x9dffb0);
       else if (e.slow > 0) e.img.setTint(0x9fb0ff);
+      else if (e.vuln > 0) e.img.setTint(0xff9a9a);
       else e.img.clearTint();
       if (e.def.kind === 'boss' || e.def.kind === 'elite') sg.fillEllipse(e.x, e.y + e.radius * 0.8, e.radius * 2, e.radius * 0.6);
     }

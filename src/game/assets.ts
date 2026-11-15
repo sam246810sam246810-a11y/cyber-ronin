@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 
 // Vite 會把這些檔案打包進單一 HTML（data URI）；開發時則是一般網址。
-const sprites = import.meta.glob('../assets/sprites/*.{png,jpg}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
+const sprites = import.meta.glob('../assets/sprites/*.{png,jpg,webp}', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 const audio = import.meta.glob('../assets/audio/*.mp3', { eager: true, query: '?url', import: 'default' }) as Record<string, string>;
 
-const keyOf = (path: string) => path.split('/').pop()!.replace(/\.(png|jpg|mp3)$/, '');
+const keyOf = (path: string) => path.split('/').pop()!.replace(/\.(png|jpg|webp|mp3)$/, '');
 
 function loadImage(url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {

@@ -211,3 +211,21 @@ export function wantedMods(level: number): WantedMods {
 
 // ---------- D1 打擊感 ----------
 export const CRIT = { base: 0.05, mult: 2 };
+
+// ---------- 角色專屬大招 ----------
+export interface UltimateDef {
+  name: string;
+  gauge: string;
+  color: number;
+  css: string;
+  finisher: 'slash' | 'code' | 'thunder';
+}
+
+export const ULTIMATES: Record<'jin' | 'zero' | 'tetsu', UltimateDef> = {
+  jin: { name: '居合・一閃', gauge: '殺意', color: 0xff3d81, css: '#ff3d81', finisher: 'slash' },
+  zero: { name: '系統崩潰', gauge: '駭入', color: 0x2bd96b, css: '#5dff7a', finisher: 'code' },
+  tetsu: { name: '雷神降臨', gauge: '電荷', color: 0x6d7cff, css: '#9fbcff', finisher: 'thunder' },
+};
+
+/** 大招演出（特寫切入＋收尾特效）總長，遊戲在這段時間停住 */
+export const ULT_FREEZE = 1.0;
