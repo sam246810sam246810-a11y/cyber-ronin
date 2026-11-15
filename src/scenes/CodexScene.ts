@@ -70,7 +70,7 @@ export class CodexScene extends Phaser.Scene {
         const u = ULTIMATES[id];
         const w = WEAPONS[c.weapon];
         const lines = [
-          `${MOD_RARITY[r].name}　${c.role}　${owned ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : `未擁有（碎片 ${s.shards[id] ?? 0}/${unlockCost(id)}）`}`,
+          `${c.role}　${owned ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : `未擁有（碎片 ${s.shards[id] ?? 0}/${unlockCost(id)}）`}`,
           `生命 ${c.maxHp}　移動 ${Math.round(c.speedMult * 100)}%${c.armor ? `　護甲 ${c.armor}` : ''}`,
           `特性：${c.trait}`,
           `專屬武器「${w.name}」：${w.desc.replace('專屬武器：', '')}`,
