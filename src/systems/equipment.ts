@@ -70,7 +70,7 @@ export function generateEquip(rng: Rng, uid: number, opts: { tier: number; class
     return b.tier === opts.tier && (!b.class || b.class === opts.classId) && (!opts.slot || b.slot === opts.slot);
   });
   const base = ids[Math.floor(rng() * ids.length)];
-  const rarity = rollRarity(rng, opts.minRarity ?? 0, opts.maxRarity ?? 3);
+  const rarity = rollRarity(rng, opts.minRarity ?? 0, Math.max(opts.maxRarity ?? 3, opts.minRarity ?? 0));
   return { uid, base, rarity, affixes: rollAffixes(rng, RARITIES[rarity].affixes, opts.tier) };
 }
 

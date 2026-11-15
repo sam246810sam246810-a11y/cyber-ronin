@@ -32,6 +32,12 @@ export interface GameState extends Bag {
   job: string | null;
   /** 技能鈕上裝的 2 個技能 */
   skillSlots: [string, string];
+  /** 每種妖怪打倒的數量（圖鑑） */
+  kills: Record<string, number>;
+  /** 二周目的次數（0 = 一周目） */
+  ngPlus: number;
+  /** 百鬼塔最高到第幾層 */
+  towerBest: number;
   /** 任務進度（PRD 9） */
   quests: Record<string, { status: 'active' | 'done'; progress: number }>;
 }
@@ -55,6 +61,7 @@ export function newGameState(classId: ClassId = 'swordsman', difficulty: Difficu
     checkpoint: { map: 'home', spawn: 'door' },
     bond: 0, anger: 0, playTime: 0, quests: {},
     job: null, skillSlots: [c.skills[0], c.skills[1]] as [string, string],
+    kills: {}, ngPlus: 0, towerBest: 0,
   };
   const st = statsOf(s); s.hp = st.maxHp; s.mp = st.maxMp;
   return s;
@@ -242,3 +249,24 @@ export function endingRoute(s: { bond: number; anger: number; items: Record<stri
 export let gameState = newGameState();
 export function resetGameState(classId?: ClassId, difficulty?: Difficulty): void { gameState = newGameState(classId, difficulty); }
 export function setGameState(s: GameState): void { gameState = s; }
+
+/** 劇情用的道具：二周目不帶過去 */
+const STORY_ITEMS = ['神器碎片', '銀鑰匙', '河童王的冠', '大天狗的團扇', '酒吞的葫蘆', '真・神器', '銅鑰匙'];
+
+/** 二周目：保留等級、職業、裝備、背包、金錢、圖鑑、成就；劇情、寶箱、任務重來，敵人變強 */
+export function newGamePlus(s: GameState): GameState {
+  const n = newGameState(s.classId, s.difficulty);
+  const items = Object.fromEntries(Object.entries(s.items).filter(([k]) => !STORY_ITEMS.includes(k)));
+  const keep = [...s.flags].filter((f) => f.startsWith('ach:') || f.startsWith('hint:'));
+  const next: GameState = {
+    ...n, level: s.level, exp: s.exp, job: s.job, skillSlots: [...s.skillSlots] as [string, string],
+    gear: s.gear.map((g) => ({ ...g, affixes: g.affixes.map((a) => ({ ...a })) })), equipped: { ...s.equipped }, capacity: s.capacity,
+    money: s.money, items, kills: { ...s.kills }, towerBest: s.towerBest, nextUid: s.nextUid,
+    ngPlus: s.ngPlus + 1, flags: new Set(keep), bond: 0, anger: 0, playTime: s.playTime,
+  };
+  const st = statsOf(next); next.hp = st.maxHp; next.mp = st.maxMp;
+  return next;
+}
+
+/** 敵人強度倍率：二周目每一輪 +60% */
+export function enemyPower(s: GameState): number { return 1 + 0.6 * s.ngPlus; }

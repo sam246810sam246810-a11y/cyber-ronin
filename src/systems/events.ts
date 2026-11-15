@@ -22,6 +22,10 @@ export const EV = {
   forge: 'forge',
   /** World → UI：結局的片尾名單 */
   credits: 'credits',
+  /** UI → World：用地藏傳送 */
+  warp: 'warp',
+  /** World → UI：第一次遇到某個機制的提示 */
+  hint: 'hint',
 } as const;
 
 export interface DialogueRequest { lines: Line[]; choices?: string[]; onDone: (choice?: number) => void }

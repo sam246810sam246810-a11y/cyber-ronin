@@ -6,11 +6,15 @@ export const OVERLAY_CSS = `
 .kf-overlay[hidden] { display: none; }
 .kf-panel { width: min(96vw, 760px); height: min(94vh, 440px); background: #1e1b2c; border: 1px solid #4a4660; border-radius: 10px;
   display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
-.kf-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #34304a; flex-wrap: wrap; }
+.kf-head { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #34304a; }
+.kf-head > .kf-mute, .kf-head > .kf-money { flex: none; white-space: nowrap; }
 .kf-title { font-weight: 700; color: #e8823a; margin-right: 6px; }
 .kf-tab { background: #2a2640; color: #f2e6c9; border: 1px solid #4a4660; border-radius: 6px; padding: 6px 14px; font: inherit; min-height: 32px; cursor: pointer; }
 .kf-tab[aria-selected="true"] { background: #c23b2f; border-color: #e8823a; }
 .kf-spacer { flex: 1; }
+.kf-tabs { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.kf-tabs::-webkit-scrollbar { display: none; }
+.kf-tab { flex: none; }
 .kf-money { color: #f2c94c; font-variant-numeric: tabular-nums; }
 .kf-close { background: transparent; border: 1px solid #6b6780; color: #f2e6c9; border-radius: 6px; width: 36px; height: 32px; font: inherit; font-size: 16px; cursor: pointer; }
 .kf-body { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; }

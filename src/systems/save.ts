@@ -18,7 +18,7 @@ export interface SaveFile {
 export function serialize(s: GameState, map: string, spawn: string, areaName: string, now = Date.now()): SaveFile {
   return {
     v: SAVE_VERSION, savedAt: now, map, spawn, areaName,
-    state: { ...s, statuses: { ...s.statuses }, items: { ...s.items }, quests: JSON.parse(JSON.stringify(s.quests)), gear: s.gear.map((g) => ({ ...g, affixes: g.affixes.map((a) => ({ ...a })) })),
+    state: { ...s, statuses: { ...s.statuses }, items: { ...s.items }, kills: { ...s.kills }, quests: JSON.parse(JSON.stringify(s.quests)), gear: s.gear.map((g) => ({ ...g, affixes: g.affixes.map((a) => ({ ...a })) })),
       equipped: { ...s.equipped }, checkpoint: { ...s.checkpoint }, flags: [...s.flags], openedChests: [...s.openedChests] },
   };
 }
@@ -34,7 +34,7 @@ export function deserialize(raw: unknown): { state: GameState; map: string; spaw
     ...base, ...st,
     flags: new Set(Array.isArray(st.flags) ? st.flags : []),
     openedChests: new Set(Array.isArray(st.openedChests) ? st.openedChests : []),
-    statuses: { ...(st.statuses ?? {}) }, items: { ...(st.items ?? {}) }, quests: { ...(st.quests ?? {}) },
+    statuses: { ...(st.statuses ?? {}) }, items: { ...(st.items ?? {}) }, quests: { ...(st.quests ?? {}) }, kills: { ...(st.kills ?? {}) },
     gear: Array.isArray(st.gear) ? st.gear : base.gear,
     equipped: { ...base.equipped, ...(st.equipped ?? {}) },
     checkpoint: st.checkpoint ?? { map: f.map, spawn: f.spawn ?? 'start' },

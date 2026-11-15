@@ -453,6 +453,7 @@ export class CombatSystem {
 
   private onKill(e: Enemy): void {
     sound.sfx('kill');
+    gameState.kills[e.kind] = (gameState.kills[e.kind] ?? 0) + 1;
     const [lo, hi] = e.info.money;
     const money = Phaser.Math.Between(lo, hi);
     gameState.money += money;

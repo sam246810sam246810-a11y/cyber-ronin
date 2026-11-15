@@ -21,6 +21,8 @@ const LEASH = 200;   // 離開原位太遠就回去
 export interface HitOptions { paralyze?: boolean; burn?: boolean; knock?: number }
 
 export class Enemy extends Phaser.Physics.Arcade.Sprite {
+  /** 這張地圖的敵人強度倍率（二周目、百鬼塔），World 建立敵人前設定 */
+  static power = 1;
   readonly kind: EnemyKind;
   readonly info: (typeof enemies)[EnemyKind];
   hp: number;
@@ -48,7 +50,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   constructor(scene: Phaser.Scene, x: number, y: number, kind: EnemyKind, difficulty: Difficulty, guard?: string) {
     super(scene, x, y, 'enemies', enemies[kind].frame);
     this.kind = kind;
-    this.info = scaleEnemy(enemies[kind], difficulty);
+    const base = scaleEnemy(enemies[kind], difficulty);
+    this.info = { ...base, hp: Math.round(base.hp * Enemy.power), atk: Math.round(base.atk * Enemy.power), exp: Math.round(base.exp * Math.sqrt(Enemy.power)) };
     this.hp = this.maxHp = this.info.hp;
     this.home = { x, y };
     this.elite = !!(enemies[kind] as { elite?: boolean }).elite;

@@ -13,12 +13,13 @@ import npcs from '../data/npcs.json';
 import dialogues from '../data/dialogues.json';
 import { inputState, resetInput } from '../systems/inputState';
 import { pickVariant, type DialogueVariant, type Line } from '../systems/dialogue';
-import { endingRoute, canChangeJob, changeJob, gameState, gearLabel, giveRandomGear, openChest, statsOf, type Reward } from '../systems/gameState';
+import { enemyPower, endingRoute, canChangeJob, changeJob, gameState, gearLabel, giveRandomGear, openChest, statsOf, type Reward } from '../systems/gameState';
 import { serialize, writeSave } from '../systems/save';
 import { accept, offersFrom, onPickup, pickupVisible, questDef, readyFor, turnIn } from '../systems/quests';
 import { FONT_FAMILY } from '../config';
 import { sound } from '../audio/sound';
 import { trackForMap } from '../audio/music';
+import { grantAchievement, newlyUnlocked } from '../systems/achievements';
 import { collectionReport } from '../systems/collection';
 import { MAPS } from '../data/maps';
 import { findInFront } from '../systems/interaction';
@@ -28,7 +29,7 @@ import { EV, type DialogueRequest, type HudInfo, type SaveRequest } from '../sys
 import type { Facing } from '../systems/movement';
 
 type Chapter = 'ch1' | 'ch2' | 'ch3' | 'endA' | 'endB' | 'endTrue';
-interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: Chapter | boolean }
+interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: Chapter | boolean; floor?: number }
 type BossLike = Boss | KappaKing | Daitengu | OmniBoss;
 /** 每個 Boss 的對話與旗標 */
 const BOSSES: Record<string, { name: string; intro: string; retry: string; seen: string; defeated: string; flags: string[]; outro: Chapter; tip: string; reward: { money: number; item: string; tier: number } }> = {
@@ -91,6 +92,8 @@ export class WorldScene extends Phaser.Scene {
   private speedNextToast = 0;
   private mapKey = '';
   private areaName = '';
+  private hintTimer = 0;
+  private achTimer = 0;
   private pickupObjs: Phaser.Types.Tilemaps.TiledObject[] = [];
   private questTimer = 0;
   private icons = new Map<Thing, Phaser.GameObjects.Text>();
@@ -142,6 +145,7 @@ export class WorldScene extends Phaser.Scene {
     this.solids = this.physics.add.staticGroup();
     this.physics.add.collider(this.player, this.solids);
 
+    Enemy.power = enemyPower(gameState);
     for (const o of objects) this.buildObject(o);
     this.restoreSolvedPuzzles();
     this.syncQuests();
@@ -179,6 +183,10 @@ export class WorldScene extends Phaser.Scene {
     sound.music(trackForMap(mapKey));
     // 自動存檔（PRD 10）：每次進入地圖
     writeSave('auto', serialize(gameState, mapKey, spawnName, areaName));
+
+    const onWarp = (w: { map: string; spawn: string }) => this.goTo(w.map, w.spawn, 'down');
+    this.game.events.on(EV.warp, onWarp);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(EV.warp, onWarp));
 
     if (this.boss) this.time.delayedCall(600, () => this.bossIntro());
     if (data.outro) this.time.delayedCall(600, () => this.chapterOutro(typeof data.outro === 'string' ? data.outro : 'ch1'));
@@ -995,6 +1003,7 @@ export class WorldScene extends Phaser.Scene {
       gameState.hp = st.maxHp; gameState.mp = st.maxMp; gameState.statuses = {};
       ring(this, t.x, t.y, 16, 0xffe0b0, 500);
       sound.sfx('save');
+      gameState.flags.add(`jizo:${this.mapKey}:${String(t.props.spawn ?? 'jizo')}`);
       this.game.events.emit(EV.toast, '地藏保佑，HP 和 MP 全滿了');
       const req: SaveRequest = { map: this.mapKey, spawn: String(t.props.spawn ?? 'jizo'), areaName: this.areaName };
       this.game.events.emit(EV.save, req);
@@ -1056,6 +1065,40 @@ export class WorldScene extends Phaser.Scene {
     }
     if (added.includes('prologue_done')) this.game.events.emit(EV.banner, { title: '序章　完', sub: '第一章「古井的土蜘蛛」開始' });
     this.refreshHud(true);
+  }
+
+  /** 第一次遇到某個機制時的提示（每個只出現一次） */
+  private hint(id: string, text: string): void {
+    if (gameState.flags.has(`hint:${id}`)) return;
+    gameState.flags.add(`hint:${id}`);
+    this.game.events.emit(EV.hint, text);
+  }
+
+  private checkHints(): void {
+    const pc = this.player.center, near = (x: number, y: number, r: number) => Math.hypot(x - pc.x, y - pc.y) < r;
+    if (this.enemies.some((e) => e.alive && e.kind !== 'dummy' && near(e.x, e.y, 110))) {
+      if (!gameState.flags.has('hint:combat')) this.hint('combat', '妖怪來了！「攻擊」會自動瞄準最近的敵人；看到紅圈或閃光的預兆，就按「閃避」躲開（翻滾時不會受傷）。');
+      else if (!gameState.flags.has('hint:skill')) this.time.delayedCall(6000, () => this.hint('skill', '右下角的技能鈕會消耗 MP（藍條）。用完會冷卻，按鈕上的暗色扇形就是剩下的時間。'));
+    }
+    const max = statsOf(gameState).maxHp;
+    if (gameState.hp < max * 0.4 && gameState.hp > 0) this.hint('lowhp', 'HP 不多了！按「藥」會自動選最適合的道具使用。');
+    if (Object.keys(gameState.statuses).length) this.hint('status', '中了異常狀態（左上角的字）。按「藥」會優先解除；解毒草、萬能符都有用。');
+    if (this.blocks.some((b) => near(b.tx * T + 8, b.ty * T + 8, 40))) this.hint('block', '推石頭：朝石頭的方向一直走就會推動。推上踏板會卡住；推到動不了的話，離開這層再回來就會恢復。');
+    if (this.cracks.some((c) => c.alive && near(c.x, c.y, 50))) this.hint('crack', '牆上有裂縫！用攻擊打破它，後面可能有密室。');
+    if (this.things.some((t) => t.kind === 'chest' && near(t.x, t.y, 40))) this.hint('chest', '靠近寶箱時，攻擊鈕會變成「打開」。');
+    if (this.things.some((t) => t.kind === 'jizo' && near(t.x, t.y, 50))) this.hint('jizo', '地藏：參拜可以存檔、補滿 HP 和 MP，也能傳送到去過的其他地藏。');
+    if (this.things.some((t) => t.kind === 'lever' && near(t.x, t.y, 50))) this.hint('lever', '拉桿：同一組的拉桿全部拉下，水門或柵門就會打開。');
+    if (this.winds.some((w) => pc.x >= w.x && pc.x <= w.x + w.w && pc.y >= w.y && pc.y <= w.y + w.h)) this.hint('wind', '山風會把人往一個方向推。閃避或突刺時不受影響。');
+    if (gameState.level >= 2) this.hint('levelup', '升級了！右上角「選單」可以看能力、換裝備、選技能。');
+    if (gameState.gear.length > 2) this.hint('gear', '拿到新裝備了！到「選單 → 裝備」，會顯示換上後能力怎麼變。');
+  }
+
+  private checkAchievements(): void {
+    const collection = collectionReport(MAPS, gameState.openedChests, gameState.flags).percent;
+    for (const a of newlyUnlocked(gameState, { collection })) {
+      sound.sfx('levelup');
+      this.game.events.emit(EV.toast, grantAchievement(gameState, a));
+    }
   }
 
   /** 收集度 100% 時得到第 5 枚神器碎片（PRD 2.6） */
@@ -1133,6 +1176,10 @@ export class WorldScene extends Phaser.Scene {
     if (this.markerTimer <= 0) { this.markerTimer = 200; this.updateMinimapMarkers(); }
     this.questTimer -= dt;
     if (this.questTimer <= 0 && !locked) { this.questTimer = 400; this.syncQuests(); }
+    this.hintTimer -= dt;
+    if (this.hintTimer <= 0 && !locked) { this.hintTimer = 500; this.checkHints(); }
+    this.achTimer -= dt;
+    if (this.achTimer <= 0 && !locked) { this.achTimer = 2000; this.checkAchievements(); }
     this.refreshHud();
   }
 }

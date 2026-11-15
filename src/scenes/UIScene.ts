@@ -101,7 +101,8 @@ export class UIScene extends Phaser.Scene {
       [EV.credits, (c: CreditsInfo) => this.openOverlay(() => this.overlay.openCredits(c, () => { this.closeOverlay(); this.scene.stop(SCENES.world); this.scene.start(SCENES.title); }, () => this.closeOverlay()))],
       [EV.forge, () => this.openOverlay(() => this.overlay.openForge(() => this.closeOverlay()))],
       [EV.board, () => this.openOverlay(() => this.overlay.openBoard(() => this.closeOverlay()))],
-      [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay()))],
+      [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay(), (map, spawn) => { this.closeOverlay(); this.game.events.emit(EV.warp, { map, spawn }); }))],
+      [EV.hint, (text: string) => this.showHint(text)],
     ];
     handlers.forEach(([e, h]) => ev.on(e, h, this));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => handlers.forEach(([e, h]) => ev.off(e, h, this)));
@@ -170,6 +171,17 @@ export class UIScene extends Phaser.Scene {
     const t = this.add.text(GAME_WIDTH / 2, 44, name, { ...TXT(18), backgroundColor: '#14121ccc', padding: { x: 14, y: 4 } })
       .setOrigin(0.5).setResolution(RENDER_SCALE).setAlpha(0).setDepth(500);
     this.tweens.chain({ targets: t, tweens: [{ alpha: 1, duration: 300, delay: 200 }, { alpha: 0, duration: 500, delay: 1300 }], onComplete: () => t.destroy() });
+  }
+
+  /** 教學提示：比一般訊息大、停留比較久 */
+  private showHint(text: string): void {
+    const w = 300;
+    const box = this.add.rectangle(GAME_WIDTH / 2, 96, w, 10, 0x1e2a3a, 0.94).setStrokeStyle(1, 0x9fd8ff, 0.9).setDepth(1200).setAlpha(0);
+    const t = this.add.text(GAME_WIDTH / 2, 96, `提示　${text}`, { ...TXT(10, '#e8f4ff'), wordWrap: { width: w - 20, useAdvancedWrap: true }, lineSpacing: 3 })
+      .setOrigin(0.5).setResolution(RENDER_SCALE).setDepth(1201).setAlpha(0);
+    box.setSize(w, t.height + 14);
+    this.tweens.add({ targets: [box, t], alpha: 1, duration: 250 });
+    this.time.delayedCall(6500, () => this.tweens.add({ targets: [box, t], alpha: 0, duration: 400, onComplete: () => { box.destroy(); t.destroy(); } }));
   }
 
   private toast(msg: string): void {

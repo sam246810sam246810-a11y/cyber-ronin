@@ -12,6 +12,9 @@ import { equip, gameState, statsIfSwapped, statsOf, unequip, useItem } from '../
 import { OVERLAY_CSS } from './overlay.css';
 import { MAPS } from '../../data/maps';
 import { collectionReport } from '../../systems/collection';
+import bestiary from '../../data/bestiary.json';
+import enemyData from '../../data/enemies.json';
+import { ACHIEVEMENTS } from '../../systems/achievements';
 import { MANUAL_SLOTS, formatPlayTime, readSave, serialize, writeSave, type SaveFile, type SlotId } from '../../systems/save';
 import type { CreditsInfo, SaveRequest } from '../../systems/events';
 import { accept, dailyBounties, dateKey, isReady, offersFrom, progressOf, questDef, rewardText, turnIn, type QuestDef } from '../../systems/quests';
@@ -23,7 +26,7 @@ import { getSettings, updateSettings, type Settings } from '../../systems/settin
 import { sound } from '../../audio/sound';
 import { MAX_PLUS, RECIPES, SYNTH_COST, craft, enhance, enhanceCost, missingFor, recipeOutput, synthesize } from '../../systems/forge';
 
-type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest' | 'settings' | 'skills';
+type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest' | 'settings' | 'skills' | 'bestiary' | 'achievements';
 type ShopTab = 'buy' | 'sell';
 type Selection = { kind: 'gear'; uid: number } | { kind: 'item'; name: string } | { kind: 'buyItem'; name: string } | { kind: 'buyGear'; base: BaseId } | null;
 
@@ -82,6 +85,8 @@ export class GameOverlay {
   private synthSel: number[] = [];
   private saveReq?: SaveRequest;
   private onLoad: (f: SaveFile) => void = () => {};
+  private onWarp: (map: string, spawn: string) => void = () => {};
+  private beast = '';
   private confirmSlot: SlotId | null = null;
   private menuTab: MenuTab = 'status';
   private shopTab: ShopTab = 'buy';
@@ -112,7 +117,7 @@ export class GameOverlay {
   openCredits(info: CreditsInfo, onTitle: () => void, onContinue: () => void): void { this.mode = 'credits'; this.credits = info; this.onTitle = onTitle; this.open(onContinue); }
   openBoard(onClose: () => void): void { this.mode = 'board'; this.open(onClose); }
   openForge(onClose: () => void): void { this.mode = 'forge'; this.forgeTab = 'craft'; this.recipe = ''; this.synthSel = []; this.open(onClose); }
-  openSave(req: SaveRequest, onClose: () => void): void { this.mode = 'save'; this.saveReq = req; this.open(onClose); }
+  openSave(req: SaveRequest, onClose: () => void, onWarp: (map: string, spawn: string) => void = () => {}): void { this.mode = 'save'; this.saveReq = req; this.onWarp = onWarp; this.open(onClose); }
   openLoad(onLoad: (f: SaveFile) => void, onClose: () => void): void { this.mode = 'load'; this.onLoad = onLoad; this.open(onClose); }
 
   private open(onClose: () => void): void {
@@ -143,8 +148,13 @@ export class GameOverlay {
       return `<div class="kf-card"><h3>${name}</h3>${info}<div class="kf-btns">${btn}</div></div>`;
     }).join('');
     const tip = saving ? '在地藏前可以存檔。換地圖時也會自動存檔。' : '選一個存檔繼續。';
+    const name = (m: string) => String(((MAPS[m] as { properties?: { name: string; value: unknown }[] }).properties ?? []).find((p) => p.name === 'displayName')?.value ?? m);
+    const here = this.saveReq ? `jizo:${this.saveReq.map}:${this.saveReq.spawn}` : '';
+    const travel = saving ? [...gameState.flags].filter((f) => f.startsWith('jizo:') && f !== here && MAPS[f.split(':')[1]])
+      .map((f) => { const [, m, sp] = f.split(':'); return `<button class="kf-btn secondary" data-warp="${m}:${sp}">${esc(name(m))}${sp === 'jizo_entry' ? '（入口）' : ''}</button>`; }).join('') : '';
+    const travelBox = saving ? `<div class="kf-card" style="grid-column:1 / -1"><h3>傳送到其他地藏</h3>${travel ? `<div class="kf-btns">${travel}</div>` : '<div class="kf-mute">參拜過其他地藏後，就能從這裡傳送過去。</div>'}</div>` : '';
     return `<div class="kf-col" style="grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;align-content:start">
-      <div class="kf-tag" style="grid-column:1 / -1">${tip}</div>${cards}<div class="kf-msg" style="grid-column:1 / -1">${esc(this.msg)}</div></div>`;
+      <div class="kf-tag" style="grid-column:1 / -1">${tip}</div>${travelBox}${cards}<div class="kf-msg" style="grid-column:1 / -1">${esc(this.msg)}</div></div>`;
   }
 
   private questCard(id: string, q: QuestDef, actions: string): string {
@@ -185,6 +195,32 @@ export class GameOverlay {
     return `<div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">已學會（點按鈕把技能裝到右下角的技能鈕）</div>${rows}</div>
       <div class="kf-col"><div class="kf-sec">之後會學會</div>${later.map(([id, lv]) => `<div class="kf-row"><span class="n">${esc(sk[id].name)}</span><span class="kf-tag">Lv.${lv}</span></div>`).join('') || '<div class="kf-empty">職業技能都學會了。</div>'}
         <div class="kf-sec">轉職</div><div class="kf-tag">${esc(jobHint)}</div><div class="kf-msg">${esc(this.msg)}</div></div>`;
+  }
+
+  private bestiaryView(): string {
+    const s = gameState, B = bestiary as Record<string, { area: string; desc: string }>;
+    const E = enemyData as Record<string, { name: string; hp: number; atk: number; def: number; elite?: boolean; drops?: { item: string; chance: number }[] }>;
+    const ids = Object.keys(B), seen = ids.filter((k) => (s.kills[k] ?? 0) > 0);
+    const list = ids.map((k) => {
+      const known = (s.kills[k] ?? 0) > 0;
+      return `<div class="kf-row" data-beast="${k}" aria-selected="${this.beast === k}"><span class="n">${known ? esc(E[k].name) : '？？？'}</span><span class="q">${known ? `×${s.kills[k]}` : ''}</span></div>`;
+    }).join('');
+    const k = this.beast, known = k && (s.kills[k] ?? 0) > 0;
+    const det = !k ? '<div class="kf-empty">打倒過的妖怪會自動收錄。點左邊查看。</div>' : !known ? '<div class="kf-empty">還沒打倒過這種妖怪。</div>'
+      : `<div class="kf-card"><h3>${esc(E[k].name)}${E[k].elite ? '　<span class="kf-tag">強敵</span>' : ''}</h3><div class="kf-tag">出沒：${esc(B[k].area)}・打倒 ${s.kills[k]} 隻</div>
+        <div>${esc(B[k].desc)}</div><dl class="kf-grid"><dt>HP</dt><dd>${E[k].hp}</dd><dt>攻擊</dt><dd>${E[k].atk}</dd><dt>防禦</dt><dd>${E[k].def}</dd></dl>
+        <div class="kf-sec">掉落</div><div>${(E[k].drops ?? []).map((d) => `${esc(d.item)}（${Math.round(d.chance * 100)}%）`).join('、') || '—'}</div></div>`;
+    return `<div class="kf-col"><div class="kf-sec">收錄 ${seen.length}/${ids.length}</div>${list}</div><div class="kf-col">${det}</div>`;
+  }
+
+  private achievementsView(): string {
+    const s = gameState, got = ACHIEVEMENTS.filter((a) => s.flags.has(`ach:${a.id}`)).length;
+    const rows = ACHIEVEMENTS.map((a) => {
+      const done = s.flags.has(`ach:${a.id}`);
+      const rw = [a.reward.money ? `${a.reward.money} 文` : '', ...Object.entries(a.reward.items ?? {}).map(([n, c]) => `${n} ×${c}`)].filter(Boolean).join('、');
+      return `<div class="kf-row" style="${done ? '' : 'opacity:.55'}"><span class="k">${done ? '<span class="kf-up">✔</span>' : '・'}</span><span class="n"><b>${esc(a.name)}</b>　<span class="kf-tag">${esc(a.desc)}</span></span><span class="kf-tag">${esc(rw)}</span></div>`;
+    }).join('');
+    return `<div class="kf-col" style="grid-column:1 / -1"><div class="kf-sec">達成 ${got}/${ACHIEVEMENTS.length}</div>${rows}</div>`;
   }
 
   private settingsView(): string {
@@ -300,14 +336,14 @@ export class GameOverlay {
     }
     const s = gameState;
     const tabs = this.mode === 'menu'
-      ? ([['status', '狀態'], ['quest', '任務'], ['skills', '技能'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集'], ['settings', '設定']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
+      ? ([['status', '狀態'], ['quest', '任務'], ['skills', '技能'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集'], ['bestiary', '圖鑑'], ['achievements', '成就'], ['settings', '設定']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
       : ([['buy', '購買'], ['sell', '賣出']] as const).map(([k, t]) => `<button class="kf-tab" data-stab="${k}" aria-selected="${this.shopTab === k}">${t}</button>`).join('');
     const title = this.mode === 'menu' ? '選單' : '鈴屋';
     const body = this.mode === 'menu'
-      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.menuTab === 'settings' ? this.settingsView() : this.menuTab === 'skills' ? this.skillsView() : this.bagView())
+      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.menuTab === 'settings' ? this.settingsView() : this.menuTab === 'skills' ? this.skillsView() : this.menuTab === 'bestiary' ? this.bestiaryView() : this.menuTab === 'achievements' ? this.achievementsView() : this.bagView())
       : (this.shopTab === 'buy' ? this.buyView() : this.sellView());
     this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}">
-      <div class="kf-head"><span class="kf-title">${title}</span>${tabs}<span class="kf-spacer"></span>
+      <div class="kf-head"><span class="kf-title">${title}</span><div class="kf-tabs">${tabs}</div>
         <span class="kf-mute">背包 ${slotsUsed(s)}/${s.capacity}</span>
         <span class="kf-money">● ${s.money} 文</span><button class="kf-close" data-act="close" aria-label="關閉">✕</button></div>
       <div class="kf-body">${body}</div></div>`;
@@ -455,9 +491,11 @@ export class GameOverlay {
 
   // ---------- 操作 ----------
   private onClick(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-slot0],[data-slot1],[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-warp],[data-beast],[data-slot0],[data-slot1],[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
     if (!el) { if (e.target === this.root) this.close(); return; }
     const d = el.dataset, s = gameState;
+    if (d.warp) { const [m, sp] = d.warp.split(':'); this.root.hidden = true; this.onWarp(m, sp); return; }
+    if (d.beast) { this.beast = d.beast; this.render(); return; }
     if (d.slot0 || d.slot1) { setSkillSlot(s, d.slot0 ? 0 : 1, (d.slot0 ?? d.slot1)!); this.msg = '換好了'; this.render(); return; }
     if (d.setting) {
       updateSettings({ [d.setting]: Number(d.value) } as Partial<Settings>);
