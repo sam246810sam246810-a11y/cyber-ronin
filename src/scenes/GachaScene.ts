@@ -6,9 +6,9 @@ import { CONTENT_BOTTOM, CONTENT_TOP, enter, goTo, lobbyBackground, tabBar, topB
 import { SaveData, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
-import { PullItem, canStarUp, feedJade, payMethod, pityLeft, pullPool, setComplete, spiritLv, spiritStats, starOf, starUp, starUpCost } from '../game/gacha';
+import { PullItem, canStarUp, canUnlock, unlockChar, unlockCost, feedJade, payMethod, pityLeft, pullPool, setComplete, spiritLv, spiritStats, starOf, starUp, starUpCost } from '../game/gacha';
 import { MOD_RARITY, MODULE_BASES, StatKey, fmtStat, mainValue } from '../config/meta';
-import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, MAX_SPIRIT_LV, MAX_STAR, POOLS, POOL_ORDER, PoolId, SPIRITS, SPIRIT_SETS, STAR_PERKS, SpiritId, spiritNeed } from '../config/gacha';
+import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, UNLOCK_SHARDS, MAX_SPIRIT_LV, MAX_STAR, POOLS, POOL_ORDER, PoolId, SPIRITS, SPIRIT_SETS, STAR_PERKS, SpiritId, spiritNeed } from '../config/gacha';
 import { CHARACTERS, CharId } from '../config/balance';
 
 const RAR = ['N', 'R', 'SR', 'SSR'];
@@ -72,8 +72,8 @@ export class GachaScene extends Phaser.Scene {
     makeButton(this, W / 2 - 92, sy, 164, 46, '機率說明', 0x888899, () => this.showRates(), 15);
     if (this.pool === 'equip') makeButton(this, W / 2 + 92, sy, 164, 46, '前往義體', COLORS.cyan, () => goTo(this, 'Armory'), 15);
     else if (this.pool === 'char') {
-      const b = makeButton(this, W / 2 + 92, sy, 164, 46, '角色升星', COLORS.magenta, () => this.showStars(), 15);
-      if ((Object.keys(CHARACTERS) as CharId[]).some((c) => canStarUp(s, c))) this.redDot(b.x + 74, sy - 18);
+      const b = makeButton(this, W / 2 + 92, sy, 164, 46, '解鎖・升星', COLORS.magenta, () => this.showStars(), 15);
+      if ((Object.keys(CHARACTERS) as CharId[]).some((c) => canStarUp(s, c) || canUnlock(s, c))) this.redDot(b.x + 74, sy - 18);
     } else {
       const b = makeButton(this, W / 2 + 92, sy, 164, 46, '式神圖鑑', COLORS.gold, () => this.showSpirits(), 15);
       if (s.jade > 0 && SPIRITS.some((x) => (s.spirits[x.id] ?? 0) > 0)) this.redDot(b.x + 74, sy - 18);
@@ -126,8 +126,8 @@ export class GachaScene extends Phaser.Scene {
         if (!s.chars.includes(id)) img.setTint(0x403a58);
         img.setName('machine');
       }
-      this.add.text(W / 2, cy - h / 2 + 10, 'SR 角色：駭客・零、重裝・鐵', textStyle(16, '#ff6a9a')).setOrigin(0.5).setStroke('#07060d', 4);
-      this.add.text(W / 2, cy + h / 2 - 6, '重複抽到變成碎片，可以升星（最高 5 星）', textStyle(13, '#ffffff', false)).setOrigin(0.5).setStroke('#07060d', 4);
+      this.add.text(W / 2, cy - h / 2 + 10, '抽 SR／SSR 角色，N／R 是角色碎片', textStyle(16, '#ff6a9a')).setOrigin(0.5).setStroke('#07060d', 4);
+      this.add.text(W / 2, cy + h / 2 - 6, '碎片集滿可以解鎖角色、升星（最高 5 星）', textStyle(13, '#ffffff', false)).setOrigin(0.5).setStroke('#07060d', 4);
       return;
     }
     // 靈物池
@@ -200,10 +200,7 @@ export class GachaScene extends Phaser.Scene {
       c.add(img);
       return img;
     };
-    if (it.kind === 'credits') {
-      fit('ui-ic-coin', 0.6);
-      name = `信用點 ${it.amount}`;
-    } else if (it.kind === 'char') {
+    if (it.kind === 'char') {
       fit(this.textures.exists(`portrait-${it.char}`) ? `portrait-${it.char}` : `char-${it.char}`, 0.86);
       name = CHARACTERS[it.char].name;
       note = it.isNew ? 'NEW!' : `碎片 +${it.shards}`;
@@ -288,10 +285,11 @@ export class GachaScene extends Phaser.Scene {
     const detail: Record<PoolId, string[]> = {
       equip: ['N～SSR：義體模組（12 種平均），稀有度越高副屬性越多'],
       char: [
-        `N：信用點 ${CHAR_POOL.nCredits}`,
+        `N：隨機一名角色的碎片 ×${CHAR_POOL.nShards}`,
         `R：隨機一名角色的碎片 ×${CHAR_POOL.rShards}`,
-        `SR：駭客・零 或 重裝・鐵（各半）；已擁有則換成碎片 ×${DUP_SHARDS[2]}`,
-        `SSR：萬能碎片 ×${CHAR_POOL.ssrShards}（第三期加入 SSR 角色）`,
+        `SR：SR 角色本身（平均）；已擁有則換成碎片 ×${DUP_SHARDS[2]}`,
+        `SSR：SSR 角色本身；已擁有則換成碎片 ×${DUP_SHARDS[3]}`,
+        `碎片集滿 ${UNLOCK_SHARDS[2]}（SSR ${UNLOCK_SHARDS[3]}）也能直接解鎖角色`,
       ],
       spirit: ['N：靈玉 ×1（可以餵給任何已擁有的式神）', 'R／SR／SSR：該稀有度的式神（同稀有度平均）', `重複抽到會升級，最高 Lv ${MAX_SPIRIT_LV}`],
     };
@@ -310,7 +308,7 @@ export class GachaScene extends Phaser.Scene {
 
   /** 角色升星面板 */
   private showStars() {
-    const layer = this.overlay('角色升星');
+    const layer = this.overlay('角色解鎖・升星');
     const s = loadSave();
     layer.add(this.add.text(W / 2, CONTENT_TOP + 76, `萬能碎片 ×${s.wildShards}`, textStyle(15, '#ffd84d')).setOrigin(0.5));
     const ids = Object.keys(CHARACTERS) as CharId[];
@@ -327,8 +325,23 @@ export class GachaScene extends Phaser.Scene {
       layer.add(this.add.text(146, y - 26, st ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : '尚未擁有', textStyle(18, st ? '#ffd84d' : COLORS.dim)).setOrigin(0, 0));
       const cost = starUpCost(s, id);
       const own = s.shards[id] ?? 0;
-      layer.add(this.add.text(146, y + 4, st >= MAX_STAR ? '已滿星' : st ? `下一星：${STAR_PERKS[st]}` : '可在角色池抽到，或在大廳用信用點解鎖', { ...textStyle(13, '#c9c6e0', false), wordWrap: { width: 240 } }).setOrigin(0, 0));
-      layer.add(this.add.text(146, y + 44, `碎片 ${own}${cost ? ` / ${cost}` : ''}`, textStyle(13, COLORS.dim, false)).setOrigin(0, 0.5));
+      const need = st ? cost : unlockCost(id);
+      layer.add(this.add.text(146, y + 4, st >= MAX_STAR ? '已滿星' : st ? `下一星：${STAR_PERKS[st]}` : `抽到角色，或集滿碎片解鎖`, { ...textStyle(13, '#c9c6e0', false), wordWrap: { width: 240 } }).setOrigin(0, 0));
+      layer.add(this.add.text(146, y + 44, `碎片 ${own}${need ? ` / ${need}` : ''}`, textStyle(13, COLORS.dim, false)).setOrigin(0, 0.5));
+      if (!st) {
+        const b = makeButton(this, W - 76, y, 112, 56, '解鎖', COLORS.gold, () => {
+          const save = loadSave();
+          if (!unlockChar(save, id)) return;
+          writeSave(save);
+          Audio.play('sfx-levelup', 0.6);
+          vibrate(80);
+          layer.destroy();
+          this.draw();
+          this.showStars();
+        }, 18);
+        b.setEnabled(canUnlock(s, id));
+        layer.add(b);
+      }
       if (st && st < MAX_STAR) {
         const b = makeButton(this, W - 76, y, 112, 56, '升星', COLORS.magenta, () => {
           const save = loadSave();

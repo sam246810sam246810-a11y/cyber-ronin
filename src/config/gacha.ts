@@ -26,18 +26,22 @@ export const POOLS: Record<PoolId, PoolDef> = {
 export const POOL_ORDER: PoolId[] = ['equip', 'char', 'spirit'];
 
 // ---------- 角色池 ----------
-/** 角色的稀有度（之後第三期的新角色會是 SSR） */
-export const CHAR_RARITY: Record<CharId, 1 | 2 | 3> = { jin: 1, zero: 2, tetsu: 2 };
+/** 角色的稀有度：角色最低就是 SR，N／R 只會抽到角色碎片 */
+export const CHAR_RARITY: Record<CharId, 2 | 3> = { jin: 2, zero: 2, tetsu: 2 };
+/** 一開始就擁有的角色（其他角色都要從角色池取得） */
+export const STARTER: CharId = 'jin';
+/** 用碎片直接解鎖角色需要的數量 */
+export const UNLOCK_SHARDS = { 2: 40, 3: 100 } as const;
 /** 已擁有的角色再抽到時換成的碎片數 */
-export const DUP_SHARDS = { 1: 10, 2: 25, 3: 60 } as const;
+export const DUP_SHARDS = { 2: 25, 3: 60 } as const;
 /** 從 n 星升到 n+1 星需要的碎片（1→2、2→3、3→4、4→5） */
 export const STAR_COST = [0, 10, 20, 40, 80];
 export const MAX_STAR = 5;
 export const CHAR_POOL = {
-  /** N：信用點 */
-  nCredits: 120,
-  /** R：隨機角色碎片 */
-  rShards: 5,
+  /** N：隨機一名角色的碎片 */
+  nShards: 2,
+  /** R：隨機一名角色的碎片 */
+  rShards: 6,
   /** SSR：萬能碎片（第三期加入 SSR 角色前的替代） */
   ssrShards: 40,
 };

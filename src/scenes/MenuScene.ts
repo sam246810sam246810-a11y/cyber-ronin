@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { starOf } from '../game/gacha';
+import { canUnlock, starOf, unlockChar, unlockCost } from '../game/gacha';
 import { MAX_STAR } from '../config/gacha';
 import { CHARACTERS, CHAR_ORDER, CharId, WEAPONS } from '../config/balance';
 import { WANTED_RULES, wantedMods } from '../config/expansion';
@@ -91,7 +91,7 @@ export class MenuScene extends Phaser.Scene {
       this.add.text(W / 2, heroY + 12, '★'.repeat(st) + '☆'.repeat(MAX_STAR - st), textStyle(16, '#ffd84d')).setOrigin(0.5).setStroke('#07060d', 4);
     }
     const trait = this.add
-      .text(W / 2, heroY + 60, owned ? `${WEAPONS[c.weapon].name}・${c.trait}` : `解鎖需要 ${c.cost} 信用點`, textStyle(13, owned ? '#ffd84d' : '#ff8a5d', false))
+      .text(W / 2, heroY + 60, owned ? `${WEAPONS[c.weapon].name}・${c.trait}` : `從角色池抽到，或集滿碎片解鎖（${s.shards[id] ?? 0}/${unlockCost(id)}）`, textStyle(13, owned ? '#ffd84d' : '#ff8a5d', false))
       .setOrigin(0.5);
     trait.setStroke('#07060d', 3);
     const arrow = (dx: number) =>
@@ -183,16 +183,16 @@ export class MenuScene extends Phaser.Scene {
       }, 32);
       this.tweens.add({ targets: start, scale: 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.InOut' });
     } else {
-      makeButton(this, W / 2, by, 330, 78, `解鎖　◆ ${c.cost}`, COLORS.gold, () => {
-        const sv = loadSave();
-        if (sv.credits < c.cost) return;
-        sv.credits -= c.cost;
-        sv.chars.push(id);
-        sv.lastChar = id;
-        writeSave(sv);
-        Audio.play('sfx-chest', 0.5);
-        this.draw();
-      }, 26).setEnabled(s.credits >= c.cost);
+      if (canUnlock(s, id))
+        makeButton(this, W / 2, by, 330, 78, '碎片解鎖', COLORS.gold, () => {
+          const sv = loadSave();
+          if (!unlockChar(sv, id)) return;
+          sv.lastChar = id;
+          writeSave(sv);
+          Audio.play('sfx-levelup', 0.6);
+          this.draw();
+        }, 26);
+      else makeButton(this, W / 2, by, 330, 78, '前往角色池', COLORS.magenta, () => goTo(this, 'Gacha', { pool: 'char' }), 26);
     }
     if (owned && id !== s.lastChar) {
       const sv = loadSave();

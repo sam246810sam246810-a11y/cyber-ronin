@@ -3,7 +3,6 @@ import { BootScene } from './scenes/BootScene';
 import { MenuScene } from './scenes/MenuScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
-import { CharSelectScene } from './scenes/CharSelectScene';
 import { ShopScene } from './scenes/ShopScene';
 import { CodexScene } from './scenes/CodexScene';
 import { ArmoryScene } from './scenes/ArmoryScene';
@@ -21,7 +20,7 @@ const game = new Phaser.Game({
   input: { activePointers: 3 },
   render: { antialias: true, powerPreference: 'high-performance' },
   fps: { target: 60 },
-  scene: [BootScene, MenuScene, CharSelectScene, ShopScene, CodexScene, ArmoryScene, GachaScene, MissionsScene, GameScene, UIScene],
+  scene: [BootScene, MenuScene, ShopScene, CodexScene, ArmoryScene, GachaScene, MissionsScene, GameScene, UIScene],
 });
 
 // 給自動化測試與除錯使用

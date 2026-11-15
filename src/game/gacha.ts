@@ -1,6 +1,6 @@
 // 三池扭蛋的共用邏輯：付費、抽卡、角色升星、式神等級與加成。
 import { CHARACTERS, CharId } from '../config/balance';
-import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, SpiritId, spiritLevel, starStats } from '../config/gacha';
+import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, STARTER, SpiritId, UNLOCK_SHARDS, spiritLevel, starStats } from '../config/gacha';
 import { ModuleItem, StatKey, makeModule } from '../config/meta';
 import { SaveData } from './storage';
 
@@ -8,7 +8,6 @@ export type Rar = 0 | 1 | 2 | 3;
 
 export type PullItem =
   | { kind: 'module'; rarity: Rar; module: ModuleItem }
-  | { kind: 'credits'; rarity: Rar; amount: number }
   | { kind: 'char'; rarity: Rar; char: CharId; isNew: boolean; shards: number }
   | { kind: 'shards'; rarity: Rar; char: CharId | 'wild'; amount: number }
   | { kind: 'spirit'; rarity: Rar; spirit: SpiritId; isNew: boolean; lv: number; lvUp: boolean }
@@ -58,21 +57,21 @@ function grant(s: SaveData, pool: PoolId, r: Rar): PullItem {
   }
   if (pool === 'char') {
     const ids = Object.keys(CHARACTERS) as CharId[];
-    if (r === 0) {
-      s.credits += CHAR_POOL.nCredits;
-      return { kind: 'credits', rarity: r, amount: CHAR_POOL.nCredits };
-    }
-    if (r === 1) {
+    if (r <= 1) {
+      // N／R：角色碎片
       const c = pick(ids);
-      s.shards[c] = (s.shards[c] ?? 0) + CHAR_POOL.rShards;
-      return { kind: 'shards', rarity: r, char: c, amount: CHAR_POOL.rShards };
+      const n = r === 0 ? CHAR_POOL.nShards : CHAR_POOL.rShards;
+      s.shards[c] = (s.shards[c] ?? 0) + n;
+      return { kind: 'shards', rarity: r, char: c, amount: n };
     }
-    if (r === 3) {
+    const tier = ids.filter((id) => CHAR_RARITY[id] === r);
+    if (!tier.length) {
+      // 這個稀有度還沒有角色：給萬能碎片
       s.wildShards += CHAR_POOL.ssrShards;
       return { kind: 'shards', rarity: r, char: 'wild', amount: CHAR_POOL.ssrShards };
     }
-    // SR：抽到角色本身
-    const c = pick(ids.filter((id) => CHAR_RARITY[id] >= 2));
+    // SR／SSR：抽到角色本身
+    const c = pick(tier);
     if (!s.chars.includes(c)) {
       s.chars.push(c);
       s.stars[c] = 1;
@@ -108,6 +107,31 @@ export function pullPool(s: SaveData, pool: PoolId, n: 1 | 10): PullItem[] | nul
   s.gachaPulls += n;
   s.ssrCount += rars.filter((r) => r === 3).length;
   return out;
+}
+
+// ---------- 角色解鎖與星級 ----------
+export function ownsChar(s: SaveData, c: CharId): boolean {
+  return c === STARTER || s.chars.includes(c);
+}
+
+export function unlockCost(c: CharId): number {
+  return UNLOCK_SHARDS[CHAR_RARITY[c]];
+}
+
+/** 碎片夠了就能直接解鎖角色（先用該角色碎片，不夠再用萬能碎片） */
+export function canUnlock(s: SaveData, c: CharId): boolean {
+  return !ownsChar(s, c) && (s.shards[c] ?? 0) + s.wildShards >= unlockCost(c);
+}
+
+export function unlockChar(s: SaveData, c: CharId): boolean {
+  if (!canUnlock(s, c)) return false;
+  const cost = unlockCost(c);
+  const own = Math.min(s.shards[c] ?? 0, cost);
+  s.shards[c] = (s.shards[c] ?? 0) - own;
+  s.wildShards -= cost - own;
+  s.chars.push(c);
+  s.stars[c] = 1;
+  return true;
 }
 
 // ---------- 角色星級 ----------
