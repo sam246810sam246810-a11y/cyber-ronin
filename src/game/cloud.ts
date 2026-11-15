@@ -20,17 +20,22 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 export type CloudState = 'off' | 'syncing' | 'ok' | 'error';
 let state: CloudState = 'off';
 export const cloudState = () => state;
+/** 是否為開發者（作品擁有者）；不在 Claude 裡開啟時（本機測試）也當作開發者 */
+let owner = true;
+export const isDeveloper = () => owner;
 
 /** 啟動時呼叫：取得雲端存檔，比本機新就覆蓋本機；回傳要使用的存檔字串（沒有就 null） */
 export async function initCloud(local: CloudSave | null, timeoutMs = 8000): Promise<CloudSave | null> {
   const c = (window as unknown as { claude?: { use(n: string): Promise<unknown> } }).claude;
   if (!c?.use) return null;
+  owner = false;
   state = 'syncing';
   const work = (async (): Promise<CloudSave | null> => {
     const [db, user] = (await Promise.all([c.use('db'), c.use('user')])) as [
       { collection(p: string): { doc(id: string): DocRef } } | null,
-      { id(): Promise<string | null> } | null,
+      { id(): Promise<string | null>; isOwner(): Promise<boolean> } | null,
     ];
+    if (user) owner = await user.isOwner().catch(() => false);
     if (!db || !user) return null;
     const id = await user.id();
     if (!id) return null;

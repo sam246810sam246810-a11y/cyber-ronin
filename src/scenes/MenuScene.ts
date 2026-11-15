@@ -9,6 +9,7 @@ import { setupLogicalCamera } from '../game/ui';
 import { formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { claimableCount } from '../game/meta';
+import { mailBadge, openMailbox } from '../game/mail';
 import { TAB_H, TOP_H, enter, goTo, lobbyBackground, openSettings, tabBar, topBar } from '../game/chrome';
 import { dailyChallenge, todayKey } from '../config/meta';
 import { STAGES, stageWantedMax } from '../config/stages';
@@ -178,6 +179,7 @@ export class MenuScene extends Phaser.Scene {
       { x: W - 38, y: TOP_H + 150, icon: 'ui-ic-settings', label: '設定', dot: false, act: () => openSettings(this) },
       { x: W - 38, y: TOP_H + 230, icon: 'ui-ic-codex', label: '圖鑑', dot: false, act: () => goTo(this, 'Codex') },
       { x: 38, y: TOP_H + 310, icon: 'icon-fuma', label: '無盡模式', dot: false, act: () => this.openMode('endless') },
+      { x: 38, y: TOP_H + 390, icon: 'ui-ic-mail', label: '信箱', dot: mailBadge(s), act: () => openMailbox(this, () => this.scene.restart()) },
       { x: W - 38, y: TOP_H + 310, icon: 'relic-executioner', label: '週 Boss', dot: s.weeklyKey !== weekKey() && s.stagesCleared.length > 0, act: () => this.openMode('weekly') },
     ];
     void dc;

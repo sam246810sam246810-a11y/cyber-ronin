@@ -107,6 +107,9 @@ export interface SaveData extends UnlockStats {
   autoBattle: boolean;
   /** 付費特權（月卡／通行證，M3 接上） */
   premium: boolean;
+  /** 信箱：已讀與已領取的郵件 */
+  mailRead: string[];
+  mailClaimed: string[];
   /** 掃蕩：每天 3 次 */
   sweepDay: string;
   sweepUsed: number;
@@ -188,6 +191,8 @@ const EMPTY: SaveData = {
   gameSpeed: 1,
   autoBattle: false,
   premium: false,
+  mailRead: [],
+  mailClaimed: [],
   sweepDay: '',
   sweepUsed: 0,
   loginStreak: 0,
