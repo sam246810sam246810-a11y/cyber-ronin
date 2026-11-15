@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { CharId, PASSIVES, WEAPONS } from '../config/balance';
+import { SPEAKER_NAME, STORY, StoryLine } from '../config/story';
 import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, textStyle } from '../game/layout';
 import { makeButton, setupLogicalCamera } from '../game/ui';
@@ -117,7 +118,83 @@ export class UIScene extends Phaser.Scene {
       this.g.modal = true;
       this.g.scene.pause();
       this.showTutorial();
-    }
+    } else this.maybeIntro();
+  }
+
+  /** 關卡開頭劇情（每關第一次） */
+  private maybeIntro() {
+    const g = this.g;
+    if (g.isDaily || g.mode !== 'normal') return;
+    const key = `${g.stage.id}-intro`;
+    const sv = loadSave();
+    if ((sv.storySeen ?? []).includes(key)) return;
+    sv.storySeen = [...(sv.storySeen ?? []), key];
+    writeSave(sv);
+    g.modal = true;
+    g.scene.pause();
+    this.showStory(STORY[g.stage.id].intro, () => g.closeModal());
+  }
+
+  /** 劇情對話：頭像＋打字效果，點一下下一句；可以略過 */
+  showStory(lines: StoryLine[], onDone: () => void) {
+    this.openModal(0.55);
+    let idx = 0;
+    let typing: Phaser.Time.TimerEvent | null = null;
+    const boxY = H - 230;
+    const box = this.add.rectangle(W / 2, boxY, 510, 170, 0x0b0916, 0.96).setStrokeStyle(2, COLORS.cyan, 0.8);
+    const portrait = this.add.image(90, boxY - 150, 'avatar-jin').setVisible(false);
+    const frame = this.add.circle(90, boxY - 150, 62).setStrokeStyle(3, COLORS.cyan, 0.9).setVisible(false);
+    const name = this.add.text(36, boxY - 72, '', textStyle(18, '#3df5ff')).setOrigin(0, 0).setStroke('#07060d', 4);
+    const text = this.add.text(36, boxY - 40, '', { ...textStyle(17, '#ffffff', false), wordWrap: { width: 470, useAdvancedWrap: true }, lineSpacing: 6 }).setOrigin(0, 0);
+    const hint = this.add.text(W - 36, boxY + 70, '點一下繼續 ▼', textStyle(12, COLORS.dim, false)).setOrigin(1, 1);
+    this.modalLayer.add([box, frame, portrait, name, text, hint]);
+    const finish = () => {
+      typing?.remove();
+      this.closeModalUI();
+      onDone();
+    };
+    const skip = makeButton(this, W - 70, 120, 100, 44, '略過', 0x888899, finish, 15);
+    this.modalLayer.add(skip);
+    let full = '';
+    const show = () => {
+      const l = lines[idx];
+      const key = `avatar-${l.who}`;
+      const hasFace = l.who !== 'sys' && this.textures.exists(key);
+      portrait.setVisible(hasFace);
+      frame.setVisible(hasFace);
+      if (hasFace) {
+        portrait.setTexture(key);
+        portrait.setScale(120 / portrait.width);
+        portrait.setAlpha(0);
+        this.tweens.add({ targets: portrait, alpha: 1, x: { from: 70, to: 90 }, duration: 200 });
+      }
+      name.setText(SPEAKER_NAME[l.who]);
+      full = l.text;
+      text.setText('').setColor(l.who === 'sys' ? '#c9c6e0' : '#ffffff');
+      let n = 0;
+      typing?.remove();
+      typing = this.time.addEvent({
+        delay: 28,
+        repeat: full.length - 1,
+        callback: () => {
+          n++;
+          text.setText(full.slice(0, n));
+        },
+      });
+    };
+    const dim = this.modalLayer.list[0] as Phaser.GameObjects.Rectangle;
+    dim.on('pointerup', () => {
+      if (text.text.length < full.length) {
+        // 還在打字：先顯示整句
+        typing?.remove();
+        text.setText(full);
+        return;
+      }
+      idx++;
+      if (idx >= lines.length) finish();
+      else show();
+    });
+    show();
   }
 
   /** 新手教學：一張說明卡 */
@@ -149,6 +226,7 @@ export class UIScene extends Phaser.Scene {
       writeSave(save);
       this.closeModalUI();
       this.g.closeModal();
+      this.maybeIntro();
     }, 24);
     this.modalLayer.add(go);
   }
@@ -500,12 +578,13 @@ export class UIScene extends Phaser.Scene {
       else if (u.finisher === 'thunder') this.finisherThunder(layer);
       else if (u.finisher === 'clone') this.ultAnim(layer, 'ultoboro', 12);
       else if (u.finisher === 'orbital') this.ultAnim(layer, 'ulthayabusa');
+      else if (u.finisher === 'concert') this.finisherConcert(layer);
       else this.finisherHyakki(layer);
       this.tweens.add({
         targets: dim,
         fillAlpha: 0,
         duration: 400,
-        delay: u.finisher === 'hyakki' ? 1700 : u.finisher === 'clone' ? 1200 : 700,
+        delay: u.finisher === 'hyakki' || u.finisher === 'concert' ? 1700 : u.finisher === 'clone' ? 1200 : 700,
         onComplete: () => {
           this.events.off('update', ticker);
           layer.removeAll(true);
@@ -527,6 +606,22 @@ export class UIScene extends Phaser.Scene {
     spr.play({ key, frameRate });
     spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spr.destroy());
     return spr;
+  }
+
+  /** SSR 星光演唱會：全息舞台升起 → 彩虹光束爆發 */
+  private finisherConcert(layer: Phaser.GameObjects.Container) {
+    this.ultAnim(layer, 'ultmisora1', 20);
+    this.time.delayedCall(850, () => {
+      const flash = this.add.rectangle(W / 2, H / 2, W, H, 0xf0e0ff, 0.8);
+      layer.add(flash);
+      this.tweens.add({ targets: flash, alpha: 0, duration: 260 });
+      this.ultAnim(layer, 'ultmisora2', 18);
+    });
+    for (let i = 0; i < 26; i++) {
+      const p = this.add.circle(Math.random() * W, H + 20, 2 + Math.random() * 3, [0xb46bff, 0x3df5ff, 0xff8ac8, 0x5dff7a][i % 4], 0.9).setBlendMode(Phaser.BlendModes.ADD);
+      layer.add(p);
+      this.tweens.add({ targets: p, y: -20, x: p.x + (Math.random() - 0.5) * 120, alpha: 0, duration: 1200 + Math.random() * 600, delay: Math.random() * 400 });
+    }
   }
 
   /** SSR 百鬼夜行：鳥居與百鬼橫掃 → 狐火大爆發 */

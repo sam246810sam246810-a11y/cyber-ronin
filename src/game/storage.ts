@@ -87,6 +87,12 @@ export interface SaveData extends UnlockStats {
   screenShake: boolean;
   /** 每關各自解鎖的最高通緝等級 */
   stageWanted: Record<string, number>;
+  /** 角色天賦：學到第幾個節點 */
+  talents: Partial<Record<CharId, number>>;
+  /** 特效品質 */
+  fxQuality: 'high' | 'mid' | 'low';
+  /** 看過的關卡劇情 */
+  storySeen: string[];
 }
 
 const EMPTY: SaveData = {
@@ -155,6 +161,9 @@ const EMPTY: SaveData = {
   showDamage: true,
   screenShake: true,
   stageWanted: {},
+  talents: {},
+  fxQuality: 'high',
+  storySeen: [],
 };
 
 export function loadSave(): SaveData {

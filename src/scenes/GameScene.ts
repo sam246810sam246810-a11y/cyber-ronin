@@ -36,10 +36,11 @@ import { SaveData, formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { vibrate } from '../game/haptics';
 import { applyRunToDaily, equippedStats } from '../game/meta';
-import { charStats, mergeStats, spiritStats, starOf } from '../game/gacha';
+import { charStats, mergeStats, spiritStats, starOf, talentLevel } from '../game/gacha';
 import { SPIRITS, spiritLevel } from '../config/gacha';
 import { STAGES, StageDef, stageById, stageWantedMax } from '../config/stages';
 import { ENDLESS, GameMode, WEEKLY, weekKey, weeklyBoss } from '../config/modes';
+import { STORY } from '../config/story';
 import { MOD_RARITY, MODULE_BASES, ModuleItem, StatKey, dailyChallenge, dropRarity, makeModule, mulberry32, todayKey } from '../config/meta';
 import {
   AFFIXES,
@@ -353,6 +354,8 @@ export class GameScene extends Phaser.Scene {
   intentMult = 1;
   /** 5 星：大招對 Boss 傷害 +50% */
   starUlt = 1;
+  /** 角色天賦學到第幾個 */
+  talent = 0;
   xpMult = 1;
 
   // 第二期：義體模組、每日挑戰
@@ -531,6 +534,9 @@ export class GameScene extends Phaser.Scene {
     for (const k of Object.keys(sp) as StatKey[]) sp[k] = (sp[k] ?? 0) * spMul;
     this.modStats = mergeStats(this.modStats, sp, charStats(this.save, this.char.id));
     this.starUlt = starOf(this.save, this.char.id) >= 5 ? 1.5 : 1;
+    // 角色天賦
+    this.talent = this.isDaily ? 0 : talentLevel(this.save, this.char.id);
+    if (this.talent >= 5) this.starUlt *= 1.3;
     this.wmods = wantedMods(this.wanted);
 
     const cam = this.cameras.main;
@@ -563,6 +569,13 @@ export class GameScene extends Phaser.Scene {
       emitting: false,
     });
     this.sparks.setDepth(12);
+    // 特效品質：中／低時減少粒子
+    const q = this.save.fxQuality ?? 'high';
+    if (q !== 'high') {
+      const f = q === 'mid' ? 0.6 : 0.3;
+      const orig = this.sparks.explode.bind(this.sparks);
+      this.sparks.explode = ((n?: number, x?: number, y?: number) => orig(Math.max(1, Math.round((n ?? 1) * f)), x, y)) as typeof this.sparks.explode;
+    }
 
     for (let i = 0; i < 40; i++) {
       const t = this.add.text(0, 0, '', textStyle(15)).setOrigin(0.5).setDepth(20).setVisible(false);
@@ -579,7 +592,7 @@ export class GameScene extends Phaser.Scene {
     this.banishes = RUN.banishes + (up.banish ?? 0);
     this.locks = RUN.locks + (up.lock ?? 0);
 
-    this.addWeapon(this.char.weapon);
+    this.addWeapon(this.char.weapon, this.talent >= 2 ? 0.15 : 0);
     this.recalc();
     this.hp = this.maxHp;
 
@@ -596,7 +609,7 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch('UI');
     this.ui = this.scene.get('UI') as UIScene;
-    Audio.playMusic('bgm-battle');
+    Audio.playMusic(this.stage.bgm);
   }
 
   private groundSize() {
@@ -729,7 +742,7 @@ export class GameScene extends Phaser.Scene {
     this.might = (1 + 0.1 * this.pp('might') + 0.05 * (up.might ?? 0)) * (has('blood') ? 1.6 : 1);
     this.cdMult = Math.max(0.35, (1 - 0.07 * this.pp('haste')) * (has('battery') ? 0.88 : 1) * (has('berserk') ? 0.75 : 1));
     this.armor = PLAYER.armor + this.char.armor + this.pp('armor');
-    let newMax = this.char.maxHp + 10 * this.pp('armor') + 10 * (up.hp ?? 0) + (has('heart') ? 40 : 0) + Math.round(this.modStats.maxHp ?? 0);
+    let newMax = (this.talent >= 1 ? 15 : 0) + this.char.maxHp + 10 * this.pp('armor') + 10 * (up.hp ?? 0) + (has('heart') ? 40 : 0) + Math.round(this.modStats.maxHp ?? 0);
     if (has('blood')) newMax = Math.round(newMax * 0.5);
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
     this.maxHp = Math.round(newMax);
@@ -738,19 +751,19 @@ export class GameScene extends Phaser.Scene {
     this.speed = PLAYER.speed * this.char.speedMult * (1 + 0.08 * this.pp('camo') + 0.03 * (up.speed ?? 0)) * (has('legs') ? 1.15 : 1);
     this.areaMult = 1 + 0.1 * this.pp('overclock');
     this.healMult = this.wmods.heal * (has('berserk') ? 0 : 1);
-    this.regen = 0.4 * this.pp('nano');
+    this.regen = 0.4 * this.pp('nano') + (this.char.regen ?? 0);
     this.intentMult = this.char.intentMult * (1 + 0.15 * this.pp('intent')) * (has('soul') ? 1.4 : 1);
     this.xpMult = (1 + 0.05 * (up.growth ?? 0)) * (has('xpmod') ? 1.25 : 1) * (has('bounty') ? 1.5 : 1) * (has('devil') ? 0.7 : 1);
     this.luck = (has('coin') ? 3 : 0);
     this.critChance = CRIT.base + (has('scope') ? 0.1 : 0) + (counts.blade >= 2 ? 0.08 : 0) + (this.char.critBonus ?? 0);
     this.critDmg = CRIT.mult + (has('glass') ? 1 : 0) + (counts.blade >= 3 ? 0.5 : 0);
-    this.dmgTakenMult = has('glass') ? 2 : 1;
+    this.dmgTakenMult = (has('glass') ? 2 : 1) * (1 - (this.char.dmgReduce ?? 0));
     this.spawnMult = has('bounty') ? 1.5 : 1;
     this.creditMult = (has('goldhack') ? 2 : 1) * (has('bounty') ? 1.5 : 1);
     this.iaiBossMult = (has('finaliai') ? 2 : 1) * this.starUlt;
     // 義體模組加成
     const m = this.modStats;
-    this.might *= (1 + (m.might ?? 0)) * (this.char.mightMult ?? 1);
+    this.might *= (1 + (m.might ?? 0)) * (this.char.mightMult ?? 1) * (this.talent >= 4 ? 1.08 : 1);
     this.critChance += m.crit ?? 0;
     this.critDmg += m.critDmg ?? 0;
     this.cdMult = Math.max(0.3, this.cdMult * (1 - (m.cdr ?? 0)));
@@ -760,7 +773,7 @@ export class GameScene extends Phaser.Scene {
     this.pickupR *= 1 + (m.pickup ?? 0);
     this.xpMult *= 1 + (m.xp ?? 0);
     this.luck += m.luck ?? 0;
-    this.intentMult *= 1 + (m.intent ?? 0);
+    this.intentMult *= (1 + (m.intent ?? 0)) * (this.talent >= 3 ? 1.15 : 1);
     this.tagDmg = { blade: m.blade ?? 0, volt: m.volt ?? 0, hack: m.hack ?? 0, fire: m.fire ?? 0 };
 
     for (const w of this.weapons) w.stats = this.computeStats(w.id, w.level);
@@ -1912,7 +1925,7 @@ export class GameScene extends Phaser.Scene {
         this.bossKills++;
         this.cameras.main.shake(300, 0.012);
         this.ui.banner(T.bossDown, '#ffc83d');
-        if (!this.bosses.some((b) => b.active && b !== e)) Audio.playMusic('bgm-battle');
+        if (!this.bosses.some((b) => b.active && b !== e)) Audio.playMusic(this.stage.bgm);
         if (e.boss?.final) {
           this.finalKilled = true;
           if (this.t < RUN.duration) this.ui.banner(T.waitDawn, '#3df5ff', 2.4);
@@ -2134,6 +2147,23 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         }
+        case 'song':
+        case 'songx': {
+          // 音波突擊：以自己為中心的音波環
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            if (!this.nearestEnemies(1, 200 * s.area)[0]) {
+              w.timer = 0.2;
+              break;
+            }
+            w.timer = Math.max(0.3, s.cooldown * this.cdMult);
+            this.playerAttack(this.faceX, this.faceY);
+            for (let i = 0; i < s.amount; i++) {
+              this.time.delayedCall(i * 180, () => this.songPulse(110 * s.area, dmg, w.id === 'songx'));
+            }
+          }
+          break;
+        }
         case 'shadow':
         case 'shadowx': {
           // 影分身：分身瞬移到附近敵人身邊斬擊
@@ -2297,6 +2327,36 @@ export class GameScene extends Phaser.Scene {
       }
     }
     return best;
+  }
+
+  /** 音波環：擴散的音波，擊退並傷害範圍內的敵人；進化後會回血並撒星光 */
+  private songPulse(r: number, dmg: number, evolved: boolean) {
+    this.curTag = 'volt';
+    Audio.play('sfx-laser', 0.18, 300, 300);
+    const near = this.grid.query(this.px, this.py, r + 40, tmp2);
+    let hit = 0;
+    for (const e of near) {
+      if (!e.active) continue;
+      const dx = e.x - this.px;
+      const dy = e.y - this.py;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d > r + e.radius * 0.5) continue;
+      this.damageEnemy(e, dmg, (dx / d) * 160, (dy / d) * 160);
+      if (evolved && hit < 4 && this.textures.exists('proj-star')) {
+        const st = this.add.image(e.x, e.y, 'proj-star').setScale(0.3).setDepth(9).setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: st, scale: 0.6, alpha: 0, angle: 90, duration: 400, onComplete: () => st.destroy() });
+      }
+      hit++;
+    }
+    if (evolved && hit > 0) this.hp = Math.min(this.maxHp, this.hp + 1.5 * this.healMult);
+    const key = this.textures.exists('proj-wave') ? 'proj-wave' : null;
+    if (key) {
+      const ring = this.add.image(this.px, this.py, key).setDepth(8).setBlendMode(Phaser.BlendModes.ADD);
+      const full = (r * 2) / ring.width;
+      ring.setScale(full * 0.2).setAlpha(0.95);
+      if (evolved) ring.setTint(0xffc8f0);
+      this.tweens.add({ targets: ring, scale: full, alpha: 0, duration: 380, ease: 'Cubic.Out', onComplete: () => ring.destroy() });
+    }
   }
 
   /** 影分身斬擊：在目標位置出現分身殘影並範圍斬擊 */
@@ -2859,6 +2919,17 @@ export class GameScene extends Phaser.Scene {
 
   /** 依角色發動專屬大招 */
   private executeUltimate() {
+    // 天賦「奧義覺醒」：大招傷害 +30%（對雜兵；對 Boss 已算在 starUlt）
+    const m0 = this.might;
+    if (this.talent >= 5) this.might *= 1.3;
+    try {
+      this.executeUltimateInner();
+    } finally {
+      this.might = m0;
+    }
+  }
+
+  private executeUltimateInner() {
     const fin = ULTIMATES[this.char.id].finisher;
     if (fin === 'slash') {
       this.executeIai();
@@ -2919,6 +2990,27 @@ export class GameScene extends Phaser.Scene {
           if (e?.active) this.addStrike(e.x, e.y, 80, 160 * this.might);
         });
       }
+    } else if (fin === 'concert') {
+      // 星光演唱會：畫面內敵人著迷停住 2.5 秒並受傷，自己回復 40% 生命、3 秒無敵；第二段彩虹爆發
+      for (const e of onScreen) {
+        if (e.def.kind === 'boss') {
+          this.damageEnemy(e, e.maxHp * 0.08 * this.iaiBossMult, 0, 0, true, true);
+          continue;
+        }
+        e.stun = 2.5;
+        this.damageEnemy(e, 160 * this.might, 0, 0, true, true);
+      }
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.4);
+      this.invuln = Math.max(this.invuln, 3);
+      this.time.delayedCall(900, () => {
+        const xx0 = this.px - W / 2 - 40;
+        const yy0 = this.py - H / 2 - 40;
+        for (const e of this.activeEnemies) {
+          if (!e.active || e.x < xx0 || e.x > xx0 + W + 80 || e.y < yy0 || e.y > yy0 + H + 80) continue;
+          if (e.def.kind !== 'boss') this.damageEnemy(e, 140 * this.might, 0, 0, true, true);
+        }
+        this.cameras.main.shake(260, 0.012);
+      });
     } else if (fin === 'hyakki') {
       // 百鬼夜行：橫掃畫面內所有敵人，存活的恐懼逃跑 4 秒
       for (const e of onScreen) {
@@ -3226,6 +3318,7 @@ export class GameScene extends Phaser.Scene {
     for (const k of this.seenEnemies) if (!save.seenEnemies.includes(k)) save.seenEnemies.push(k);
     // 檢查新解鎖
     const unlocked: string[] = [];
+    let outro = false;
     // 無盡模式紀錄
     if (this.mode === 'endless') {
       const eb = save.endlessBest ?? { time: 0, kills: 0 };
@@ -3261,6 +3354,10 @@ export class GameScene extends Phaser.Scene {
       if (!sb || this.t > sb.time || (victory && this.kills > sb.kills)) save.stageBest[sid] = { time: Math.max(this.t, sb?.time ?? 0), kills: Math.max(this.kills, sb?.kills ?? 0) };
       if (victory && !save.stagesCleared.includes(sid)) {
         save.stagesCleared.push(sid);
+        if (!(save.storySeen ?? []).includes(`${sid}-outro`)) {
+          save.storySeen = [...(save.storySeen ?? []), `${sid}-outro`];
+          outro = true;
+        }
         const fc = this.stage.firstClear;
         save.chips += fc.chips;
         save.tickets.char += fc.char;
@@ -3312,7 +3409,9 @@ export class GameScene extends Phaser.Scene {
     Audio.stopMusic();
     Audio.play(victory ? 'sfx-victory' : 'sfx-defeat', 0.6);
     const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked, modules: this.moduleDrops, chips, daily: this.isDaily, mode: this.mode, weeklyDmg: Math.round(this.weeklyDmg) };
-    this.ui.showResults(result);
+    // 第一次通關：先播通關劇情再顯示結算
+    if (outro) this.ui.showStory(STORY[this.stage.id].outro, () => this.ui.showResults(result));
+    else this.ui.showResults(result);
   }
 
   // ---------- 除錯 ----------
@@ -3443,6 +3542,9 @@ export class GameScene extends Phaser.Scene {
   playFx(name: string, x: number, y: number, size: number, rotation = 0, tint = 0xffffff, rate = 24, depth = 9): boolean {
     const key = `fx-${name}`;
     if (!this.anims.exists(key)) return false;
+    // 特效品質：中／低時略過一部分命中特效
+    const fq = this.save.fxQuality ?? 'high';
+    if (name === 'hit' && fq !== 'high' && Math.random() < (fq === 'mid' ? 0.35 : 0.7)) return false;
     let sp = this.fxPool.find((q) => !q.visible);
     if (!sp) {
       if (this.fxPool.length >= 90) return false;

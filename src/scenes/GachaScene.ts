@@ -115,8 +115,8 @@ export class GachaScene extends Phaser.Scene {
       const glow = this.add.ellipse(W / 2, cy + h * 0.42, 420, 70, 0xff3d81, 0.18);
       this.tweens.add({ targets: glow, alpha: 0.5, yoyo: true, repeat: -1, duration: 1400 });
       const order: [CharId, number, number][] = [
-        ['oboro', -150, 0.8],
-        ['hayabusa', 150, 0.8],
+        ['hayabusa', -150, 0.8],
+        ['misora', 150, 0.8],
       ];
       for (const [id, dx, sc] of order) {
         const key = this.textures.exists(`hd-${id}`) ? `hd-${id}` : `char-${id}`;
@@ -133,7 +133,7 @@ export class GachaScene extends Phaser.Scene {
         (star as Phaser.GameObjects.Sprite).play('live-kagura');
       } else star = this.add.image(W / 2, cy + h / 2 - 20, this.textures.exists('hd-kagura') ? 'hd-kagura' : 'char-kagura').setOrigin(0.5, 1);
       star.setScale((h * 0.98) / star.texture.getSourceImage().height).setName('machine');
-      this.add.text(W / 2, cy - h / 2 + 10, 'SSR 陰陽師・神樂 登場！', textStyle(18, '#ffd84d')).setOrigin(0.5).setStroke('#7a1a4a', 5);
+      this.add.text(W / 2, cy - h / 2 + 10, 'SSR：神樂・美空 登場！', textStyle(18, '#ffd84d')).setOrigin(0.5).setStroke('#7a1a4a', 5);
       this.add.text(W / 2, cy + h / 2 - 6, 'SR：刃・零・鐵・朧・隼　碎片集滿可以解鎖、升星', textStyle(13, '#ffffff', false)).setOrigin(0.5).setStroke('#07060d', 4);
       return;
     }
@@ -171,24 +171,50 @@ export class GachaScene extends Phaser.Scene {
     writeSave(s);
     this.busy = true;
     const best = Math.max(...res.map((m) => m.rarity));
+    const col = MOD_RARITY[best].color;
     Audio.play('sfx-chest', 0.5);
     vibrate(40);
-    const targets = this.children.list.filter((o) => o.name === 'machine');
-    targets.forEach((t) => this.tweens.add({ targets: t, angle: { from: -4, to: 4 }, yoyo: true, repeat: 3, duration: 70, onComplete: () => (t as Phaser.GameObjects.Image).setAngle(0) }));
+    // 全螢幕演出：暗場 → 機器放大搖晃、燈光閃爍 → 膠囊掉出彈跳 → 打開時依稀有度放出光柱
+    const show = this.add.container(0, 0).setDepth(15);
+    const dark = this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0).setInteractive();
+    show.add(dark);
+    this.tweens.add({ targets: dark, fillAlpha: 0.92, duration: 250 });
+    const mKey = this.textures.exists('gacha-machine') ? 'gacha-machine' : 'pickup-chest';
+    const machine = this.add.image(W / 2, H * 0.4, mKey);
+    const ms = (W * 0.75) / Math.max(machine.width, machine.height);
+    machine.setScale(ms * 0.8).setAlpha(0);
+    show.add(machine);
+    this.tweens.add({ targets: machine, scale: ms, alpha: 1, duration: 300, ease: 'Back.Out' });
+    this.tweens.add({ targets: machine, angle: { from: -5, to: 5 }, yoyo: true, repeat: 5, duration: 60, delay: 300, onComplete: () => machine.setAngle(0) });
+    // 機器周圍的燈
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const lamp = this.add.circle(W / 2 + Math.cos(a) * 190, H * 0.4 + Math.sin(a) * 210, 9, [0xff3d81, 0x3df5ff, 0xffd84d][i % 3], 0.9).setBlendMode(Phaser.BlendModes.ADD);
+      show.add(lamp);
+      this.tweens.add({ targets: lamp, alpha: 0.15, yoyo: true, repeat: -1, duration: 120, delay: i * 40 });
+    }
     const capKey = `capsule-${best}`;
-    const cap = this.add.image(W / 2, 420, this.textures.exists(capKey) ? capKey : 'gem3').setScale(0.4).setAlpha(0).setDepth(5);
-    this.tweens.add({ targets: cap, alpha: 1, y: 520, scale: 1.4, delay: 350, duration: 450, ease: 'Bounce.Out' });
-    const col = MOD_RARITY[best].color;
-    this.time.delayedCall(850, () => {
-      const pillar = this.add.rectangle(W / 2, H / 2, best >= 2 ? 180 : 90, H, col, 0.6).setDepth(6);
-      this.tweens.add({ targets: pillar, alpha: 0, scaleX: best === 3 ? 4 : 2, duration: 700 });
-      if (best === 3) {
-        this.cameras.main.flash(400, 255, 210, 80);
-        Audio.play('sfx-levelup', 0.7);
-        vibrate(150);
+    const cap = this.add.image(W / 2, H * 0.52, this.textures.exists(capKey) ? capKey : 'gem3').setScale(0.4).setAlpha(0);
+    show.add(cap);
+    this.tweens.add({ targets: cap, alpha: 1, y: H * 0.7, scale: 1.8, delay: 750, duration: 500, ease: 'Bounce.Out' });
+    this.time.delayedCall(1350, () => {
+      // 膠囊打開：光柱
+      this.tweens.add({ targets: cap, scale: 2.6, alpha: 0, duration: 200 });
+      const beams = best === 3 ? 5 : best === 2 ? 3 : 1;
+      for (let i = 0; i < beams; i++) {
+        const c = best === 3 ? [0xffc83d, 0xff8ac8, 0x3df5ff, 0x5dff7a, 0xb46bff][i] : col;
+        const pillar = this.add.rectangle(W / 2 + (i - (beams - 1) / 2) * 60, H / 2, 70, H * 1.2, c, 0.55).setBlendMode(Phaser.BlendModes.ADD);
+        show.add(pillar);
+        this.tweens.add({ targets: pillar, alpha: 0, scaleX: 3, duration: 900 });
       }
+      Audio.play(best >= 2 ? 'sfx-levelup' : 'sfx-gem', 0.6);
+      if (best === 3) {
+        this.cameras.main.flash(500, 255, 210, 80);
+        vibrate(150);
+      } else vibrate(50);
       const ssrChar = res.find((it) => it.kind === 'char' && it.rarity === 3);
-      this.time.delayedCall(450, () => {
+      this.time.delayedCall(600, () => {
+        show.destroy();
         if (ssrChar && ssrChar.kind === 'char') this.ssrReveal(ssrChar.char, () => this.showResults(res));
         else this.showResults(res);
       });
@@ -308,34 +334,73 @@ export class GachaScene extends Phaser.Scene {
 
   private showResults(res: PullItem[]) {
     const layer = this.add.container(0, 0).setDepth(10);
-    layer.add(this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.92).setInteractive());
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.92).setInteractive();
+    layer.add(bg);
     layer.add(this.add.text(W / 2, 150, res.length === 1 ? '抽卡結果' : '十連結果', textStyle(30, '#ffd84d')).setOrigin(0.5));
     const cols = res.length === 1 ? 1 : 5;
     const size = res.length === 1 ? 160 : 92;
+    const flips: (() => void)[] = [];
     res.forEach((it, i) => {
       const x = W / 2 + ((i % cols) - (cols - 1) / 2) * (size + 8);
       const y = (res.length === 1 ? 330 : 260) + Math.floor(i / cols) * (size + 46);
+      // 背面：依稀有度發光的卡背
+      const back = this.add.container(x, y);
+      const rc = MOD_RARITY[it.rarity].color;
+      back.add(this.add.rectangle(0, 0, size, size, 0x1a1430, 1).setStrokeStyle(3, it.rarity >= 2 ? rc : 0x3a3168, 1));
+      back.add(this.add.text(0, 0, '?', textStyle(size * 0.4, it.rarity >= 2 ? MOD_RARITY[it.rarity].css : '#5a5678')).setOrigin(0.5));
+      if (it.rarity >= 2) this.tweens.add({ targets: back, alpha: 0.75, yoyo: true, repeat: -1, duration: 300 });
+      back.setScale(0);
+      this.tweens.add({ targets: back, scale: 1, delay: i * 60, duration: 200, ease: 'Back.Out' });
+      layer.add(back);
       const { card, name } = this.itemCard(x, y, size, it);
-      card.setScale(0);
-      this.tweens.add({ targets: card, scale: 1, delay: i * 90, duration: 220, ease: 'Back.Out' });
-      if (it.rarity === 3) {
-        const shine = this.add.rectangle(x, y, size + 10, size + 10, 0xffc83d, 0).setStrokeStyle(3, 0xffe08a, 1);
-        this.tweens.add({ targets: shine, alpha: 0.2, yoyo: true, repeat: -1, duration: 500 });
-        layer.add(shine);
-      }
-      const t = this.add.text(x, y + size / 2 + 6, name, textStyle(12, MOD_RARITY[it.rarity].css, false)).setOrigin(0.5, 0);
+      card.setVisible(false);
+      const t = this.add.text(x, y + size / 2 + 6, name, textStyle(12, MOD_RARITY[it.rarity].css, false)).setOrigin(0.5, 0).setAlpha(0);
       layer.add([card, t]);
+      let flipped = false;
+      const flip = () => {
+        if (flipped) return;
+        flipped = true;
+        this.tweens.killTweensOf(back);
+        this.tweens.add({
+          targets: back,
+          scaleX: 0,
+          duration: 120,
+          onComplete: () => {
+            back.destroy();
+            card.setVisible(true).setScale(0, 1);
+            this.tweens.add({ targets: card, scaleX: 1, duration: 140, ease: 'Back.Out' });
+            this.tweens.add({ targets: t, alpha: 1, duration: 200 });
+            if (it.rarity >= 2) {
+              Audio.play('sfx-gem', 0.5);
+              const burst = this.add.circle(x, y, size * 0.5, rc, 0.5).setBlendMode(Phaser.BlendModes.ADD);
+              layer.add(burst);
+              this.tweens.add({ targets: burst, scale: 2, alpha: 0, duration: 400, onComplete: () => burst.destroy() });
+            }
+            if (it.rarity === 3) {
+              const shine = this.add.rectangle(x, y, size + 10, size + 10, 0xffc83d, 0).setStrokeStyle(3, 0xffe08a, 1);
+              this.tweens.add({ targets: shine, alpha: 0.2, yoyo: true, repeat: -1, duration: 500 });
+              layer.add(shine);
+            }
+          },
+        });
+      };
+      flips.push(flip);
+      back.setSize(size, size).setInteractive({ useHandCursor: true }).on('pointerup', flip);
       if (res.length === 1 && it.kind === 'module') {
-        const base = MODULE_BASES.find((b) => b.id === it.module.base)!;
+        const base = MODULE_BASES.find((b2) => b2.id === it.module.base)!;
         const lines = [fmtStat(base.main, mainValue(it.module)), ...it.module.subs.map((x2) => fmtStat(x2.key, x2.value))];
         layer.add(this.add.text(W / 2, y + size / 2 + 34, lines.join('\n'), { ...textStyle(15, '#c9c6e0', false), align: 'center' }).setOrigin(0.5, 0));
       }
     });
+    // 一張一張自動翻開；點按鈕可以全部翻開
+    flips.forEach((f, i) => this.time.delayedCall(500 + i * 220, f));
     const ok = makeButton(this, W / 2, H - 150, 260, 64, '確定', COLORS.cyan, () => {
+      if (flips.length > 1) flips.forEach((f) => f());
       this.busy = false;
       this.draw();
     }, 22);
-    layer.add(ok);
+    const all = makeButton(this, W / 2, H - 230, 200, 48, '全部翻開', 0x888899, () => flips.forEach((f) => f()), 16);
+    layer.add([all, ok]);
   }
 
   private overlay(title: string) {

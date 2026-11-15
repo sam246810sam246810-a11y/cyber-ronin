@@ -51,7 +51,9 @@ export type WeaponId =
   | 'talisman'
   | 'shadowx'
   | 'railx'
-  | 'talismanx';
+  | 'talismanx'
+  | 'song'
+  | 'songx';
 
 export interface WeaponStats {
   damage: number;
@@ -307,7 +309,32 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
       { delta: { amount: 2 }, desc: '符咒 +2' },
     ],
   },
+  song: {
+    id: 'song',
+    name: '音波突擊',
+    desc: '專屬武器：以自己為中心放出音波環，擊退並傷害周圍的敵人。',
+    color: 0xb46bff,
+    base: S({ damage: 18, cooldown: 1.4, area: 1, amount: 1 }),
+    levels: [
+      { delta: { damage: 6 }, desc: '傷害 +6' },
+      { delta: { area: 0.2 }, desc: '音波範圍 +20%' },
+      { delta: { amount: 1 }, desc: '連續音波 +1' },
+      { delta: { cooldown: -0.2 }, desc: '冷卻 -0.2 秒' },
+      { delta: { damage: 8, area: 0.15 }, desc: '傷害 +8、範圍 +15%' },
+      { delta: { amount: 1 }, desc: '連續音波 +1' },
+      { delta: { damage: 12 }, desc: '傷害 +12' },
+    ],
+  },
   // 專屬武器的進化
+  songx: {
+    id: 'songx',
+    name: '星光安可',
+    desc: '進化武器：巨大的彩虹音波，每一波都會回復生命並撒出星光。',
+    color: 0xff8ac8,
+    base: S({ damage: 40, cooldown: 1, area: 1.6, amount: 3 }),
+    levels: [],
+    evolved: true,
+  },
   shadowx: {
     id: 'shadowx',
     name: '百影・朧月',
@@ -373,10 +400,11 @@ export const EVOLUTIONS: { weapon: WeaponId; passive: PassiveId; result: WeaponI
   { weapon: 'shadow', passive: 'camo', result: 'shadowx' },
   { weapon: 'railgun', passive: 'overclock', result: 'railx' },
   { weapon: 'talisman', passive: 'intent', result: 'talismanx' },
+  { weapon: 'song', passive: 'nano', result: 'songx' },
 ];
 
 // ---------- 角色 ----------
-export type CharId = 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura';
+export type CharId = 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura' | 'misora';
 
 export interface CharDef {
   id: CharId;
@@ -400,6 +428,10 @@ export interface CharDef {
   mightMult?: number;
   /** 式神（靈物池）加成倍率 */
   spiritMult?: number;
+  /** 額外每秒回復 */
+  regen?: number;
+  /** 受到的傷害減少（比例） */
+  dmgReduce?: number;
 }
 
 export const CHARACTERS: Record<CharId, CharDef> = {
@@ -486,9 +518,25 @@ export const CHARACTERS: Record<CharId, CharDef> = {
     mightMult: 1.15,
     spiritMult: 1.5,
   },
+  misora: {
+    id: 'misora',
+    name: '歌姬・美空',
+    role: '偶像應援型',
+    trait: '攻擊 +12%、大招能量 +25%、每秒回復 1 生命、受到傷害 -10%',
+    weapon: 'song',
+    maxHp: 105,
+    speedMult: 1.05,
+    armor: 0,
+    intentMult: 1.25,
+    extraAmount: 0,
+    cost: 0,
+    mightMult: 1.12,
+    regen: 1,
+    dmgReduce: 0.1,
+  },
 };
 
-export const CHAR_ORDER: CharId[] = ['jin', 'zero', 'tetsu', 'oboro', 'hayabusa', 'kagura'];
+export const CHAR_ORDER: CharId[] = ['jin', 'zero', 'tetsu', 'oboro', 'hayabusa', 'kagura', 'misora'];
 
 // ---------- 局外強化 ----------
 export type UpgradeId = 'might' | 'hp' | 'speed' | 'pickup' | 'growth' | 'reroll' | 'banish' | 'lock';

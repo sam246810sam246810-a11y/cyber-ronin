@@ -1,6 +1,6 @@
 // 三池扭蛋的共用邏輯：付費、抽卡、角色升星、式神等級與加成。
 import { CHARACTERS, CharId } from '../config/balance';
-import { CHAR_POOL, CHAR_RARITY, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, STARTER, SpiritId, UNLOCK_SHARDS, spiritLevel, starStats } from '../config/gacha';
+import { CHAR_POOL, CHAR_RARITY, CHAR_TALENTS, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, STARTER, SpiritId, UNLOCK_SHARDS, spiritLevel, starStats } from '../config/gacha';
 import { ModuleItem, StatKey, makeModule } from '../config/meta';
 import { SaveData } from './storage';
 
@@ -131,6 +131,29 @@ export function unlockChar(s: SaveData, c: CharId): boolean {
   s.wildShards -= cost - own;
   s.chars.push(c);
   s.stars[c] = 1;
+  return true;
+}
+
+// ---------- 角色天賦 ----------
+export function talentLevel(s: SaveData, c: CharId): number {
+  return s.talents?.[c] ?? 0;
+}
+
+export function canLearnTalent(s: SaveData, c: CharId): boolean {
+  const lv = talentLevel(s, c);
+  const t = CHAR_TALENTS[lv];
+  return !!t && ownsChar(s, c) && (s.shards[c] ?? 0) + s.wildShards >= t.shards && s.credits >= t.credits;
+}
+
+/** 學下一個天賦：先用該角色碎片，不夠再用萬能碎片 */
+export function learnTalent(s: SaveData, c: CharId): boolean {
+  if (!canLearnTalent(s, c)) return false;
+  const t = CHAR_TALENTS[talentLevel(s, c)];
+  const own = Math.min(s.shards[c] ?? 0, t.shards);
+  s.shards[c] = (s.shards[c] ?? 0) - own;
+  s.wildShards -= t.shards - own;
+  s.credits -= t.credits;
+  s.talents = { ...(s.talents ?? {}), [c]: talentLevel(s, c) + 1 };
   return true;
 }
 

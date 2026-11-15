@@ -32,6 +32,8 @@ export interface StageDef {
   finalBoss?: { tex: string; title: string; desc: string; variant: 'oni' | 'spider' | 'apex'; hp: number };
   hazard: HazardKind;
   hazardDesc: string;
+  /** 戰鬥音樂 */
+  bgm: string;
   /** 首次通關獎勵 */
   firstClear: { chips: number; char: number; spirit: number };
 }
@@ -39,6 +41,7 @@ export interface StageDef {
 export const STAGES: StageDef[] = [
   {
     id: 'slums',
+    bgm: 'bgm-battle',
     name: '霓虹貧民窟',
     desc: '雨夜的霓虹巷弄，幫派與企業無人機橫行。',
     ground: 'ground',
@@ -55,6 +58,7 @@ export const STAGES: StageDef[] = [
   },
   {
     id: 'tower',
+    bgm: 'bgm-tower',
     name: '企業高塔',
     desc: '雲層之上的企業總部頂樓，保全機犬與鎮暴兵嚴陣以待。',
     ground: 'ground-tower',
@@ -75,6 +79,7 @@ export const STAGES: StageDef[] = [
   },
   {
     id: 'shrine',
+    bgm: 'bgm-shrine',
     name: '電子神社',
     desc: '被駭入程式汙染的神社，妖怪化的程式在鳥居間徘徊。',
     ground: 'ground-shrine',
@@ -95,6 +100,7 @@ export const STAGES: StageDef[] = [
   },
   {
     id: 'grave',
+    bgm: 'bgm-grave',
     name: '地下數據墳場',
     desc: '廢棄伺服器堆成的墓園，死去的資料化成幽靈。',
     ground: 'ground-grave',
@@ -115,6 +121,7 @@ export const STAGES: StageDef[] = [
   },
   {
     id: 'orbit',
+    bgm: 'bgm-orbit',
     name: '軌道太空站',
     desc: '地球上空的軌道兵器平台，最後的決戰。',
     ground: 'ground-orbit',

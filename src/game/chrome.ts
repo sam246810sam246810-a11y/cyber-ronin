@@ -172,9 +172,9 @@ export function openSettings(scene: Phaser.Scene) {
   const layer = scene.add.container(0, 0).setDepth(200);
   const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.8).setInteractive();
   layer.add(dim);
-  const panel = panelBox(scene, W / 2, H / 2, 420, 560);
+  const panel = panelBox(scene, W / 2, H / 2, 420, 640);
   layer.add(panel);
-  const title = scene.add.text(W / 2, H / 2 - 230, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
+  const title = scene.add.text(W / 2, H / 2 - 268, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
   title.setStroke('#07060d', 5);
   layer.add(title);
   const rows: [string, () => boolean, (v: boolean) => void][] = [
@@ -199,7 +199,7 @@ export function openSettings(scene: Phaser.Scene) {
     }],
   ];
   rows.forEach(([name, get, set], i) => {
-    const y = H / 2 - 160 + i * 74;
+    const y = H / 2 - 200 + i * 74;
     layer.add(scene.add.text(W / 2 - 160, y, name, textStyle(22)).setOrigin(0, 0.5));
     const b = makeButton(scene, W / 2 + 110, y, 140, 52, '', COLORS.cyan, () => {
       set(!get());
@@ -208,7 +208,19 @@ export function openSettings(scene: Phaser.Scene) {
     b.setLabel(get() ? '開' : '關').setActive2(get());
     layer.add(b);
   });
-  const close = makeButton(scene, W / 2, H / 2 + 220, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
+  // 特效品質：高 → 中 → 低
+  const qy = H / 2 - 200 + rows.length * 74;
+  layer.add(scene.add.text(W / 2 - 160, qy, '特效品質', textStyle(22)).setOrigin(0, 0.5));
+  const qName = { high: '高', mid: '中', low: '低' } as const;
+  const qb = makeButton(scene, W / 2 + 110, qy, 140, 52, qName[loadSave().fxQuality ?? 'high'], COLORS.gold, () => {
+    const s = loadSave();
+    const order = ['high', 'mid', 'low'] as const;
+    s.fxQuality = order[(order.indexOf(s.fxQuality ?? 'high') + 1) % 3];
+    writeSave(s);
+    qb.setLabel(qName[s.fxQuality]);
+  }, 20);
+  layer.add(qb);
+  const close = makeButton(scene, W / 2, H / 2 + 268, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
   layer.add(close);
   layer.setScale(0.9).setAlpha(0);
   scene.tweens.add({ targets: layer, scale: 1, alpha: 1, duration: 180, ease: 'Back.Out' });

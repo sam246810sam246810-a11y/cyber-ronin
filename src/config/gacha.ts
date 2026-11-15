@@ -27,7 +27,7 @@ export const POOL_ORDER: PoolId[] = ['equip', 'char', 'spirit'];
 
 // ---------- 角色池 ----------
 /** 角色的稀有度：角色最低就是 SR，N／R 只會抽到角色碎片 */
-export const CHAR_RARITY: Record<CharId, 2 | 3> = { jin: 2, zero: 2, tetsu: 2, oboro: 2, hayabusa: 2, kagura: 3 };
+export const CHAR_RARITY: Record<CharId, 2 | 3> = { jin: 2, zero: 2, tetsu: 2, oboro: 2, hayabusa: 2, kagura: 3, misora: 3 };
 /** 一開始就擁有的角色（其他角色都要從角色池取得） */
 export const STARTER: CharId = 'jin';
 /** 用碎片直接解鎖角色需要的數量 */
@@ -110,4 +110,20 @@ export const SPIRIT_SETS: SpiritSet[] = [
   { name: '百鬼夜行', members: ['fox', 'kappa', 'tengu', 'oni'], bonus: { might: 0.05 }, desc: '攻擊力 +5%' },
   { name: '吉祥四寶', members: ['turtle', 'crane', 'baku', 'cat'], bonus: { maxHp: 20, luck: 1 }, desc: '最大生命 +20、幸運 +1' },
   { name: '天之眷屬', members: ['raiju', 'snake', 'kyubi', 'dragon'], bonus: { crit: 0.05, cdr: 0.05 }, desc: '暴擊率 +5%、武器冷卻 -5%' },
+];
+
+// ---------- 角色天賦（每個角色 5 個節點，依序學習） ----------
+export interface CharTalent {
+  name: string;
+  desc: string;
+  shards: number;
+  credits: number;
+}
+
+export const CHAR_TALENTS: CharTalent[] = [
+  { name: '體魄強化', desc: '最大生命 +15', shards: 5, credits: 300 },
+  { name: '武器專精', desc: '起始武器傷害 +15%', shards: 10, credits: 600 },
+  { name: '大招充能', desc: '大招能量累積 +15%', shards: 15, credits: 1000 },
+  { name: '戰鬥本能', desc: '攻擊力 +8%', shards: 20, credits: 1500 },
+  { name: '奧義覺醒', desc: '大招傷害 +30%', shards: 30, credits: 2500 },
 ];
