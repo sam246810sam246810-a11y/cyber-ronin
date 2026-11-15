@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { inputState, type Action } from '../systems/inputState';
 import { EV, type BannerInfo, type CreditsInfo, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
-import { currentObjective, gameState, className } from '../systems/gameState';
+import { currentObjective, gameState, className, newGamePlus, setGameState } from '../systems/gameState';
 import { hudState } from '../systems/hudState';
 import { STATUS_NAME, type StatusKind } from '../systems/combat';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
@@ -98,7 +98,10 @@ export class UIScene extends Phaser.Scene {
       [EV.area, (name: string) => { if (this.dialogue.isOpen) { this.dialogue.close(); this.showButtons(true); } this.showAreaName(name); }],
       [EV.banner, (b: BannerInfo) => this.banner(b)],
       [EV.shop, (id: string) => this.openOverlay(() => this.overlay.openShop(id, () => this.closeOverlay()))],
-      [EV.credits, (c: CreditsInfo) => this.openOverlay(() => this.overlay.openCredits(c, () => { this.closeOverlay(); this.scene.stop(SCENES.world); this.scene.start(SCENES.title); }, () => this.closeOverlay()))],
+      [EV.credits, (c: CreditsInfo) => this.openOverlay(() => this.overlay.openCredits(c,
+        () => { this.closeOverlay(); this.scene.stop(SCENES.world); this.scene.start(SCENES.title); },
+        () => this.closeOverlay(),
+        () => { this.closeOverlay(); setGameState(newGamePlus(gameState)); this.scene.stop(SCENES.world); this.scene.stop(); this.scene.start(SCENES.world, { map: 'home', spawn: 'door', face: 'up', intro: true }); }))],
       [EV.forge, () => this.openOverlay(() => this.overlay.openForge(() => this.closeOverlay()))],
       [EV.board, () => this.openOverlay(() => this.overlay.openBoard(() => this.closeOverlay()))],
       [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay(), (map, spawn) => { this.closeOverlay(); this.game.events.emit(EV.warp, { map, spawn }); }))],
@@ -152,7 +155,7 @@ export class UIScene extends Phaser.Scene {
   private drawBars(): void {
     const g = this.bars; g.clear();
     const w = 80, x = 14;
-    this.label.setText(`燈・${className(gameState)}　Lv.${gameState.level}`);
+    this.label.setText(`燈・${className(gameState)}　Lv.${gameState.level}${gameState.ngPlus ? `　${gameState.ngPlus + 1}周目` : ''}`);
     const hp = Phaser.Math.Clamp(gameState.hp / hudState.maxHp, 0, 1), mp = Phaser.Math.Clamp(gameState.mp / hudState.maxMp, 0, 1);
     g.fillStyle(0x000000, 0.6).fillRect(x, 22, w, 6).fillRect(x, 33, w, 4);
     g.fillStyle(hp > 0.3 ? 0xd04848 : 0xff2a2a, 1).fillRect(x, 22, w * hp, 6);

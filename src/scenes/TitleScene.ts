@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
 import classes from '../data/classes.json';
+import jobs from '../data/jobs.json';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { useLogicalCamera } from '../ui/camera';
 import { getOverlay } from '../ui/dom/GameOverlay';
 import { deserialize, latestSave, type SaveFile } from '../systems/save';
-import { setGameState } from '../systems/gameState';
+import { newGamePlus, setGameState } from '../systems/gameState';
 import { sound } from '../audio/sound';
 
 export class TitleScene extends Phaser.Scene {
@@ -21,11 +22,11 @@ export class TitleScene extends Phaser.Scene {
       this.tweens.add({ targets: fire, y: fire.y - Phaser.Math.Between(20, 50), alpha: 0.1, duration: Phaser.Math.Between(1800, 3200), yoyo: true, repeat: -1, ease: 'Sine.inOut' });
     }
 
-    this.add.text(cx, 82, '狐火行', { fontFamily: FONT_FAMILY, fontSize: '48px', color: '#f2e6c9', fontStyle: 'bold' })
+    this.add.text(cx, 72, '狐火行', { fontFamily: FONT_FAMILY, fontSize: '48px', color: '#f2e6c9', fontStyle: 'bold' })
       .setOrigin(0.5).setResolution(RENDER_SCALE).setShadow(0, 3, '#c23b2f', 0, false, true);
-    this.add.text(cx, 122, 'KITSUNEBI', { fontFamily: FONT_FAMILY, fontSize: '10px', color: '#a39fb8', letterSpacing: 6 })
+    this.add.text(cx, 110, 'KITSUNEBI', { fontFamily: FONT_FAMILY, fontSize: '10px', color: '#a39fb8', letterSpacing: 6 })
       .setOrigin(0.5).setResolution(RENDER_SCALE);
-    this.add.text(GAME_WIDTH - 6, GAME_HEIGHT - 6, '第一章試玩版', { fontFamily: FONT_FAMILY, fontSize: '9px', color: '#6b6780' })
+    this.add.text(GAME_WIDTH - 6, GAME_HEIGHT - 6, '完整版 v1.0', { fontFamily: FONT_FAMILY, fontSize: '9px', color: '#6b6780' })
       .setOrigin(1, 1).setResolution(RENDER_SCALE);
 
     const latest = latestSave();
@@ -37,9 +38,15 @@ export class TitleScene extends Phaser.Scene {
     }
 
     const f = latest.file;
-    this.button(cx, 162, `繼續遊戲　燈・${classes[f.state.classId].name} Lv.${f.state.level}・${f.areaName}`, true, () => this.loadSave(f));
-    this.button(cx, 194, '新遊戲', false, () => this.go(() => this.scene.start(SCENES.classSelect)));
-    this.button(cx, 226, '讀取存檔', false, () => getOverlay().openLoad((file) => this.loadSave(file), () => {}));
+    this.button(cx, 146, `繼續遊戲　燈・${f.state.job ? (jobs as Record<string, { name: string }>)[f.state.job].name : classes[f.state.classId].name} Lv.${f.state.level}${f.state.ngPlus ? `（${f.state.ngPlus + 1}周目）` : ''}・${f.areaName}`, true, () => this.loadSave(f));
+    this.button(cx, 176, '新遊戲', false, () => this.go(() => this.scene.start(SCENES.classSelect)));
+    this.button(cx, 206, '讀取存檔', false, () => getOverlay().openLoad((file) => this.loadSave(file), () => {}));
+    if (f.state.flags.includes('game_cleared')) this.button(cx, 236, '開始二周目（帶著等級與裝備）', false, () => {
+      const r = deserialize(f);
+      if (!r) return;
+      setGameState(newGamePlus(r.state));
+      this.go(() => this.scene.start(SCENES.world, { map: 'home', spawn: 'door', face: 'up', intro: true }));
+    });
   }
 
   private button(x: number, y: number, label: string, primary: boolean, onTap: () => void): void {

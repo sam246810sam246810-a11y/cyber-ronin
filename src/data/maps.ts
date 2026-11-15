@@ -23,5 +23,6 @@ import oni_castle1 from '../../assets/maps/oni_castle1.json';
 import oni_castle2 from '../../assets/maps/oni_castle2.json';
 import shuten_lair from '../../assets/maps/shuten_lair.json';
 import yomi from '../../assets/maps/yomi.json';
+import tower from '../../assets/maps/tower.json';
 
-export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3, lair, swamp, suijin1, suijin2, kappa_lair, mountain, tengu_temple, tengu_lair, oni_road, oni_castle1, oni_castle2, shuten_lair, yomi };
+export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3, lair, swamp, suijin1, suijin2, kappa_lair, mountain, tengu_temple, tengu_lair, oni_road, oni_castle1, oni_castle2, shuten_lair, yomi, tower };

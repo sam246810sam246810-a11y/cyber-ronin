@@ -920,6 +920,7 @@ const maps = {};
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
   obj(m, 'board', 'village_board', tilePoint(17, 13));
+  obj(m, 'portal', 'tower_portal', tilePoint(12, 5), { showFlag: 'game_cleared' });
   // 南邊：往河童沼澤（第二章）
   m.fill('obst', 18, H - 1, 3, 1, 0); m.fill('ground', 18, H - 1, 3, 1, gid.path);
   exit(m, tileRect(18, H - 1, 3, 1), 'swamp', 'north', 'down');
@@ -1478,6 +1479,16 @@ function castleFloor(W, H) {
   obj(m, 'boss', 'hyakki', tilePoint(13, 6), { kind: 'hyakki' });
   for (const [x, y] of [[3, 3], [22, 3], [3, 14], [22, 14]]) obj(m, 'sealstone', `seal_${x}_${y}`, tilePoint(x, y));
   maps.yomi = toTiled(m, { displayName: '黃泉之門', dark: true, boss: true, tier: 4 });
+}
+
+// 百鬼塔（破關後）：每層都用這張場地，妖怪由程式依樓層產生
+{
+  const m = newMap(22, 14, 'castle_floor');
+  m.fill('obst', 0, 0, 22, 14, gid.castle_wall);
+  m.fill('obst', 2, 2, 18, 10, 0);
+  for (const [x, y] of [[6, 5], [15, 5], [6, 9], [15, 9]]) m.set('ground', x, y, gid.yomi_floor);
+  spawn(m, 'entry', 11, 10);
+  maps.tower = toTiled(m, { displayName: '百鬼塔', dark: true, tier: 4 });
 }
 
 mkdirSync('assets/tiles', { recursive: true }); mkdirSync('assets/sprites', { recursive: true }); mkdirSync('assets/maps', { recursive: true });

@@ -80,6 +80,7 @@ export class GameOverlay {
   private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' | 'forge' | 'credits' = 'menu';
   private credits?: CreditsInfo;
   private onTitle: () => void = () => {};
+  private onNGPlus: () => void = () => {};
   private forgeTab: 'craft' | 'enhance' | 'synth' = 'craft';
   private recipe = '';
   private synthSel: number[] = [];
@@ -114,7 +115,7 @@ export class GameOverlay {
 
   openMenu(onClose: () => void): void { this.mode = 'menu'; this.open(onClose); }
   openShop(shopId: string, onClose: () => void): void { this.mode = 'shop'; this.shopId = shopId; this.shopTab = 'buy'; this.open(onClose); }
-  openCredits(info: CreditsInfo, onTitle: () => void, onContinue: () => void): void { this.mode = 'credits'; this.credits = info; this.onTitle = onTitle; this.open(onContinue); }
+  openCredits(info: CreditsInfo, onTitle: () => void, onContinue: () => void, onNGPlus: () => void): void { this.mode = 'credits'; this.credits = info; this.onTitle = onTitle; this.onNGPlus = onNGPlus; this.open(onContinue); }
   openBoard(onClose: () => void): void { this.mode = 'board'; this.open(onClose); }
   openForge(onClose: () => void): void { this.mode = 'forge'; this.forgeTab = 'craft'; this.recipe = ''; this.synthSel = []; this.open(onClose); }
   openSave(req: SaveRequest, onClose: () => void, onWarp: (map: string, spawn: string) => void = () => {}): void { this.mode = 'save'; this.saveReq = req; this.onWarp = onWarp; this.open(onClose); }
@@ -308,7 +309,8 @@ export class GameOverlay {
       <div class="kf-tag">${esc(c.sub)}</div>
       <div style="display:grid;grid-template-columns:auto auto;gap:4px 18px;margin:8px 0">${staff.map(([k, v]) => `<span class="kf-mute" style="text-align:right">${k}</span><span style="text-align:left">${v}</span>`).join('')}</div>
       <div style="max-width:46ch;color:#f2c94c;font-size:12px">${esc(c.hint)}</div>
-      <div class="kf-btns" style="justify-content:center"><button class="kf-btn" data-act="toTitle">回到標題</button><button class="kf-btn secondary" data-act="close">繼續遊玩</button></div>
+      <div class="kf-btns" style="justify-content:center"><button class="kf-btn" data-act="toTitle">回到標題</button><button class="kf-btn secondary" data-act="close">繼續遊玩</button><button class="kf-btn secondary" data-act="ngplus">開始二周目</button></div>
+      <div class="kf-tag">二周目：保留等級、職業、裝備與金錢，劇情重新開始，妖怪更強、寶箱更好。神社旁的百鬼塔也已經開放。</div>
     </div>`;
   }
 
@@ -508,6 +510,7 @@ export class GameOverlay {
       this.render(); return;
     }
     if (d.act === 'toTitle') { this.root.hidden = true; this.onTitle(); return; }
+    if (d.act === 'ngplus') { this.root.hidden = true; this.onNGPlus(); return; }
     if (d.ftab) { this.forgeTab = d.ftab as 'craft' | 'enhance' | 'synth'; this.sel = null; this.msg = ''; this.synthSel = []; this.render(); return; }
     if (d.recipe) { this.recipe = d.recipe; this.msg = ''; this.render(); return; }
     if (d.synth) {

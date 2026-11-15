@@ -20,6 +20,7 @@ import { FONT_FAMILY } from '../config';
 import { sound } from '../audio/sound';
 import { trackForMap } from '../audio/music';
 import { grantAchievement, newlyUnlocked } from '../systems/achievements';
+import { floorPlan, floorRewardRarity, TOWER_FLOORS } from '../systems/tower';
 import { collectionReport } from '../systems/collection';
 import { MAPS } from '../data/maps';
 import { findInFront } from '../systems/interaction';
@@ -47,7 +48,7 @@ const BOSSES: Record<string, { name: string; intro: string; retry: string; seen:
 /** 神器碎片放在這些寶箱裡（舊存檔開過的話，最終章開始時補發） */
 const SHARD_CHESTS = ['forest_chest_secret', 'swamp_chest_secret', 'mt_chest_secret', 'oni_chest_secret'];
 
-type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice' | 'trial' | 'relay' | 'sealgate';
+type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup' | 'lever' | 'sluice' | 'trial' | 'relay' | 'sealgate' | 'portal';
 interface Thing { id: string; kind: Kind; x: number; y: number; sprite: Phaser.GameObjects.Sprite; props: Record<string, unknown> }
 interface Block { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; dir: string; moving: boolean; pushMs: number }
 interface Plate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string }
@@ -59,7 +60,7 @@ const FRAME = {
   chest: [25, 26], ironChest: [45, 46], goldChest: [47, 48], shimenawa: 27, well: 28, sign: 29,
   plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54, plank: 59, lever: [63, 64], waterGate: 65, bell: 69, trial: [70, 71], barrel: 78, sealStone: 79, sealDoor: 80,
 };
-const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘', trial: '挑戰', relay: '點燈', sealgate: '調查' };
+const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起', lever: '拉下', sluice: '開水閘', trial: '挑戰', relay: '點燈', sealgate: '調查', portal: '進入' };
 const DIRS: Record<string, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const gateFlag = (group: string) => `gate:${group}`;
 
@@ -93,6 +94,8 @@ export class WorldScene extends Phaser.Scene {
   private mapKey = '';
   private areaName = '';
   private hintTimer = 0;
+  private floor = 0;
+  private floorCleared = false;
   private achTimer = 0;
   private pickupObjs: Phaser.Types.Tilemaps.TiledObject[] = [];
   private questTimer = 0;
@@ -121,7 +124,10 @@ export class WorldScene extends Phaser.Scene {
     this.playerGlow = undefined;
     const mapKey = this.mapKey = data.map ?? 'village';
     const spawnName = data.spawn ?? 'start';
-    gameState.checkpoint = { map: mapKey, spawn: spawnName };
+    this.floor = mapKey === 'tower' ? (data.floor ?? 1) : 0;
+    this.floorCleared = false;
+    // 百鬼塔裡死掉會回到進塔前的地方
+    if (!this.floor) gameState.checkpoint = { map: mapKey, spawn: spawnName };
     gameState.flags.add(`visited:${mapKey}`);
     if (data.respawn) {
       const st = statsOf(gameState);
@@ -145,8 +151,9 @@ export class WorldScene extends Phaser.Scene {
     this.solids = this.physics.add.staticGroup();
     this.physics.add.collider(this.player, this.solids);
 
-    Enemy.power = enemyPower(gameState);
+    Enemy.power = enemyPower(gameState) * (this.floor ? floorPlan(this.floor).power : 1);
     for (const o of objects) this.buildObject(o);
+    if (this.floor) this.buildTowerFloor();
     this.restoreSolvedPuzzles();
     this.syncQuests();
 
@@ -172,7 +179,7 @@ export class WorldScene extends Phaser.Scene {
 
     const props = (Array.isArray(map.properties) ? map.properties : []) as { name: string; value: unknown }[];
     const prop = (k: string) => props.find((p) => p.name === k)?.value;
-    const areaName = this.areaName = String(prop('displayName') ?? '');
+    const areaName = this.areaName = this.floor ? `百鬼塔　第 ${this.floor} 層` : String(prop('displayName') ?? '');
     if (prop('fog')) this.addFog();
     if (prop('dark')) this.addDarkness(objects);
     this.buildMinimap();
@@ -182,13 +189,14 @@ export class WorldScene extends Phaser.Scene {
 
     sound.music(trackForMap(mapKey));
     // 自動存檔（PRD 10）：每次進入地圖
-    writeSave('auto', serialize(gameState, mapKey, spawnName, areaName));
+    if (!this.floor) writeSave('auto', serialize(gameState, mapKey, spawnName, areaName));
 
     const onWarp = (w: { map: string; spawn: string }) => this.goTo(w.map, w.spawn, 'down');
     this.game.events.on(EV.warp, onWarp);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.game.events.off(EV.warp, onWarp));
 
-    if (this.boss) this.time.delayedCall(600, () => this.bossIntro());
+    if (this.boss && this.floor) this.time.delayedCall(800, () => this.boss?.start(this.time.now));
+    else if (this.boss) this.time.delayedCall(600, () => this.bossIntro());
     if (data.outro) this.time.delayedCall(600, () => this.chapterOutro(typeof data.outro === 'string' ? data.outro : 'ch1'));
     if (data.intro) this.time.delayedCall(700, () => this.say([
       ['燈', '……嗯，睡過頭了！'],
@@ -247,6 +255,14 @@ export class WorldScene extends Phaser.Scene {
       case 'sign': add('sign', this.add.sprite(x, y, 'tilesheet', FRAME.sign)); break;
       case 'well': add('well', this.add.sprite(x, y, 'tilesheet', FRAME.well)); break;
       case 'jizo': add('jizo', this.add.sprite(x, y, 'tilesheet', FRAME.jizo)); break;
+      case 'portal': {
+        if (props.showFlag && !gameState.flags.has(String(props.showFlag))) break;
+        const pt = add('portal', this.add.sprite(x, y, 'tilesheet', 9).setTint(0xff6a8a));
+        const glow = this.add.circle(x, y, 10, 0xb08aff, 0.25).setDepth(y - 1).setBlendMode(Phaser.BlendModes.ADD);
+        this.tweens.add({ targets: glow, scale: 1.6, alpha: 0.05, duration: 900, yoyo: true, repeat: -1 });
+        void pt;
+        break;
+      }
       case 'lever': add('lever', this.add.sprite(x, y, 'tilesheet', FRAME.lever[gameState.flags.has(`lever:${o.name}`) ? 1 : 0])); break;
       case 'sluice': add('sluice', this.add.sprite(x, y, 'tilesheet', FRAME.lever[0])); break;
       case 'trial': add('trial', this.add.sprite(x, y, 'tilesheet', FRAME.trial[gameState.flags.has(`trial:${props.trial}`) ? 1 : 0])); break;
@@ -305,9 +321,8 @@ export class WorldScene extends Phaser.Scene {
       }
       case 'boss': {
         const kind = String(props.kind ?? 'tsuchigumo');
-        if (gameState.flags.has(BOSSES[kind].defeated)) break;
-        const b = this.boss = kind === 'kappaking' ? new KappaKing(this, x, y, gameState.difficulty) : kind === 'daitengu' ? new Daitengu(this, x, y, gameState.difficulty)
-          : kind === 'shuten' || kind === 'hyakki' ? new OmniBoss(this, x, y, kind, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
+        if (!this.floor && gameState.flags.has(BOSSES[kind].defeated)) break;
+        const b = this.boss = this.makeBoss(kind, x, y);
         if (b instanceof OmniBoss) b.arena = { x: 2 * T, y: 2 * T, w: (this.map.width - 4) * T, h: (this.map.height - 4) * T };
         b.on('breath', (_: Enemy, br: { x: number; y: number; dir: { x: number; y: number } }) => { for (let i = 1; i <= 3; i++) this.addPool(br.x + br.dir.x * 30 * i, br.y + br.dir.y * 30 * i, true); });
         b.on('gale', (en: Enemy, g: { x: number; y: number; r: number }) => this.combat.enemyGale(en, g));
@@ -437,6 +452,49 @@ export class WorldScene extends Phaser.Scene {
     ring(this, t.x, t.y, 30, 0x5ab0e8, 500);
     if (this.boss?.alive && this.boss.started) { this.boss.stun(4000); this.game.events.emit(EV.toast, '水退了！河童王頭上的皿乾掉了！'); }
     this.time.delayedCall(15000, () => { if (t.sprite.active) t.sprite.setFrame(FRAME.lever[0]); });
+  }
+
+  // ---------- 百鬼塔 ----------
+  private makeBoss(kind: string, x: number, y: number): BossLike {
+    return kind === 'kappaking' ? new KappaKing(this, x, y, gameState.difficulty) : kind === 'daitengu' ? new Daitengu(this, x, y, gameState.difficulty)
+      : kind === 'shuten' || kind === 'hyakki' ? new OmniBoss(this, x, y, kind, gameState.difficulty) : new Boss(this, x, y, gameState.difficulty);
+  }
+
+  private buildTowerFloor(): void {
+    const plan = floorPlan(this.floor);
+    const W = this.map.width, H = this.map.height;
+    plan.enemies.forEach((k, i) => {
+      const a = (i / Math.max(1, plan.enemies.length)) * Math.PI * 2;
+      const x = Phaser.Math.Clamp(W * T / 2 + Math.cos(a) * 110, 3 * T, (W - 3) * T), y = Phaser.Math.Clamp(5 * T + Math.sin(a) * 50, 3 * T, (H - 5) * T);
+      this.buildObject({ id: 900 + i, name: `tower_e_${i}`, type: 'enemy', x, y, properties: [{ name: 'kind', type: 'string', value: k }] } as unknown as Phaser.Types.Tilemaps.TiledObject);
+    });
+    if (plan.boss) this.buildObject({ id: 999, name: 'tower_boss', type: 'boss', x: W * T / 2, y: 4 * T, properties: [{ name: 'kind', type: 'string', value: plan.boss }] } as unknown as Phaser.Types.Tilemaps.TiledObject);
+  }
+
+  /** 這層的妖怪全倒：給獎勵、出現往上的樓梯 */
+  private clearTowerFloor(): void {
+    this.floorCleared = true;
+    sound.sfx('gate');
+    const first = this.floor > gameState.towerBest;
+    gameState.towerBest = Math.max(gameState.towerBest, this.floor);
+    const cx = this.map.width * T / 2, cy = 6 * T;
+    const money = 200 * this.floor;
+    gameState.money += money;
+    if (first) {
+      const g = giveRandomGear(gameState, Math.random, 4, floorRewardRarity(this.floor));
+      this.game.events.emit(EV.toast, `第一次通過第 ${this.floor} 層！獲得 ${money} 文${g ? `、${gearLabel(g)}` : '（背包滿了，裝備拿不到）'}`);
+    } else this.game.events.emit(EV.toast, `通過第 ${this.floor} 層！獲得 ${money} 文`);
+    const last = this.floor >= TOWER_FLOORS;
+    const stair = this.add.sprite(cx, 2 * T + 8, 'tilesheet', 36).setDepth(1);
+    ring(this, stair.x, stair.y, 16, 0xb08aff, 600);
+    const zone = this.add.zone(cx - 8, 2 * T, 16, 16).setOrigin(0);
+    this.physics.add.existing(zone, true);
+    this.physics.add.overlap(this.player, zone, () => {
+      if (last) { gameState.flags.add('tower_cleared'); this.goTo('village', 'jizo', 'down'); this.time.delayedCall(900, () => this.game.events.emit(EV.banner, { title: '百鬼塔制霸', sub: '最高樓層的妖氣散去了', duration: 3000 })); }
+      else this.goTo('tower', 'entry', 'up', { floor: this.floor + 1 });
+    });
+    this.game.events.emit(EV.banner, { title: last ? '百鬼塔　制霸！' : `第 ${this.floor} 層　通過`, sub: last ? '走進樓梯回到村子' : '往上的樓梯出現了', duration: 1600 });
+    void cy;
   }
 
   // ---------- 天狗山的試煉 ----------
@@ -821,6 +879,7 @@ export class WorldScene extends Phaser.Scene {
   }
 
   private onBossDefeated(): void {
+    if (this.floor) { hudState.boss.visible = false; for (const e of this.enemies) if (e.alive) e.hit(999999, false, e.center); return; }
     inputState.locked = true;
     for (const e of this.enemies) if (e.alive) e.hit(9999, false, e.center);
     for (const p of this.pools) p.gfx.destroy();
@@ -953,7 +1012,9 @@ export class WorldScene extends Phaser.Scene {
   private interact(t: Thing): void {
     if (t.kind === 'chest') {
       if (!gameState.openedChests.has(t.id) && this.isSealed(t)) { this.game.events.emit(EV.toast, '寶箱被妖氣封住了。打倒守護它的妖怪吧！'); return; }
-      const r = openChest(gameState, t.id, t.props as Reward);
+      const base = t.props as Reward;
+      const boosted: Reward = gameState.ngPlus && base.gearTier ? { ...base, minRarity: Math.min(3, (base.minRarity ?? 0) + gameState.ngPlus) } : base;
+      const r = openChest(gameState, t.id, boosted);
       if (r.opened && (t.props as Reward).item === '神器碎片') gameState.flags.add(`shard:${t.id}`);
       if (r.opened) this.time.delayedCall(600, () => this.checkCollectionShard());
       if (r.opened) {
@@ -971,6 +1032,7 @@ export class WorldScene extends Phaser.Scene {
     if (t.kind === 'lever') { this.pullLever(t); return; }
     if (t.kind === 'sluice') { this.openSluice(t); return; }
     if (t.kind === 'trial') { this.startTrial(t); return; }
+    if (t.kind === 'portal') { this.runDialogue('tower_portal'); return; }
     if (t.kind === 'sealgate') {
       const item = String(t.props.item), label = String(t.props.label);
       if ((gameState.items[item] ?? 0) <= 0) { this.game.events.emit(EV.toast, `「${label}」被封住了。好像需要「${item}」……`); return; }
@@ -1181,6 +1243,7 @@ export class WorldScene extends Phaser.Scene {
     if (this.hintTimer <= 0 && !locked) { this.hintTimer = 500; this.checkHints(); }
     this.achTimer -= dt;
     if (this.achTimer <= 0 && !locked) { this.achTimer = 2000; this.checkAchievements(); }
+    if (this.floor && !this.floorCleared && !locked && this.enemies.length && this.enemies.every((e) => !e.alive)) this.clearTowerFloor();
     this.refreshHud();
   }
 }
