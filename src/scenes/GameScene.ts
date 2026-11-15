@@ -463,6 +463,11 @@ export class GameScene extends Phaser.Scene {
 
   /** 除錯用：每幀模擬幾步（自動化平衡測試用） */
   simSpeed = 1;
+  /** 玩家選的遊戲速度（1×／2×／3×） */
+  gameSpeed = 1;
+  /** 自動戰鬥：走位與選卡 */
+  auto = false;
+  private lastManual = -99;
   /** 除錯用：自動操作（自動化平衡測試用） */
   debugBot: ((g: GameScene) => void) | null = null;
 
@@ -479,6 +484,9 @@ export class GameScene extends Phaser.Scene {
     this.resetState();
     this.save = loadSave();
     this.modStats = equippedStats(this.save);
+    this.gameSpeed = Math.min(this.save.premium ? 3 : 2, Math.max(1, this.save.gameSpeed ?? 1));
+    this.auto = !!this.save.autoBattle && this.autoUnlocked();
+    this.lastManual = -99;
     this.isDaily = !!data?.daily;
     this.stage = this.isDaily ? STAGES[0] : stageById(data?.stage);
     if (this.isDaily) {
@@ -769,9 +777,12 @@ export class GameScene extends Phaser.Scene {
   // ---------- 主迴圈 ----------
   update(_time: number, deltaMs: number) {
     const dt = Math.min(deltaMs, 50) / 1000;
-    for (let i = 0; i < this.simSpeed; i++) {
+    const steps = this.simSpeed * this.gameSpeed;
+    for (let i = 0; i < steps; i++) {
       if (this.modal || this.ended) break;
       this.step(dt);
+      // 大招演出用真實時間播放，不跟著加速
+      if (this.iaiFreeze > 0) break;
     }
   }
 
@@ -1286,6 +1297,158 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------- 玩家 ----------
+  // ---------- 遊戲速度與自動戰鬥 ----------
+  /** 切換速度：1× → 2× → 3×（3× 需要特權）；回傳是否被擋下 */
+  cycleSpeed(): 'ok' | 'locked' {
+    const save = loadSave();
+    let next = this.gameSpeed >= 3 ? 1 : this.gameSpeed + 1;
+    if (next === 3 && !save.premium) {
+      if (this.gameSpeed === 2) {
+        this.gameSpeed = 1;
+        save.gameSpeed = 1;
+        writeSave(save);
+        return 'locked';
+      }
+      next = 3;
+    }
+    this.gameSpeed = next;
+    save.gameSpeed = next;
+    writeSave(save);
+    return 'ok';
+  }
+
+  autoUnlocked(): boolean {
+    const s = loadSave();
+    return (s.stagesCleared ?? []).length > 0 || s.wins > 0;
+  }
+
+  setAuto(on: boolean) {
+    this.auto = on;
+    const save = loadSave();
+    save.autoBattle = on;
+    writeSave(save);
+  }
+
+  /** AI 走位：躲敵人與子彈、繞圈引怪、撿經驗晶片，血少時保命 */
+  private autoMove(): [number, number] {
+    let fx = 0;
+    let fy = 0;
+    for (const e of this.activeEnemies) {
+      if (!e.active) continue;
+      const dx = this.px - e.x;
+      const dy = this.py - e.y;
+      const d2 = dx * dx + dy * dy;
+      const reach = 90 + e.radius * 1.2;
+      if (d2 < reach * reach) {
+        const w = (e.def.kind === 'boss' ? 2.5 : e.def.kind === 'elite' ? 1.5 : 1) / Math.max(d2, 100);
+        fx += dx * w;
+        fy += dy * w;
+      }
+    }
+    for (const b of this.bullets) {
+      if (!b.active) continue;
+      const dx = this.px - b.x;
+      const dy = this.py - b.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < 130 * 130) {
+        fx += (dx * 3) / Math.max(d2, 50);
+        fy += (dy * 3) / Math.max(d2, 50);
+      }
+    }
+    for (const h of this.hazards) {
+      const dx = this.px - h.x;
+      const dy = this.py - h.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < (h.r + 40) ** 2) {
+        fx += (dx * 4) / Math.max(d2, 50);
+        fy += (dy * 4) / Math.max(d2, 50);
+      }
+    }
+    let best: Pickup | null = null;
+    let bd = 500 * 500;
+    for (const p of this.pickups) {
+      if (!p.active) continue;
+      const d = (p.x - this.px) ** 2 + (p.y - this.py) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = p;
+      }
+    }
+    const l = Math.hypot(fx, fy);
+    let mx = 0;
+    let my = 0;
+    if (l > 1e-6) {
+      const ux = fx / l;
+      const uy = fy / l;
+      const danger = Math.min(1, l * 400);
+      // 沿著逃跑方向的切線繞圈，讓敵人留在武器範圍邊緣
+      mx = ux * (0.35 + 0.65 * danger) - uy * 0.9;
+      my = uy * (0.35 + 0.65 * danger) + ux * 0.9;
+      if (best) {
+        const brave = this.hp / this.maxHp > 0.4 ? 2 : danger < 0.8 ? 1 : 0;
+        const d = Math.sqrt(bd) || 1;
+        mx += ((best.x - this.px) / d) * brave;
+        my += ((best.y - this.py) / d) * brave;
+      }
+    } else {
+      // 沒有危險：靠近最近的敵人（保持在武器範圍邊緣），順路撿晶片
+      let ne: Enemy | null = null;
+      let nd = 600 * 600;
+      for (const e of this.activeEnemies) {
+        if (!e.active) continue;
+        const d = (e.x - this.px) ** 2 + (e.y - this.py) ** 2;
+        if (d < nd) {
+          nd = d;
+          ne = e;
+        }
+      }
+      if (ne) {
+        const d = Math.sqrt(nd) || 1;
+        const want = 80 + ne.radius;
+        const ax = (ne.x - this.px) / d;
+        const ay = (ne.y - this.py) / d;
+        if (d > want + 20) {
+          mx = ax;
+          my = ay;
+        } else {
+          mx = -ay;
+          my = ax;
+        }
+      }
+      if (best) {
+        const d = Math.sqrt(bd) || 1;
+        const w = d < 160 ? 1.5 : 0.6;
+        mx += ((best.x - this.px) / d) * w;
+        my += ((best.y - this.py) / d) * w;
+      }
+    }
+    const m = Math.hypot(mx, my);
+    return m > 1e-6 ? [mx / m, my / m] : [0, 0];
+  }
+
+  /** 自動選卡：隨機但有判斷（優先進化、升級已有的、血少時回血） */
+  autoPickIndex(choices: Choice[]): number {
+    let bestI = 0;
+    let bestScore = -1;
+    choices.forEach((c, i) => {
+      let sc = Math.random() * 12 + (c.rarity ?? 0) * 6;
+      if (c.kind === 'weapon') {
+        const owned = this.weapons.some((w) => w.id === c.id);
+        sc += owned ? 30 : 24;
+        const evo = EVOLUTIONS.find((e) => e.weapon === c.id);
+        if (evo && this.passives.has(evo.passive)) sc += 25;
+      } else if (c.kind === 'passive') {
+        sc += this.passives.has(c.id) ? 20 : 14;
+        if (EVOLUTIONS.some((e) => e.passive === c.id && this.weapons.some((w) => w.id === e.weapon))) sc += 25;
+      } else if (c.kind === 'heal') sc += this.hp / this.maxHp < 0.5 ? 60 : 0;
+      if (sc > bestScore) {
+        bestScore = sc;
+        bestI = i;
+      }
+    });
+    return bestI;
+  }
+
   private updatePlayer(dt: number) {
     let mx = this.joy.x;
     let my = this.joy.y;
@@ -1294,6 +1457,9 @@ export class GameScene extends Phaser.Scene {
     if (k.D?.isDown || k.RIGHT?.isDown) mx += 1;
     if (k.W?.isDown || k.UP?.isDown) my -= 1;
     if (k.S?.isDown || k.DOWN?.isDown) my += 1;
+    // 自動戰鬥：玩家沒在操作 1.5 秒後由 AI 走位；一碰搖桿就交還玩家
+    if (Math.hypot(mx, my) > 0.05) this.lastManual = this.t;
+    else if (this.auto && this.t - this.lastManual > 1.5) [mx, my] = this.autoMove();
     const len = Math.hypot(mx, my);
     if (len > 1) {
       mx /= len;

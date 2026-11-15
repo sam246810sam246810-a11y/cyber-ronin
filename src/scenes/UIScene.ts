@@ -45,6 +45,9 @@ export class UIScene extends Phaser.Scene {
   private modalLayer!: Phaser.GameObjects.Container;
   private modalOpen = false;
   private cardKeys: (() => void)[] = [];
+  /** 自動戰鬥時，視窗打開後自動執行的動作 */
+  private autoAction: (() => void) | null = null;
+  private autoAt = 0;
 
   // 居合・一閃
   private iaiLayer!: Phaser.GameObjects.Container;
@@ -78,6 +81,22 @@ export class UIScene extends Phaser.Scene {
     this.invLayer = this.add.container(0, 0);
 
     makeButton(this, W - 38, 46, 52, 52, 'II', COLORS.cyan, () => this.g.pauseByUser(), 22);
+    // 遊戲速度與自動戰鬥
+    const speedBtn = makeButton(this, W - 98, 46, 56, 52, `${this.g.gameSpeed}×`, COLORS.gold, () => {
+      const r = this.g.cycleSpeed();
+      speedBtn.setLabel(`${this.g.gameSpeed}×`);
+      if (r === 'locked') this.banner('3× 是月卡特權（之後開放）', '#ffd84d', 1.6);
+    }, 18);
+    const autoBtn = makeButton(this, W - 162, 46, 64, 52, '自動', 0x5dff7a, () => {
+      if (!this.g.autoUnlocked()) {
+        this.banner('通關第一關後解鎖自動戰鬥', '#ffd84d', 1.6);
+        return;
+      }
+      this.g.setAuto(!this.g.auto);
+      autoBtn.setActive2(this.g.auto);
+      this.banner(this.g.auto ? '自動戰鬥：開' : '自動戰鬥：關', '#5dff7a', 1);
+    }, 16);
+    autoBtn.setActive2(this.g.auto);
 
     this.joyG = this.add.graphics().setDepth(50);
     this.iaiLayer = this.add.container(0, 0).setDepth(80);
@@ -155,6 +174,11 @@ export class UIScene extends Phaser.Scene {
     if (!this.ready) return;
     const g = this.g;
     const dt = deltaMs / 1000;
+    if (g.auto && this.modalOpen && this.autoAction && this.time.now >= this.autoAt) {
+      const act = this.autoAction;
+      this.autoAction = null;
+      act();
+    }
 
     // 經驗條
     this.xpBar.clear();
@@ -520,6 +544,7 @@ export class UIScene extends Phaser.Scene {
   private openModal(dimAlpha = 0.78) {
     this.closeModalUI();
     this.modalOpen = true;
+    this.autoAt = this.time.now + 900;
     this.resetJoy();
     const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x05040a, dimAlpha).setInteractive();
     this.modalLayer.add(dim);
@@ -529,6 +554,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   private closeModalUI() {
+    this.autoAction = null;
     this.modalLayer.removeAll(true);
     this.cardKeys = [];
     this.modalOpen = false;
@@ -628,6 +654,7 @@ export class UIScene extends Phaser.Scene {
       });
     };
 
+    this.autoAction = () => onCard(g.autoPickIndex(shown));
     const btnY = startY + 3 * (cardH + gap) + 30;
     const reroll = makeButton(this, W / 2 - 165, btnY, 150, 56, '', COLORS.cyan, () => {
       if (this.time.now - openedAt < 400) return;
@@ -697,6 +724,15 @@ export class UIScene extends Phaser.Scene {
       this.closeModalUI();
       cb(null);
     }, 17);
+    // 自動：選第一個不是詛咒的遺物，全部是詛咒就略過
+    this.autoAction = () => {
+      const i = options.findIndex((r) => !r.curse);
+      if (i >= 0) this.cardKeys[i]?.();
+      else {
+        this.closeModalUI();
+        cb(null);
+      }
+    };
     this.modalLayer.add(skip);
   }
 
@@ -735,6 +771,12 @@ export class UIScene extends Phaser.Scene {
     }, 20);
     this.modalLayer.add(leave);
     refresh();
+    // 自動：血少就買修復針，然後離開
+    this.autoAction = () => {
+      if (this.g.hp / this.g.maxHp < 0.6) buy('heal');
+      this.closeModalUI();
+      close();
+    };
   }
 
   // ---------- 確認視窗 ----------
@@ -755,6 +797,10 @@ export class UIScene extends Phaser.Scene {
       cb(false);
     }, 20);
     this.modalLayer.add([a, b]);
+    this.autoAction = () => {
+      this.closeModalUI();
+      cb(false);
+    };
   }
 
   // ---------- 暫停 ----------
@@ -803,6 +849,10 @@ export class UIScene extends Phaser.Scene {
       this.g.endRun(false);
     });
     this.modalLayer.add([revive, give]);
+    this.autoAction = () => {
+      this.closeModalUI();
+      this.g.revive();
+    };
   }
 
   // ---------- 結算 ----------

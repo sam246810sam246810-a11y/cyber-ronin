@@ -63,6 +63,11 @@ export interface SaveData extends UnlockStats {
   lastStage: StageId;
   /** 圖鑑：拿過的遺物 */
   seenRelics: string[];
+  /** 遊戲速度（3× 是付費特權） */
+  gameSpeed: number;
+  autoBattle: boolean;
+  /** 付費特權（月卡／通行證，M3 接上） */
+  premium: boolean;
 }
 
 const EMPTY: SaveData = {
@@ -116,6 +121,9 @@ const EMPTY: SaveData = {
   stageBest: {},
   lastStage: 'slums',
   seenRelics: [],
+  gameSpeed: 1,
+  autoBattle: false,
+  premium: false,
 };
 
 export function loadSave(): SaveData {
