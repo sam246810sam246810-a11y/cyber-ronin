@@ -1,10 +1,10 @@
-// 把 dist/index.html（單一檔案）轉成可發布成 Claude Artifact 的頁面：
-// Artifact 會自動加上 doctype/head/body，所以這裡只留內容本身。
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+// 把 dist/ 轉成可發布成 Claude Artifact 的多檔案頁面：
+// artifact/cyber-ronin.html（頁面本身；Artifact 會自動加上 doctype/head/body）
+// artifact/assets/*（程式、圖片、音樂），以及發布用的檔案清單 artifact/files.json。
+import { readFileSync, writeFileSync, mkdirSync, rmSync, cpSync, readdirSync, statSync } from 'node:fs';
 
 const html = readFileSync('dist/index.html', 'utf8');
-const scripts = [...html.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)].map((m) => m[0]);
-if (scripts.length === 0) throw new Error('dist/index.html 裡找不到 script');
+if (!/assets\/game\.js/.test(html)) throw new Error('dist/index.html 裡找不到 assets/game.js');
 
 const page = `<title>Cyber Ronin</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -17,9 +17,18 @@ const page = `<title>Cyber Ronin</title>
 </style>
 <div id="game"></div>
 <div id="loading">載入中…</div>
-${scripts.join('\n')}
+<script type="module" src="assets/game.js"></script>
 `;
 
+rmSync('artifact', { recursive: true, force: true });
 mkdirSync('artifact', { recursive: true });
 writeFileSync('artifact/cyber-ronin.html', page);
-console.log(`artifact/cyber-ronin.html ${(page.length / 1024).toFixed(0)} KB`);
+cpSync('dist/assets', 'artifact/assets', { recursive: true });
+const files = {};
+let total = page.length;
+for (const f of readdirSync('artifact/assets')) {
+  files[`assets/${f}`] = `artifact/assets/${f}`;
+  total += statSync(`artifact/assets/${f}`).size;
+}
+writeFileSync('artifact/files.json', JSON.stringify(files, null, 1));
+console.log(`artifact: 頁面＋${Object.keys(files).length} 個檔案，共 ${(total / 1024 / 1024).toFixed(1)} MB`);
