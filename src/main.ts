@@ -19,6 +19,8 @@ async function start() {
   if (cloud) adoptSave(cloud.json, cloud.savedAt);
   const game = new Phaser.Game({
     type: Phaser.AUTO,
+    // 戰鬥中延後載入的圖用一般 <img> 載入（和開場相同方式，避免 blob 網址被頁面阻擋）
+    loader: { imageLoadType: "HTMLImageElement" },
     parent: "game",
     backgroundColor: COLORS.bg,
     width: W * Z,
