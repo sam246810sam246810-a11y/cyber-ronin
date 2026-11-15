@@ -11,6 +11,8 @@ import { inputState, resetInput } from '../systems/inputState';
 import { pickVariant, type DialogueVariant, type Line } from '../systems/dialogue';
 import { gameState, gearLabel, giveRandomGear, openChest, statsOf, type Reward } from '../systems/gameState';
 import { serialize, writeSave } from '../systems/save';
+import { accept, offersFrom, onPickup, pickupVisible, questDef, readyFor, turnIn } from '../systems/quests';
+import { FONT_FAMILY } from '../config';
 import { collectionReport } from '../systems/collection';
 import { MAPS } from '../data/maps';
 import { findInFront } from '../systems/interaction';
@@ -21,7 +23,7 @@ import type { Facing } from '../systems/movement';
 
 interface WorldData { map?: string; spawn?: string; face?: Facing; intro?: boolean; respawn?: boolean; outro?: boolean }
 
-type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo';
+type Kind = 'npc' | 'chest' | 'sign' | 'well' | 'blocker' | 'lantern' | 'bossdoor' | 'jizo' | 'board' | 'pickup';
 interface Thing { id: string; kind: Kind; x: number; y: number; sprite: Phaser.GameObjects.Sprite; props: Record<string, unknown> }
 interface Block { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string; dir: string; moving: boolean; pushMs: number }
 interface Plate { sprite: Phaser.GameObjects.Sprite; tx: number; ty: number; group: string }
@@ -31,9 +33,9 @@ interface Pool { x: number; y: number; until: number; next: number; gfx: Phaser.
 
 const FRAME = {
   chest: [25, 26], ironChest: [45, 46], goldChest: [47, 48], shimenawa: 27, well: 28, sign: 29,
-  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53,
+  plate: [38, 39], block: 40, gate: 41, cracked: 42, lantern: [43, 44], bossDoor: 49, jizo: 51, cocoon: 52, web: 53, board: 54,
 };
-const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜' };
+const LABEL: Record<Kind, string> = { npc: '對話', chest: '打開', sign: '查看', well: '調查', blocker: '調查', lantern: '點燈', bossdoor: '調查', jizo: '參拜', board: '告示', pickup: '撿起' };
 const DIRS: Record<string, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
 const gateFlag = (group: string) => `gate:${group}`;
 
@@ -59,6 +61,9 @@ export class WorldScene extends Phaser.Scene {
   private boss?: Boss;
   private mapKey = '';
   private areaName = '';
+  private pickupObjs: Phaser.Types.Tilemaps.TiledObject[] = [];
+  private questTimer = 0;
+  private icons = new Map<Thing, Phaser.GameObjects.Text>();
   private lanternNext: Record<string, number> = {};
   private solids!: Phaser.Physics.Arcade.StaticGroup;
   private obstacles!: Phaser.Tilemaps.TilemapLayer;
@@ -74,6 +79,7 @@ export class WorldScene extends Phaser.Scene {
     resetInput();
     this.things = []; this.enemies = []; this.blocks = []; this.plates = []; this.gates = []; this.cracks = [];
     this.webs = []; this.breakables = []; this.pools = []; this.boss = undefined;
+    this.pickupObjs = []; this.icons = new Map();
     hudState.boss = { visible: false, name: '', hp: 0, max: 1 };
     this.lanternNext = {};
     this.transitioning = false;
@@ -107,6 +113,7 @@ export class WorldScene extends Phaser.Scene {
 
     for (const o of objects) this.buildObject(o);
     this.restoreSolvedPuzzles();
+    this.syncQuests();
 
     this.combat = new CombatSystem(this, this.player, this.enemies, this.obstacles, {
       onDeath: () => this.onDeath(),
@@ -157,9 +164,9 @@ export class WorldScene extends Phaser.Scene {
       this.solids.add(sprite);
       (sprite.body as Phaser.Physics.Arcade.StaticBody).setSize(w, h).setOffset(ox, oy);
     };
-    const add = (kind: Kind, sprite: Phaser.GameObjects.Sprite) => {
+    const add = (kind: Kind, sprite: Phaser.GameObjects.Sprite, isSolid = true) => {
       sprite.setDepth(y);
-      solid(sprite);
+      if (isSolid) solid(sprite);
       this.things.push({ id: o.name, kind, x, y, sprite, props });
       return sprite;
     };
@@ -197,6 +204,8 @@ export class WorldScene extends Phaser.Scene {
       case 'sign': add('sign', this.add.sprite(x, y, 'tilesheet', FRAME.sign)); break;
       case 'well': add('well', this.add.sprite(x, y, 'tilesheet', FRAME.well)); break;
       case 'jizo': add('jizo', this.add.sprite(x, y, 'tilesheet', FRAME.jizo)); break;
+      case 'board': add('board', this.add.sprite(x, y, 'tilesheet', FRAME.board)); break;
+      case 'pickup': this.pickupObjs.push(o); break;
       case 'cocoon': {
         if (gameState.flags.has('boss_defeated')) break;
         const c = this.add.sprite(x, y, 'tilesheet', FRAME.cocoon).setDepth(y);
@@ -429,6 +438,61 @@ export class WorldScene extends Phaser.Scene {
     this.buildMinimap();
   }
 
+  // ---------- 任務 ----------
+  /** 任務物品要不要出現、NPC 頭上的「！」「？」 */
+  private syncQuests(): void {
+    for (const o of this.pickupObjs) {
+      const props = propsOf(o), group = String(props.group);
+      const existing = this.things.find((t) => t.id === o.name);
+      const visible = pickupVisible(gameState, group, o.name);
+      if (visible && !existing) {
+        const s = this.add.sprite(o.x!, o.y!, 'fx', Number(props.frame)).setDepth(o.y!);
+        this.tweens.add({ targets: s, y: o.y! - 3, duration: 600, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        const glow = this.add.circle(o.x!, o.y! + 4, 6, 0xfff2b0, 0.25).setDepth(2).setBlendMode(Phaser.BlendModes.ADD);
+        s.setData('glow', glow);
+        this.things.push({ id: o.name, kind: 'pickup', x: o.x!, y: o.y!, sprite: s, props });
+      } else if (!visible && existing) {
+        (existing.sprite.getData('glow') as Phaser.GameObjects.Arc | undefined)?.destroy();
+        existing.sprite.destroy();
+        this.things = this.things.filter((t) => t !== existing);
+      }
+    }
+    for (const t of this.things.filter((t) => t.kind === 'npc' || t.kind === 'board')) {
+      const giver = t.kind === 'board' ? 'board' : String(t.props.npc);
+      const mark = readyFor(gameState, giver).length ? '？' : offersFrom(gameState, giver).length ? '！' : '';
+      let icon = this.icons.get(t);
+      if (!icon) {
+        icon = this.add.text(t.x, t.y - 14, '', { fontFamily: FONT_FAMILY, fontSize: '10px', color: '#ffd84a', fontStyle: 'bold', stroke: '#14121c', strokeThickness: 3 })
+          .setOrigin(0.5, 1).setResolution(RENDER_SCALE).setDepth(150000);
+        this.tweens.add({ targets: icon, y: t.y - 16, duration: 500, yoyo: true, repeat: -1 });
+        this.icons.set(t, icon);
+      }
+      icon.setText(mark).setColor(mark === '？' ? '#7fe08a' : '#ffd84a');
+    }
+  }
+
+  private npcQuest(t: Thing): boolean {
+    const npc = String(t.props.npc);
+    const ready = readyFor(gameState, npc)[0];
+    if (ready) {
+      const q = questDef(ready, gameState.flags)!;
+      this.say(q.done ?? [], () => { const msg = turnIn(gameState, ready); if (msg) this.game.events.emit(EV.toast, msg); this.syncQuests(); this.refreshHud(true); });
+      return true;
+    }
+    const offer = offersFrom(gameState, npc)[0];
+    if (offer) {
+      const q = questDef(offer, gameState.flags)!;
+      this.say(q.offer ?? [], (c) => {
+        if (c === 0 && accept(gameState, offer)) this.game.events.emit(EV.toast, `接受任務：${q.name}`);
+        this.syncQuests(); this.refreshHud(true);
+      }, ['好，交給我！', '之後再說']);
+      return true;
+    }
+    const active = Object.keys(gameState.quests).find((id) => gameState.quests[id].status === 'active' && questDef(id, gameState.flags)?.giver === npc);
+    if (active && questDef(active, gameState.flags)?.remind) { this.say(questDef(active, gameState.flags)!.remind!); return true; }
+    return false;
+  }
+
   // ---------- Boss 戰 ----------
   private bossIntro(): void {
     const first = !gameState.flags.has('boss_seen');
@@ -560,7 +624,8 @@ export class WorldScene extends Phaser.Scene {
     const tp = (x: number, y: number) => ({ x: x / T, y: y / T });
     for (const t of this.things) {
       if (t.kind === 'chest' && !gameState.openedChests.has(t.id)) mk.push({ ...tp(t.x, t.y), color: 0xf2c94c });
-      if (t.kind === 'npc') mk.push({ ...tp(t.x, t.y), color: 0xffffff });
+      if (t.kind === 'npc' || t.kind === 'board') mk.push({ ...tp(t.x, t.y), color: this.icons.get(t)?.text ? 0xffd84a : 0xffffff });
+      if (t.kind === 'pickup') mk.push({ ...tp(t.x, t.y), color: 0xc7f0a0 });
       if (t.kind === 'well' || t.kind === 'bossdoor') mk.push({ ...tp(t.x, t.y), color: 0xff5ae0 });
     }
     for (const g of this.gates) if (!g.open) mk.push({ ...tp(g.sprite.x, g.sprite.y), color: 0x8a8aa0 });
@@ -611,6 +676,16 @@ export class WorldScene extends Phaser.Scene {
       return;
     }
     if (t.kind === 'lantern') { this.lightLantern(t); return; }
+    if (t.kind === 'board') { this.game.events.emit(EV.board); return; }
+    if (t.kind === 'pickup') {
+      gameState.flags.add(`pickup:${t.id}`);
+      ring(this, t.x, t.y, 10, 0xfff2b0, 350);
+      this.game.events.emit(EV.toast, `撿到了${t.props.label}`);
+      for (const m of onPickup(gameState, String(t.props.group))) this.game.events.emit(EV.toast, m);
+      this.syncQuests(); this.refreshHud(true);
+      return;
+    }
+    if (t.kind === 'npc' && this.npcQuest(t)) return;
     if (t.kind === 'jizo') {
       const st = statsOf(gameState);
       gameState.hp = st.maxHp; gameState.mp = st.maxMp; gameState.statuses = {};
@@ -709,6 +784,8 @@ export class WorldScene extends Phaser.Scene {
     hudState.minimap.player = { x: target.x / T, y: target.y / T };
     this.markerTimer -= dt;
     if (this.markerTimer <= 0) { this.markerTimer = 200; this.updateMinimapMarkers(); }
+    this.questTimer -= dt;
+    if (this.questTimer <= 0 && !locked) { this.questTimer = 400; this.syncQuests(); }
     this.refreshHud();
   }
 }

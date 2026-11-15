@@ -11,7 +11,13 @@
       5
     ],
     "frame": 0,
-    "burnChance": 0.2
+    "burnChance": 0.2,
+    "drops": [
+      {
+        "item": "狐火的殘焰",
+        "chance": 0.5
+      }
+    ]
   },
   "karakasa": {
     "name": "唐傘小僧",
@@ -24,7 +30,13 @@
       3,
       7
     ],
-    "frame": 2
+    "frame": 2,
+    "drops": [
+      {
+        "item": "唐傘的破布",
+        "chance": 0.5
+      }
+    ]
   },
   "nogitsune": {
     "name": "野狐",
@@ -37,7 +49,13 @@
       3,
       6
     ],
-    "frame": 4
+    "frame": 4,
+    "drops": [
+      {
+        "item": "野狐的毛",
+        "chance": 0.5
+      }
+    ]
   },
   "dummy": {
     "name": "稻草人",
@@ -64,7 +82,17 @@
       8
     ],
     "frame": 8,
-    "poisonChance": 0.4
+    "poisonChance": 0.4,
+    "drops": [
+      {
+        "item": "蜘蛛絲",
+        "chance": 0.5
+      },
+      {
+        "item": "玉鋼",
+        "chance": 0.3
+      }
+    ]
   },
   "chochin": {
     "name": "提燈鬼",
@@ -79,7 +107,17 @@
     ],
     "frame": 10,
     "elite": true,
-    "burnChance": 0.5
+    "burnChance": 0.5,
+    "drops": [
+      {
+        "item": "玉鋼",
+        "chance": 1.0
+      },
+      {
+        "item": "玉鋼",
+        "chance": 0.5
+      }
+    ]
   },
   "tsuchigumo": {
     "name": "土蜘蛛",
@@ -94,6 +132,12 @@
     ],
     "frame": 0,
     "elite": true,
-    "poisonChance": 0.3
+    "poisonChance": 0.3,
+    "drops": [
+      {
+        "item": "蜘蛛絲",
+        "chance": 1.0
+      }
+    ]
   }
 }

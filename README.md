@@ -13,10 +13,17 @@ npm run build:artifact # 另外產生可發佈成 Claude Artifact 的 dist-artif
 npm run assets         # 重新產生佔位素材（tileset、主角、狐火村地圖）
 ```
 
-## 目前進度：第一章可以玩到結局（M2 戰鬥、M3 成長、M4 探險、M6 Boss 與存檔）
+## 目前進度：第一章可以玩到結局（M2 戰鬥、M3 成長、M4 探險、M5 任務、M6 Boss 與存檔）
 
 開新遊戲先選職業與難度，接著：
 燈的家 → 狐火村 → 神社找宮司爺爺 → 迷霧竹林 → 古井 → 回神社報告（序章完）→ 古井地城 B1 → B2 → B3 → 土蜘蛛的巢穴 → 第一章完。
+
+**任務（M5）**
+- 支線任務 3 個：太郎的獨角仙、阿梅的護身符、鐵心的玉鋼（頭上有「！」的 NPC 有任務，「？」表示可以交付）
+- 神社前的告示板：討伐任務（狐火、骨蜘蛛）、收集任務（野狐的毛、唐傘的破布）、每日懸賞（依裝置日期每天換 3 個）
+- 怪物會掉素材（狐火的殘焰、唐傘的破布、野狐的毛、蜘蛛絲、玉鋼），收集任務會在交付時收走
+- 任務物品（獨角仙、護身符）接了任務才會出現在竹林
+- 選單「任務」分頁：主線目標、進行中的任務與進度、已完成；畫面上方顯示追蹤中的任務
 
 **Boss 與存檔（M6）**
 - 土蜘蛛三階段：揮擊與直線吐絲 → 召喚骨蜘蛛與毒池 → 狂暴（快 30%）、衝撞、蛛網封路；每招都有預兆
@@ -54,7 +61,7 @@ npm run assets         # 重新產生佔位素材（tileset、主角、狐火村
 
 **探索與劇情**
 - 10 張地圖、6 位 NPC（對話依劇情進度改變）、14 個寶箱、4 個隱藏地點
-- 尚未做：支線任務與任務日誌（M5）、鍛冶屋打造與數值平衡（M7）
+- 尚未做：鍛冶屋打造與強化、音效、數值平衡（M7）
 
 ## 結構
 
@@ -65,8 +72,8 @@ src/
   scenes/          Boot、Title、World、UI
   entities/        Player、Enemy（AI）、Boss（土蜘蛛）
   combat/          CombatSystem（攻擊、技能、閃避、受傷）、特效
-  systems/         純邏輯（combat、progression、equipment、inventory、collection、save、boss、movement、dialogue、gameState、interaction），有單元測試
-  data/            職業、技能、怪物、裝備、商店、對話、NPC、地圖清單
+  systems/         純邏輯（combat、progression、equipment、inventory、collection、save、quests、boss、movement、dialogue、gameState、interaction），有單元測試
+  data/            職業、技能、怪物、裝備、商店、任務、對話、NPC、地圖清單
   ui/              VirtualJoystick、TouchButton、DialogueBox、camera 工具
   ui/dom/          選單與商店（HTML 疊加層）
 assets/            佔位素材（由 scripts/gen-placeholder-assets.mjs 產生）

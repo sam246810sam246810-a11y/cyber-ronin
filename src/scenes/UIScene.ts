@@ -11,6 +11,7 @@ import { DialogueBox } from '../ui/DialogueBox';
 import { useLogicalCamera } from '../ui/camera';
 import { getOverlay, type GameOverlay } from '../ui/dom/GameOverlay';
 import { PHASE_MARKS } from '../systems/boss';
+import { isReady, progressOf, questDef } from '../systems/quests';
 import { expToNext, LEVEL_CAP } from '../systems/progression';
 
 const TXT = (size: number, color = '#f2e6c9'): Phaser.Types.GameObjects.Text.TextStyle => ({ fontFamily: FONT_FAMILY, fontSize: `${size}px`, color });
@@ -35,6 +36,7 @@ export class UIScene extends Phaser.Scene {
   private mmBox = { x: 0, y: 0, s: 1, w: 0, h: 0 };
   private bossG!: Phaser.GameObjects.Graphics;
   private bossName!: Phaser.GameObjects.Text;
+  private tracked!: Phaser.GameObjects.Text;
   private menuBtn!: TouchButton;
   private label!: Phaser.GameObjects.Text;
 
@@ -76,6 +78,7 @@ export class UIScene extends Phaser.Scene {
     // 目標
     this.objective = this.add.text(GAME_WIDTH / 2 - 4, 10, '', { ...TXT(9), backgroundColor: '#14121cb0', padding: { x: 8, y: 3 } })
       .setOrigin(0.5, 0).setResolution(RENDER_SCALE);
+    this.tracked = this.add.text(GAME_WIDTH / 2 - 4, 27, '', { ...TXT(8, '#ffd84a'), backgroundColor: '#14121c90', padding: { x: 6, y: 2 } }).setOrigin(0.5, 0).setResolution(RENDER_SCALE);
     this.refreshStatus();
 
     const hint = this.add.text(GAME_WIDTH / 4, GAME_HEIGHT - 28, '按住左半邊拖曳來移動', { ...TXT(11), backgroundColor: '#14121caa', padding: { x: 8, y: 3 } })
@@ -91,6 +94,7 @@ export class UIScene extends Phaser.Scene {
       [EV.area, (name: string) => { if (this.dialogue.isOpen) { this.dialogue.close(); this.showButtons(true); } this.showAreaName(name); }],
       [EV.banner, (b: BannerInfo) => this.banner(b)],
       [EV.shop, (id: string) => this.openOverlay(() => this.overlay.openShop(id, () => this.closeOverlay()))],
+      [EV.board, () => this.openOverlay(() => this.overlay.openBoard(() => this.closeOverlay()))],
       [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay()))],
     ];
     handlers.forEach(([e, h]) => ev.on(e, h, this));
@@ -125,6 +129,10 @@ export class UIScene extends Phaser.Scene {
     const potions = n('回復丸') + n('大回復丸') + n('靈水') + n('解毒草') + n('萬能符');
     this.buttons.item.setSub(potions ? `×${potions}` : '');
     this.objective.setText(`目標：${currentObjective(gameState.flags)}`);
+    // 追蹤中的任務：最早接的那個進行中任務
+    const id = Object.keys(gameState.quests).find((k) => gameState.quests[k].status === 'active' && questDef(k, gameState.flags));
+    const q = id ? questDef(id, gameState.flags) : undefined;
+    this.tracked?.setText(q && id ? `${q.name}　${isReady(gameState, id) ? '可以交付' : `${progressOf(gameState, id)}/${q.target.count}`}` : '').setVisible(!!q);
   }
 
   private drawBars(): void {
@@ -193,6 +201,7 @@ export class UIScene extends Phaser.Scene {
   private drawBossBar(): void {
     const b = hudState.boss, g = this.bossG; g.clear();
     this.bossName.setVisible(b.visible);
+    if (b.visible) this.tracked.setVisible(false);
     if (!b.visible) return;
     const w = 200, x = GAME_WIDTH / 2 - w / 2, y = 42, k = Math.max(0, b.hp / b.max);
     this.bossName.setText(b.name);

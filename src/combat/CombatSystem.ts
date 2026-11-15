@@ -5,6 +5,8 @@ import { Enemy, type HitOptions } from '../entities/Enemy';
 import { applyItem, applyStatus, atkModifier, calcDamage, chooseQuickItem, COMBO_MULT, hasStatus, nextComboStep, pickAimTarget, tickStatuses } from '../systems/combat';
 import { facingFromVector } from '../systems/movement';
 import { classStats, gainExp, gameState, gearLabel, giveRandomGear, statsOf } from '../systems/gameState';
+import { canAddItem } from '../systems/inventory';
+import { onKill as questKill } from '../systems/quests';
 import { hudState } from '../systems/hudState';
 import type { Action } from '../systems/inputState';
 import type { Vec2 } from '../systems/movement';
@@ -261,6 +263,14 @@ export class CombatSystem {
     const levels = gainExp(gameState, e.info.exp);
     if (e.info.exp) floatText(this.scene, e.x, e.y - 22, `+${e.info.exp} EXP`, '#9fd8ff', 7);
     if (levels > 0) this.onLevelUp();
+    // 素材掉落
+    for (const dr of (e.info as { drops?: { item: string; chance: number }[] }).drops ?? []) {
+      if (Math.random() >= dr.chance) continue;
+      if (!canAddItem(gameState, dr.item)) { this.cb.toast('背包滿了，素材撿不起來'); continue; }
+      gameState.items[dr.item] = (gameState.items[dr.item] ?? 0) + 1;
+      floatText(this.scene, e.x + 8, e.y - 6, dr.item, '#c7f0a0', 7);
+    }
+    for (const m of questKill(gameState, e.kind)) this.cb.toast(m);
     if (e.kind !== 'dummy' && Math.random() < GEAR_DROP) {
       const g = giveRandomGear(gameState, Math.random, 1);
       this.cb.toast(g ? `獲得 ${gearLabel(g)}` : '背包滿了，裝備撿不起來');

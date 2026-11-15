@@ -16,7 +16,7 @@ function analyze(key: string) {
   const objs = m.layers.find((l) => l.name === 'objects')!.objects!;
   const tile = (o: TObj) => [Math.floor(o.x / 16), Math.floor(o.y / 16)] as const;
   const solidObj = new Set<string>();
-  for (const o of objs) if (['chest', 'sign', 'npc', 'well', 'block', 'lantern', 'bossdoor', 'jizo', 'cocoon', 'bosslantern'].includes(o.type)) solidObj.add(tile(o).join(','));
+  for (const o of objs) if (['chest', 'sign', 'npc', 'well', 'block', 'lantern', 'bossdoor', 'jizo', 'cocoon', 'bosslantern', 'board'].includes(o.type)) solidObj.add(tile(o).join(','));
   const wall = (x: number, y: number) => x < 0 || y < 0 || x >= W || y >= H || collides.has(obst[y * W + x]);
   return { W, H, objs, tile, wall, solidObj };
 }
@@ -43,7 +43,7 @@ describe.each(['village', 'forest', 'b1', 'b2', 'b3', 'lair'])('地圖 %s', (key
   const near = (x: number, y: number) => Object.values(DIR).some(([dx, dy]) => reach.has(`${x + dx},${y + dy}`));
 
   it('所有寶箱、告示牌、燈籠都走得到旁邊', () => {
-    for (const o of a.objs.filter((o) => ['chest', 'sign', 'lantern', 'npc', 'well', 'bossdoor', 'jizo', 'bosslantern'].includes(o.type))) {
+    for (const o of a.objs.filter((o) => ['chest', 'sign', 'lantern', 'npc', 'well', 'bossdoor', 'jizo', 'bosslantern', 'board', 'pickup'].includes(o.type))) {
       const [x, y] = a.tile(o);
       expect(near(x, y), `${o.name} @ ${x},${y}`).toBe(true);
     }

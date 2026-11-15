@@ -57,7 +57,7 @@ const TILES = [
   { name: 'push_block' }, { name: 'gate' }, { name: 'cracked' }, { name: 'stone_lantern_off' },
   { name: 'stone_lantern_on' }, { name: 'iron_chest' }, { name: 'iron_chest_open' }, { name: 'gold_chest' },
   { name: 'gold_chest_open' }, { name: 'boss_door' }, { name: 'bones' },
-  { name: 'jizo' }, { name: 'cocoon' }, { name: 'web_wall' },
+  { name: 'jizo' }, { name: 'cocoon' }, { name: 'web_wall' }, { name: 'notice_board' },
 ];
 const COLS = 8;
 const ts = new Canvas(COLS * T, Math.ceil(TILES.length / COLS) * T);
@@ -318,6 +318,11 @@ const draw = {
     for (let i = 0; i < 16; i++) { ts.px(ox + i, oy + i, W); ts.px(ox + 15 - i, oy + i, W); ts.px(ox + i, oy + 8, G); ts.px(ox + 8, oy + i, G); }
     for (const r of [3, 6]) for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; ts.px(ox + 8 + Math.round(Math.cos(t) * r), oy + 8 + Math.round(Math.sin(t) * r), W); }
   },
+  notice_board(ox, oy) {
+    ts.rect(ox + 2, oy + 9, 2, 7, C.wood); ts.rect(ox + 12, oy + 9, 2, 7, C.wood);
+    ts.rect(ox, oy + 1, T, 10, C.woodD); ts.rect(ox + 1, oy + 2, 14, 8, C.woodL); ts.rect(ox, oy, T, 2, C.roof);
+    ts.rect(ox + 2, oy + 3, 5, 5, C.white); ts.rect(ox + 9, oy + 3, 5, 4, 0xf2e6c9); ts.rect(ox + 3, oy + 4, 3, 1, C.red); ts.rect(ox + 10, oy + 4, 3, 1, C.dark);
+  },
   bones(ox, oy) {
     dfloor(ox, oy);
     ts.rect(ox + 3, oy + 9, 7, 1, 0xe8e4d8); ts.rect(ox + 2, oy + 8, 2, 3, 0xe8e4d8); ts.rect(ox + 9, oy + 8, 2, 3, 0xe8e4d8);
@@ -473,11 +478,16 @@ const oy0 = (y) => y;
 for (let f = 0; f < 4; f++) drawBoss(f * BS, f);
 
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
-const fx = new Canvas(5 * T, T);
+const fx = new Canvas(7 * T, T);
 fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
 fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
 fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
 fx.rect(3 * T + 5, 5, 6, 6, 0xf2c94c); fx.rect(3 * T + 4, 6, 8, 4, 0xf2c94c); fx.rect(3 * T + 7, 7, 2, 2, 0x8a6a1a); fx.px(3 * T + 6, 6, 0xfff2b0);
+// 5：獨角仙
+fx.rect(5 * T + 5, 6, 6, 7, 0x4a2a1a); fx.rect(5 * T + 6, 7, 4, 5, 0x6a3a22); fx.rect(5 * T + 7, 2, 2, 4, 0x4a2a1a); fx.rect(5 * T + 6, 2, 1, 1, 0x4a2a1a); fx.rect(5 * T + 9, 2, 1, 1, 0x4a2a1a);
+fx.rect(5 * T + 4, 8, 1, 3, 0x2a1a10); fx.rect(5 * T + 11, 8, 1, 3, 0x2a1a10); fx.px(5 * T + 7, 8, 0xc8a070);
+// 6：護身符
+fx.rect(6 * T + 5, 4, 6, 9, 0xc23b2f); fx.rect(6 * T + 6, 5, 4, 7, 0xe04848); fx.rect(6 * T + 7, 2, 2, 3, C.yellow); fx.rect(6 * T + 6, 7, 4, 2, C.yellow);
 fx.rect(4 * T + 5, 5, 6, 6, 0xb04aff); fx.rect(4 * T + 4, 6, 8, 4, 0xb04aff); fx.rect(4 * T + 6, 6, 4, 4, 0xe8d8ff); fx.px(4 * T + 3, 8, 0xe8d8ff); fx.px(4 * T + 12, 8, 0xe8d8ff);
 
 // ---------- 地圖工具 ----------
@@ -609,6 +619,7 @@ const maps = {};
   npcAt(m, 'ume', 13, 21);
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
+  obj(m, 'board', 'village_board', tilePoint(17, 13));
   obj(m, 'jizo', 'village_jizo', tilePoint(23, 12)); spawn(m, 'jizo', 23, 13);
   chest(m, 'village_chest', 36, 3, { money: 30, gearTier: 1 });
 
@@ -710,6 +721,8 @@ interior('shrine', '狐火神社', [
   spawn(m, 'well', 28, 16);
   obj(m, 'secret', 'forest_pocket', tileRect(2, 2, 5, 4));
   sign(m, 'sign_forest', 25, 13, 'sign_forest');
+  for (const [x, y, i] of [[18, 5, 1], [8, 17, 2], [24, 15, 3]]) obj(m, 'pickup', `beetle_${i}`, tilePoint(x, y), { group: 'beetle', frame: 5, label: '獨角仙' });
+  obj(m, 'pickup', 'charm_1', tilePoint(11, 10), { group: 'charm', frame: 6, label: '阿梅的護身符' });
   const enemies = [
     ['kitsunebi', 9, 10], ['karakasa', 15, 4], ['kitsunebi', 17, 5], ['nogitsune', 22, 4], ['nogitsune', 23, 3],
     ['karakasa', 26, 9], ['kitsunebi', 25, 16], ['nogitsune', 29, 17], ['nogitsune', 31, 14], ['karakasa', 7, 17], ['kitsunebi', 5, 16],

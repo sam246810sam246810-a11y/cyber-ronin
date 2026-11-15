@@ -14,8 +14,10 @@ import { MAPS } from '../../data/maps';
 import { collectionReport } from '../../systems/collection';
 import { MANUAL_SLOTS, formatPlayTime, readSave, serialize, writeSave, type SaveFile, type SlotId } from '../../systems/save';
 import type { SaveRequest } from '../../systems/events';
+import { accept, dailyBounties, dateKey, isReady, offersFrom, progressOf, questDef, rewardText, turnIn, type QuestDef } from '../../systems/quests';
+import { currentObjective } from '../../systems/gameState';
 
-type MenuTab = 'status' | 'equip' | 'bag' | 'map';
+type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest';
 type ShopTab = 'buy' | 'sell';
 type Selection = { kind: 'gear'; uid: number } | { kind: 'item'; name: string } | { kind: 'buyItem'; name: string } | { kind: 'buyGear'; base: BaseId } | null;
 
@@ -23,6 +25,12 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const ITEM_DESC: Record<string, string> = {
   '回復丸': 'HP 回復 50', '大回復丸': 'HP 回復 150', '靈水': 'MP 回復 30', '解毒草': '解除中毒、燒傷', '萬能符': '解除所有狀態異常',
   '銅鑰匙': '可以打開上鎖的鐵箱。用一次就沒了。',
+  '銀鑰匙': '從土蜘蛛身上得到的鑰匙。好像能打開某處更堅固的箱子。（第二章）',
+  '狐火的殘焰': '素材。摸起來不燙。',
+  '唐傘的破布': '素材。很耐用的油紙布。',
+  '野狐的毛': '素材。蓬鬆又保暖。',
+  '蜘蛛絲': '素材。比鋼線還堅韌。',
+  '玉鋼': '素材。鍛冶屋打造武器用的好鋼。',
   '擴充布袋': `背包增加 ${BAG_EXPAND} 格（最多 ${BAG_MAX} 格）`,
 };
 const STAT_ROWS: [keyof Stats, string][] = [['maxHp', 'HP'], ['maxMp', 'MP'], ['atk', '攻擊'], ['def', '防禦'], ['spd', '速度'], ['crit', '爆擊率'], ['mpRegen', 'MP 回復']];
@@ -49,7 +57,7 @@ export function getOverlay(): GameOverlay { return (shared ??= new GameOverlay()
 
 export class GameOverlay {
   private root: HTMLDivElement;
-  private mode: 'menu' | 'shop' | 'save' | 'load' = 'menu';
+  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' = 'menu';
   private saveReq?: SaveRequest;
   private onLoad: (f: SaveFile) => void = () => {};
   private confirmSlot: SlotId | null = null;
@@ -79,6 +87,7 @@ export class GameOverlay {
 
   openMenu(onClose: () => void): void { this.mode = 'menu'; this.open(onClose); }
   openShop(shopId: string, onClose: () => void): void { this.mode = 'shop'; this.shopId = shopId; this.shopTab = 'buy'; this.open(onClose); }
+  openBoard(onClose: () => void): void { this.mode = 'board'; this.open(onClose); }
   openSave(req: SaveRequest, onClose: () => void): void { this.mode = 'save'; this.saveReq = req; this.open(onClose); }
   openLoad(onLoad: (f: SaveFile) => void, onClose: () => void): void { this.mode = 'load'; this.onLoad = onLoad; this.open(onClose); }
 
@@ -114,7 +123,44 @@ export class GameOverlay {
       <div class="kf-tag" style="grid-column:1 / -1">${tip}</div>${cards}<div class="kf-msg" style="grid-column:1 / -1">${esc(this.msg)}</div></div>`;
   }
 
+  private questCard(id: string, q: QuestDef, actions: string): string {
+    const s = gameState, p = s.quests[id];
+    const status = !p ? '' : p.status === 'done' ? '<span class="kf-up">✔ 已完成</span>'
+      : isReady(s, id) ? '<span class="kf-up">可以交付</span>' : `<span class="kf-tag">進度 ${progressOf(s, id)}/${q.target.count}</span>`;
+    const who = q.giver === 'board' ? '告示板' : ({ taro: '太郎', ume: '阿梅', tesshin: '鐵心', rin: '阿鈴' } as Record<string, string>)[q.giver] ?? q.giver;
+    return `<div class="kf-card"><h3>${esc(q.name)}</h3><div>${esc(q.desc)}</div>
+      <div class="kf-tag">獎勵：${esc(rewardText(q))}・回報：${who}</div><div>${status}</div>${actions ? `<div class="kf-btns">${actions}</div>` : ''}</div>`;
+  }
+
+  private boardView(): string {
+    const s = gameState, today = dateKey(new Date());
+    const offers = offersFrom(s, 'board').map((id) => this.questCard(id, questDef(id, s.flags)!, `<button class="kf-btn" data-accept="${id}">接受</button>`));
+    const mine = Object.keys(s.quests).filter((id) => s.quests[id].status === 'active' && questDef(id, s.flags)?.giver === 'board' && !id.startsWith('daily:'))
+      .map((id) => this.questCard(id, questDef(id, s.flags)!, isReady(s, id) ? `<button class="kf-btn" data-turnin="${id}">交付</button>` : ''));
+    const daily = Object.entries(dailyBounties(today, s.flags)).map(([id, q]) => {
+      const p = s.quests[id];
+      const act = !p ? `<button class="kf-btn" data-accept="${id}">接受</button>` : p.status === 'active' && isReady(s, id) ? `<button class="kf-btn" data-turnin="${id}">交付</button>` : '';
+      return this.questCard(id, q, act);
+    });
+    return `<div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">委託</div>${[...mine, ...offers].join('') || '<div class="kf-empty">目前沒有新的委託。劇情推進後會有更多。</div>'}</div>
+      <div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">今日懸賞（${today}，每天換新）</div>${daily.join('') || '<div class="kf-empty">還沒有懸賞。</div>'}<div class="kf-msg">${esc(this.msg)}</div></div>`;
+  }
+
+  private questView(): string {
+    const s = gameState;
+    const active = Object.keys(s.quests).filter((id) => s.quests[id].status === 'active' && questDef(id, s.flags));
+    const done = Object.keys(s.quests).filter((id) => s.quests[id].status === 'done' && questDef(id, s.flags));
+    return `<div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">主線</div><div class="kf-card"><h3>${esc(currentObjective(s.flags))}</h3></div>
+        <div class="kf-sec">進行中</div>${active.map((id) => this.questCard(id, questDef(id, s.flags)!, '')).join('') || '<div class="kf-empty">沒有進行中的任務。頭上有「！」的人有事想拜託你，村子神社前的告示板也有委託。</div>'}</div>
+      <div class="kf-col"><div class="kf-sec">已完成（${done.length}）</div>${done.map((id) => `<div class="kf-row"><span class="n">${esc(questDef(id, s.flags)!.name)}</span><span class="kf-up">✔</span></div>`).join('') || '<div class="kf-empty">還沒有完成的任務。</div>'}</div>`;
+  }
+
   private render(): void {
+    if (this.mode === 'board') {
+      this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="告示板"><div class="kf-head"><span class="kf-title">告示板</span><span class="kf-spacer"></span>
+        <span class="kf-money">● ${gameState.money} 文</span><button class="kf-close" data-act="close" aria-label="關閉">✕</button></div><div class="kf-body">${this.boardView()}</div></div>`;
+      return;
+    }
     if (this.mode === 'save' || this.mode === 'load') {
       const title = this.mode === 'save' ? '地藏・存檔' : '讀取存檔';
       this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}"><div class="kf-head"><span class="kf-title">${title}</span><span class="kf-spacer"></span>
@@ -123,11 +169,11 @@ export class GameOverlay {
     }
     const s = gameState;
     const tabs = this.mode === 'menu'
-      ? ([['status', '狀態'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
+      ? ([['status', '狀態'], ['quest', '任務'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
       : ([['buy', '購買'], ['sell', '賣出']] as const).map(([k, t]) => `<button class="kf-tab" data-stab="${k}" aria-selected="${this.shopTab === k}">${t}</button>`).join('');
     const title = this.mode === 'menu' ? '選單' : '鈴屋';
     const body = this.mode === 'menu'
-      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.bagView())
+      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.bagView())
       : (this.shopTab === 'buy' ? this.buyView() : this.sellView());
     this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}">
       <div class="kf-head"><span class="kf-title">${title}</span>${tabs}<span class="kf-spacer"></span>
@@ -278,9 +324,11 @@ export class GameOverlay {
 
   // ---------- 操作 ----------
   private onClick(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
     if (!el) { if (e.target === this.root) this.close(); return; }
     const d = el.dataset, s = gameState;
+    if (d.accept) { if (accept(s, d.accept)) this.msg = `接受了「${questDef(d.accept, s.flags)?.name}」`; this.render(); return; }
+    if (d.turnin) { this.msg = turnIn(s, d.turnin) ?? ''; this.render(); return; }
     if (d.saveslot != null && this.saveReq) {
       const slot = (d.saveslot === 'auto' ? 'auto' : Number(d.saveslot)) as SlotId;
       if (readSave(slot) && this.confirmSlot !== slot) { this.confirmSlot = slot; this.render(); return; }

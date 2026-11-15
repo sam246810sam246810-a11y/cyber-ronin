@@ -27,6 +27,8 @@ export interface GameState extends Bag {
   anger: number;
   /** 遊玩時間（秒） */
   playTime: number;
+  /** 任務進度（PRD 9） */
+  quests: Record<string, { status: 'active' | 'done'; progress: number }>;
 }
 
 export function classStats(id: ClassId) { return classes[id]; }
@@ -46,7 +48,7 @@ export function newGameState(classId: ClassId = 'swordsman', difficulty: Difficu
     capacity: BAG_START,
     flags: new Set(), openedChests: new Set(),
     checkpoint: { map: 'home', spawn: 'door' },
-    bond: 0, anger: 0, playTime: 0,
+    bond: 0, anger: 0, playTime: 0, quests: {},
   };
   const st = statsOf(s); s.hp = st.maxHp; s.mp = st.maxMp;
   return s;

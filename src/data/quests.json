@@ -1,0 +1,53 @@
+{
+  "taro_beetles": {
+    "type": "side", "name": "太郎的獨角仙", "giver": "taro", "requires": ["talked_priest"],
+    "desc": "太郎想要獨角仙。在迷霧竹林裡找到 3 隻。",
+    "target": { "pickup": "beetle", "count": 3 },
+    "reward": { "money": 80, "items": { "回復丸": 2 } },
+    "offer": [["太郎", "燈姊姊！阿健說竹林裡有超大的獨角仙……"], ["太郎", "你去竹林的時候，可以幫我抓 3 隻嗎？拜託！"]],
+    "remind": [["太郎", "獨角仙在竹林裡喔！地上亮亮的那種！"]],
+    "done": [["太郎", "哇！好大隻！燈姊姊最厲害了！"], ["太郎", "這個給你，是我存的零用錢……還有媽媽做的回復丸！"]]
+  },
+  "ume_charm": {
+    "type": "side", "name": "阿梅的護身符", "giver": "ume", "requires": ["talked_priest"],
+    "desc": "阿梅去竹林找孩子時弄丟了護身符。在迷霧竹林找到它。",
+    "target": { "pickup": "charm", "count": 1 },
+    "reward": { "money": 100, "gear": { "base": "omamori", "rarity": 1 } },
+    "offer": [["阿梅", "燈……我去竹林找孩子的時候，把神社求來的護身符弄丟了。"], ["阿梅", "那是我家孩子出生時求的……如果你在竹林看到，能幫我撿回來嗎？"]],
+    "remind": [["阿梅", "護身符應該掉在竹林入口往裡走一點的地方……"]],
+    "done": [["阿梅", "就是這個！謝謝你，燈。"], ["阿梅", "神社說過，護身符要給最需要的人。現在最需要的……是你。"]]
+  },
+  "tesshin_steel": {
+    "type": "side", "name": "鐵心的玉鋼", "giver": "tesshin", "requires": ["prologue_done"],
+    "desc": "鐵心需要玉鋼才能打刀。古井地城的骨蜘蛛和提燈鬼身上會掉玉鋼，帶 3 塊回去。",
+    "target": { "item": "玉鋼", "count": 3 },
+    "reward": { "money": 150, "gear": { "base": "iron_gloves", "rarity": 1 }, "flags": ["forge_unlocked"] },
+    "offer": [["鐵心", "聽說妳要下古井？那裡的妖怪吃了不少礦石，身上常有玉鋼。"], ["鐵心", "帶 3 塊回來。我讓妳見識見識，什麼叫真正的鍛冶。"]],
+    "remind": [["鐵心", "玉鋼呢？骨蜘蛛和提燈鬼身上找找。"]],
+    "done": [["鐵心", "……好鋼。妳這丫頭有點本事。"], ["鐵心", "這副手甲先拿去用。以後帶材料來，我幫妳打東西。"]]
+  },
+  "hunt_kitsunebi": {
+    "type": "hunt", "name": "討伐：狐火", "giver": "board", "requires": ["talked_priest"],
+    "desc": "竹林的狐火越來越多，晚上連路都看不清。打倒 4 隻狐火。",
+    "target": { "kill": "kitsunebi", "count": 4 },
+    "reward": { "money": 60, "items": { "靈水": 2 } }
+  },
+  "hunt_bonespider": {
+    "type": "hunt", "name": "討伐：骨蜘蛛", "giver": "board", "requires": ["prologue_done"],
+    "desc": "古井裡的骨蜘蛛會爬上來。打倒 4 隻骨蜘蛛。",
+    "target": { "kill": "bonespider", "count": 4 },
+    "reward": { "money": 120, "items": { "大回復丸": 1 } }
+  },
+  "collect_fur": {
+    "type": "collect", "name": "收集：野狐的毛", "giver": "board", "requires": ["talked_priest"],
+    "desc": "鈴屋想做冬天的圍巾。帶 3 份野狐的毛來。",
+    "target": { "item": "野狐的毛", "count": 3 },
+    "reward": { "money": 100, "capacity": 10 }
+  },
+  "collect_cloth": {
+    "type": "collect", "name": "收集：唐傘的破布", "giver": "board", "requires": ["talked_priest"],
+    "desc": "唐傘的布很耐用，阿梅想拿來補衣服。帶 3 份唐傘的破布來。",
+    "target": { "item": "唐傘的破布", "count": 3 },
+    "reward": { "money": 80, "items": { "解毒草": 3 } }
+  }
+}

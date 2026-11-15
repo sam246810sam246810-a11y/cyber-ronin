@@ -16,6 +16,8 @@ export const EV = {
   shop: 'shop',
   /** World → UI：在地藏前存檔 */
   save: 'save',
+  /** World → UI：打開告示板 */
+  board: 'board',
 } as const;
 
 export interface DialogueRequest { lines: Line[]; choices?: string[]; onDone: (choice?: number) => void }
