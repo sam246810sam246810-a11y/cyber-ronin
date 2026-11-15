@@ -232,6 +232,7 @@ export class WorldScene extends Phaser.Scene {
         break;
       }
       case 'npc': {
+        if (props.showFlag && !gameState.flags.has(String(props.showFlag))) break;
         const frame = (npcs as Record<string, { frame: number }>)[String(props.npc)]?.frame ?? 0;
         const s = this.add.sprite(x, y, 'npcs', frame);
         this.tweens.add({ targets: s, duration: 600, repeat: -1, yoyo: true, onYoyo: () => s.setFrame(frame + 1), onRepeat: () => s.setFrame(frame) });

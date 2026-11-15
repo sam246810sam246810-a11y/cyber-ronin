@@ -25,5 +25,17 @@
   },
   "santa": {
     "frame": 16
+  },
+  "oba": {
+    "frame": 18
+  },
+  "fisher": {
+    "frame": 20
+  },
+  "hermit": {
+    "frame": 22
+  },
+  "onimother": {
+    "frame": 24
   }
 }

@@ -502,6 +502,10 @@ const NPCS = [
   ['kawataro', 'kappa'],
   ['yashamaru', { hair: 0xe8e8f0, skin: 0xe0d0c8, top: 0x1a1a24, bottom: 0x2a2a3a, feet: 0x101018, lips: 0x8a2a4a }],
   ['santa', { hair: 0x6a4a2a, skin: 0xc89a6a, top: 0x8a6a3a, bottom: 0x6a5a2a, feet: 0x4a3a1a }],
+  ['oba', { hair: 0xc8c8c8, skin: 0xe8c6a0, top: 0x8a5a3a, bottom: 0x5a3a2a, feet: 0x3a2a1a, bun: true }],
+  ['fisher', { hair: 0xd9c27a, skin: 0xd8a880, top: 0x3a5a8a, bottom: 0x2a3a5a, feet: 0x1a2a3a, beard: 0x5a4a3a }],
+  ['hermit', { hair: 0x2a2a2a, skin: 0xd8b090, top: 0xf0f0e8, bottom: 0xe0e0d8, feet: 0x8a8a80, beard: 0x5a5a5a }],
+  ['onimother', { hair: 0xe8e8e8, skin: 0xd86a5a, top: 0x6a3a6a, bottom: 0x4a2a4a, feet: 0x2a1a2a, lips: 0x8a2a2a }],
 ];
 const npc = new Canvas(2 * T, NPCS.length * T);
 function drawKappaKid(cv, ox, oy) {
@@ -763,7 +767,7 @@ function drawHyakki(ox, f) {
 for (let f = 0; f < 4; f++) drawHyakki(f * BS, f);
 
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
-const fx = new Canvas(11 * T, T);
+const fx = new Canvas(14 * T, T);
 fx.rect(2, 7, 11, 1, 0x8a6a3a); fx.rect(12, 6, 3, 3, 0xd8d8d8); fx.px(15, 7, 0xd8d8d8); fx.rect(1, 6, 2, 1, 0xf4f4f0); fx.rect(1, 8, 2, 1, 0xf4f4f0);
 fx.rect(T + 4, 3, 8, 10, 0xf4f0d8); fx.rect(T + 4, 3, 8, 2, 0xc23b2f); fx.rect(T + 6, 6, 4, 1, 0x1a1a1a); fx.rect(T + 7, 7, 2, 4, 0x1a1a1a);
 fx.rect(2 * T + 4, 3, 8, 10, 0xf2c94c); fx.rect(2 * T + 4, 3, 8, 2, 0xe8823a); fx.rect(2 * T + 6, 6, 4, 5, 0xc23b2f); fx.rect(2 * T + 7, 5, 2, 2, 0xffe08a);
@@ -779,6 +783,10 @@ fx.rect(8 * T + 3, 6, 10, 5, 0xdfe8ef); fx.rect(8 * T + 4, 5, 8, 1, 0xdfe8ef); f
 fx.rect(9 * T + 3, 7, 10, 2, 0x1a1a24); fx.rect(9 * T + 5, 6, 6, 1, 0x2a2a3a); fx.rect(9 * T + 5, 9, 6, 1, 0x2a2a3a); fx.px(9 * T + 13, 7, 0xe8e8f0);
 // 10：柿子（任務物品）
 fx.rect(10 * T + 4, 5, 8, 8, 0xe8823a); fx.rect(10 * T + 5, 4, 6, 10, 0xe8823a); fx.rect(10 * T + 6, 3, 4, 2, 0x3a6a2a); fx.px(10 * T + 6, 6, 0xffb06a);
+// 11：草藥、12：鈴的碎片、13：風箏
+fx.rect(11 * T + 7, 6, 2, 8, 0x3a7a3a); fx.rect(11 * T + 4, 5, 4, 3, 0x5ab05a); fx.rect(11 * T + 8, 3, 4, 3, 0x5ab05a); fx.rect(11 * T + 5, 9, 3, 2, 0x5ab05a); fx.px(11 * T + 10, 4, 0xf0d0e0);
+fx.rect(12 * T + 5, 6, 6, 5, 0xb87333); fx.rect(12 * T + 4, 10, 4, 2, 0xd89353); fx.px(12 * T + 7, 7, 0xe8b373); fx.rect(12 * T + 9, 5, 2, 2, 0x8a5a2a);
+fx.rect(13 * T + 4, 2, 8, 8, 0xc23b2f); fx.rect(13 * T + 5, 3, 6, 6, 0xf2e6c9); fx.rect(13 * T + 7, 4, 2, 4, 0xc23b2f); fx.rect(13 * T + 8, 10, 1, 5, 0xe8e4d8); fx.px(13 * T + 9, 13, 0xe8e4d8);
 fx.rect(4 * T + 5, 5, 6, 6, 0xb04aff); fx.rect(4 * T + 4, 6, 8, 4, 0xb04aff); fx.rect(4 * T + 6, 6, 4, 4, 0xe8d8ff); fx.px(4 * T + 3, 8, 0xe8d8ff); fx.px(4 * T + 12, 8, 0xe8d8ff);
 
 // ---------- 地圖工具 ----------
@@ -908,6 +916,7 @@ const maps = {};
   obj(m, 'enemy', 'dummy', tilePoint(6, 13), { kind: 'dummy' });
   sign(m, 'sign_dummy', 7, 13, 'sign_dummy');
   npcAt(m, 'ume', 13, 21);
+  npcAt(m, 'oba', 7, 18);
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
   obj(m, 'board', 'village_board', tilePoint(17, 13));
@@ -1022,6 +1031,7 @@ interior('shrine', '狐火神社', [
   spawn(m, 'well', 28, 16);
   obj(m, 'secret', 'forest_pocket', tileRect(2, 2, 5, 4));
   sign(m, 'sign_forest', 25, 13, 'sign_forest');
+  for (const [x, y, i] of [[16, 5, 1], [9, 18, 2], [30, 16, 3]]) obj(m, 'pickup', `herb_${i}`, tilePoint(x, y), { group: 'herb', frame: 11, label: '草藥' });
   for (const [x, y, i] of [[18, 5, 1], [8, 17, 2], [24, 15, 3]]) obj(m, 'pickup', `beetle_${i}`, tilePoint(x, y), { group: 'beetle', frame: 5, label: '獨角仙' });
   obj(m, 'pickup', 'charm_1', tilePoint(11, 10), { group: 'charm', frame: 6, label: '阿梅的護身符' });
   const enemies = [
@@ -1189,6 +1199,8 @@ const waterGate = (m, id, x, y, group) => { m.set('obst', x, y, 0); obj(m, 'wate
   sign(m, 'swamp_sign', 23, 3, 'sign_swamp');
   obj(m, 'jizo', 'swamp_jizo', tilePoint(18, 3), { spawn: 'jizo' }); spawn(m, 'jizo', 18, 4);
   npcAt(m, 'kawataro', 24, 14);
+  npcAt(m, 'fisher', 18, 13);
+  obj(m, 'pickup', 'kite_1', tilePoint(40, 3), { group: 'kite', frame: 13, label: '太郎的風箏' });
   chest(m, 'swamp_chest_1', 12, 20, { item: '大回復丸', count: 1, money: 120 });
   chest(m, 'swamp_chest_2', 40, 9, { gearTier: 3, money: 80 });
   chest(m, 'swamp_chest_secret', 2, 16, { item: '神器碎片', count: 1, gearTier: 3, minRarity: 2, money: 200 });
@@ -1303,6 +1315,7 @@ const shallow = (m, x, y, w, h) => m.fill('ground', x, y, w, h, gid.shallow);
   obj(m, 'jizo', 'mountain_jizo', tilePoint(6, 27), { spawn: 'jizo' }); spawn(m, 'jizo', 6, 28);
   sign(m, 'mountain_sign', 4, 27, 'sign_mountain');
   npcAt(m, 'santa', 10, 24);
+  npcAt(m, 'hermit', 34, 6);
   obj(m, 'secret', 'mountain_ledge', tileRect(40, 25, 3, 4));
   chest(m, 'mt_chest_1', 5, 5, { item: '大回復丸', count: 2, money: 200 });
   chest(m, 'mt_chest_2', 38, 7, { gearTier: 4, money: 150 });
@@ -1330,6 +1343,7 @@ const shallow = (m, x, y, w, h) => m.fill('ground', x, y, w, h, gid.shallow);
   lever(m, 't_lever', 12, 9, 'ta');
   block(m, 't_block', 24, 4, 'tb', 'down'); plate(m, 't_plate', 24, 7, 'tb');
   sign(m, 't_sign', 13, 2, 'sign_temple');
+  for (const [x, y, i] of [[13, 7, 1], [27, 5, 2], [12, 15, 3]]) obj(m, 'pickup', `bellpiece_${i}`, tilePoint(x, y), { group: 'bellpiece', frame: 12, label: '鈴的碎片' });
   m.set('obst', 25, 17, 0); obj(m, 'bossdoor', 't_tengu_door', tilePoint(25, 17), { dialogue: 'tengu_door' });
   chest(m, 't_chest', 19, 2, { item: '大回復丸', count: 2, money: 200 });
   chest(m, 't_chest_b', 27, 2, { gearTier: 4, minRarity: 1 });
@@ -1384,6 +1398,7 @@ const sealDoor = (m, id, x, y, item, label) => { m.set('obst', x, y, 0); obj(m, 
   obj(m, 'jizo', 'oni_jizo', tilePoint(3, 9), { spawn: 'jizo' }); spawn(m, 'jizo', 3, 10);
   sign(m, 'oni_sign', 4, 10, 'sign_oni');
   sign(m, 'oni_ruin', 17, 16, 'oni_ruin');
+  obj(m, 'npc', 'onimother', tilePoint(10, 15), { npc: 'onimother', dialogue: 'onimother', showFlag: 'oni_child_freed' });
   const es = [['gaki', 8, 13], ['gaki', 12, 10], ['gaki', 16, 14], ['gaki', 20, 12], ['aka_oni', 25, 13], ['ao_oni', 31, 9], ['aka_oni', 13, 21], ['ao_oni', 29, 20], ['onibi', 20, 6], ['onibi', 33, 5]];
   es.forEach(([k, x, y], i) => obj(m, 'enemy', `${k}_${i}`, tilePoint(x, y), { kind: k }));
   maps.oni_road = toTiled(m, { displayName: '鬼之城下', tier: 4 });
