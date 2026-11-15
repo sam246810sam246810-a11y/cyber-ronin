@@ -9,7 +9,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 SP = ROOT / 'src' / 'assets' / 'sprites'
-FACES = {'jin': (0.62, 0.17, 0.085), 'zero': (0.52, 0.18, 0.085), 'tetsu': (0.6, 0.175, 0.095)}
+FACES = {'jin': (0.62, 0.17, 0.085), 'zero': (0.52, 0.18, 0.085), 'tetsu': (0.6, 0.175, 0.095), 'oboro': (0.78, 0.29, 0.075), 'hayabusa': (0.56, 0.19, 0.075), 'kagura': (0.61, 0.155, 0.075)}
 
 for cid, (fx, fy, r) in FACES.items():
     im = Image.open(SP / f'hd-{cid}.webp').convert('RGBA')

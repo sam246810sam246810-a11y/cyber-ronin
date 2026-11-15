@@ -54,6 +54,6 @@ for i, f in enumerate(frames):
     s = height / c.height
     c = c.resize((round(c.width * s), height), Image.LANCZOS)
     p = OUT / f'live-{name}-{i}.webp'
-    c.save(p, 'WEBP', quality=72, method=6)
+    c.save(p, 'WEBP', quality=int(__import__('os').environ.get('Q', '72')), method=6)
     total += p.stat().st_size
 print(f'live-{name}: {len(frames)} 幀，外框 {box}，共 {total // 1024} KB')

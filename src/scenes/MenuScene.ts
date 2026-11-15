@@ -11,10 +11,12 @@ import { Audio } from '../game/audio';
 import { claimableCount } from '../game/meta';
 import { TAB_H, TOP_H, enter, goTo, lobbyBackground, openSettings, tabBar, topBar } from '../game/chrome';
 import { dailyChallenge, todayKey } from '../config/meta';
+import { STAGES } from '../config/stages';
 
 /** 大廳：角色、出擊卡、側邊功能鈕 */
 export class MenuScene extends Phaser.Scene {
   private charIdx = 0;
+  private stageIdx = 0;
   private wanted = 0;
 
   constructor() {
@@ -26,6 +28,7 @@ export class MenuScene extends Phaser.Scene {
     Audio.playMusic('bgm-menu');
     const s = loadSave();
     this.charIdx = Math.max(0, CHAR_ORDER.indexOf(s.lastChar));
+    this.stageIdx = Math.max(0, STAGES.findIndex((x) => x.id === s.lastStage));
     this.wanted = Math.min(this.wanted, s.wantedUnlocked ?? 0);
     this.draw();
     enter(this);
@@ -54,7 +57,15 @@ export class MenuScene extends Phaser.Scene {
     const ring = this.add.ellipse(W / 2, heroY + 6, 170, 40, COLORS.cyan, 0.18).setStrokeStyle(2, COLORS.cyan, 0.7);
     this.tweens.add({ targets: ring, alpha: 0.5, scaleX: 1.08, yoyo: true, repeat: -1, duration: 1300 });
     let hero: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image;
-    if (this.textures.exists(`hd-${id}`)) {
+    if (this.anims.exists(`live-${id}`)) {
+      // SSR 動態立繪＋金色光暈
+      const aura = this.add.ellipse(W / 2, heroY - 120, 300, 380, 0xffc83d, 0.1).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: aura, alpha: 0.25, scale: 1.06, yoyo: true, repeat: -1, duration: 1600 });
+      ring.setStrokeStyle(2, 0xffd84d, 0.9).setFillStyle(0xffc83d, 0.2);
+      hero = this.add.sprite(W / 2, heroY + 22, `live-${id}-0`).setOrigin(0.5, 1);
+      hero.setScale(330 / hero.texture.getSourceImage().height);
+      (hero as Phaser.GameObjects.Sprite).play(`live-${id}`);
+    } else if (this.textures.exists(`hd-${id}`)) {
       // 高清立繪＋程式做的呼吸起伏
       hero = this.add.image(W / 2, heroY + 22, `hd-${id}`).setOrigin(0.5, 1);
       const hs = 330 / hero.texture.getSourceImage().height;
@@ -67,7 +78,7 @@ export class MenuScene extends Phaser.Scene {
     if (!owned) hero.setTint(0x222233);
     // 點角色：做出攻擊動作
     hero.setInteractive({ useHandCursor: true }).on('pointerup', () => {
-      if (!(hero instanceof Phaser.GameObjects.Sprite)) {
+      if (!(hero instanceof Phaser.GameObjects.Sprite) || hero.anims.currentAnim?.key.startsWith('live-')) {
         // 立繪：前衝一下並揮出刀光
         this.tweens.add({ targets: hero, x: W / 2 + 14, yoyo: true, duration: 90 });
         if (this.anims.exists('fx-slash')) {
@@ -135,21 +146,39 @@ export class MenuScene extends Phaser.Scene {
     const cardY = H - TAB_H - 220;
     const cw = 470;
     const chh = 150;
-    if (this.textures.exists('ui-stage-slums')) {
-      const pic = this.add.image(W / 2, cardY, 'ui-stage-slums');
+    const stage = STAGES[this.stageIdx];
+    const stageOpen = this.stageIdx === 0 || s.stagesCleared.includes(STAGES[this.stageIdx - 1].id);
+    if (this.textures.exists(stage.card)) {
+      const pic = this.add.image(W / 2, cardY, stage.card);
       pic.setScale(Math.max((cw - 24) / pic.texture.getSourceImage().width, (chh - 20) / pic.texture.getSourceImage().height));
       pic.setCrop(0, 0, pic.texture.getSourceImage().width, pic.texture.getSourceImage().height);
       const m = this.make.graphics({}, false).fillRect(W / 2 - cw / 2 + 12, cardY - chh / 2 + 10, cw - 24, chh - 20);
       pic.setMask(m.createGeometryMask());
+      if (!stageOpen) pic.setTint(0x3a3452);
     } else this.add.rectangle(W / 2, cardY, cw - 24, chh - 20, 0x221a40);
     this.add.rectangle(W / 2, cardY + 30, cw - 24, 60, 0x07060d, 0.6);
     if (this.textures.exists('ui-frame-stage')) {
       this.add.nineslice(W / 2, cardY, 'ui-frame-stage', undefined, cw * 2, chh * 2, 120, 120, 110, 110).setScale(0.5);
     }
-    const st = this.add.text(W / 2, cardY + 14, '霓虹貧民窟', textStyle(22, '#ffffff')).setOrigin(0.5);
-    st.setStroke('#ff3d81', 5);
-    const best = s.runs > 0 ? `最佳 ${formatTime(s.bestTime)}　擊殺 ${s.bestKills}` : '尚無紀錄';
-    this.add.text(W / 2, cardY + 42, best, textStyle(13, '#c9c6e0', false)).setOrigin(0.5);
+    const st = this.add.text(W / 2, cardY + 14, `${this.stageIdx + 1}. ${stage.name}`, textStyle(22, '#ffffff')).setOrigin(0.5);
+    st.setStroke(stage.css, 5);
+    const sb = s.stageBest[stage.id] ?? (stage.id === 'slums' && s.runs > 0 ? { time: s.bestTime, kills: s.bestKills } : null);
+    const cleared = s.stagesCleared.includes(stage.id);
+    const fc = stage.firstClear;
+    const info = !stageOpen
+      ? `通關「${STAGES[this.stageIdx - 1].name}」後解鎖`
+      : `${'★'.repeat(this.stageIdx + 1)}　${sb ? `最佳 ${formatTime(sb.time)}　擊殺 ${sb.kills}` : '尚無紀錄'}${cleared ? '　已通關' : `　首通：晶片 ${fc.chips}`}`;
+    this.add.text(W / 2, cardY + 42, info, textStyle(13, stageOpen ? '#c9c6e0' : '#ff8a5d', false)).setOrigin(0.5);
+    if (stageOpen && stage.hazard !== 'none') this.add.text(W / 2, cardY - 52, stage.hazardDesc, textStyle(12, '#ffd84d', false)).setOrigin(0.5).setStroke('#07060d', 4);
+    if (!stageOpen) this.add.text(W / 2, cardY - 22, '未解鎖', textStyle(24, '#ff8a5d')).setOrigin(0.5).setStroke('#07060d', 5);
+    // 左右切換關卡
+    const stArrow = (dx: number) =>
+      makeButton(this, W / 2 + dx * 214, cardY, 40, 56, dx < 0 ? '<' : '>', stage.color, () => {
+        this.stageIdx = (this.stageIdx + dx + STAGES.length) % STAGES.length;
+        this.draw();
+      }, 22);
+    stArrow(-1);
+    stArrow(1);
     // 通緝等級
     const maxW = s.wantedUnlocked ?? 0;
     const wy = cardY - chh / 2 - 22;
@@ -174,14 +203,18 @@ export class MenuScene extends Phaser.Scene {
     // 出擊按鈕
     const by = H - TAB_H - 70;
     if (owned) {
-      const start = makeButton(this, W / 2, by, 330, 78, '出　擊', COLORS.magenta, () => {
+      const st0 = STAGES[this.stageIdx];
+      const open = this.stageIdx === 0 || s.stagesCleared.includes(STAGES[this.stageIdx - 1].id);
+      const start = makeButton(this, W / 2, by, 330, 78, open ? '出　擊' : '關卡未解鎖', COLORS.magenta, () => {
         const sv = loadSave();
         sv.lastChar = id;
+        sv.lastStage = st0.id;
         writeSave(sv);
         Audio.stopMusic();
-        goTo(this, 'Game', { char: id, wanted: this.wanted });
-      }, 32);
-      this.tweens.add({ targets: start, scale: 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.InOut' });
+        goTo(this, 'Game', { char: id, wanted: this.wanted, stage: st0.id });
+      }, open ? 32 : 24);
+      start.setEnabled(open);
+      if (open) this.tweens.add({ targets: start, scale: 1.04, yoyo: true, repeat: -1, duration: 900, ease: 'Sine.InOut' });
     } else {
       if (canUnlock(s, id))
         makeButton(this, W / 2, by, 330, 78, '碎片解鎖', COLORS.gold, () => {
@@ -201,6 +234,6 @@ export class MenuScene extends Phaser.Scene {
     }
 
     tabBar(this, 'Menu');
-    this.input.keyboard?.once('keydown-ENTER', () => owned && goTo(this, 'Game', { char: id, wanted: this.wanted }));
+    this.input.keyboard?.once('keydown-ENTER', () => owned && goTo(this, 'Game', { char: id, wanted: this.wanted, stage: STAGES[this.stageIdx].id }));
   }
 }

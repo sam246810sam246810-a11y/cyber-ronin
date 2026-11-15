@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PASSIVES, WEAPONS } from '../config/balance';
+import { CharId, PASSIVES, WEAPONS } from '../config/balance';
 import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, textStyle } from '../game/layout';
 import { makeButton, setupLogicalCamera } from '../game/ui';
@@ -366,7 +366,7 @@ export class UIScene extends Phaser.Scene {
   }
 
   /** 大招：斜切橫幅特寫切入 → 招式名稱 → 各角色收尾特效 */
-  playUltimate(charId: 'jin' | 'zero' | 'tetsu') {
+  playUltimate(charId: CharId) {
     if (!this.ready) return;
     const u = ULTIMATES[charId];
     const layer = this.iaiLayer;
@@ -384,9 +384,15 @@ export class UIScene extends Phaser.Scene {
     bg.fillStyle(u.color, 0.55);
     bg.fillRect(-W * 1.2, -bh / 2, W * 2.4, bh * 0.18);
     bg.fillRect(-W * 1.2, bh / 2 - bh * 0.18, W * 2.4, bh * 0.18);
-    bg.lineStyle(4, 0xffffff, 0.9);
+    // SSR：金色外框
+    bg.lineStyle(u.ssr ? 8 : 4, u.ssr ? 0xffd84d : 0xffffff, 0.95);
     bg.lineBetween(-W * 1.2, -bh / 2, W * 1.2, -bh / 2);
     bg.lineBetween(-W * 1.2, bh / 2, W * 1.2, bh / 2);
+    if (u.ssr) {
+      bg.lineStyle(2, 0xffffff, 0.9);
+      bg.lineBetween(-W * 1.2, -bh / 2 + 9, W * 1.2, -bh / 2 + 9);
+      bg.lineBetween(-W * 1.2, bh / 2 - 9, W * 1.2, bh / 2 - 9);
+    }
     const speed = this.add.graphics();
     band.add([bg, speed]);
     // 速度線
@@ -427,12 +433,15 @@ export class UIScene extends Phaser.Scene {
       this.tweens.add({ targets: flash, alpha: 0, duration: 300 });
       if (u.finisher === 'slash') this.finisherSlash(layer);
       else if (u.finisher === 'code') this.finisherCode(layer);
-      else this.finisherThunder(layer);
+      else if (u.finisher === 'thunder') this.finisherThunder(layer);
+      else if (u.finisher === 'clone') this.ultAnim(layer, 'ultoboro', 12);
+      else if (u.finisher === 'orbital') this.ultAnim(layer, 'ulthayabusa');
+      else this.finisherHyakki(layer);
       this.tweens.add({
         targets: dim,
         fillAlpha: 0,
         duration: 400,
-        delay: 700,
+        delay: u.finisher === 'hyakki' ? 1700 : u.finisher === 'clone' ? 1200 : 700,
         onComplete: () => {
           this.events.off('update', ticker);
           layer.removeAll(true);
@@ -454,6 +463,23 @@ export class UIScene extends Phaser.Scene {
     spr.play({ key, frameRate });
     spr.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => spr.destroy());
     return spr;
+  }
+
+  /** SSR 百鬼夜行：鳥居與百鬼橫掃 → 狐火大爆發 */
+  private finisherHyakki(layer: Phaser.GameObjects.Container) {
+    this.ultAnim(layer, 'ultkagura1', 20);
+    this.time.delayedCall(850, () => {
+      const flash = this.add.rectangle(W / 2, H / 2, W, H, 0xffe0f0, 0.8);
+      layer.add(flash);
+      this.tweens.add({ targets: flash, alpha: 0, duration: 260 });
+      this.ultAnim(layer, 'ultkagura2', 18);
+    });
+    // 金色光點
+    for (let i = 0; i < 26; i++) {
+      const p = this.add.circle(Math.random() * W, H + 20, 2 + Math.random() * 3, Math.random() < 0.5 ? 0xffd84d : 0xff8ac8, 0.9).setBlendMode(Phaser.BlendModes.ADD);
+      layer.add(p);
+      this.tweens.add({ targets: p, y: -20, x: p.x + (Math.random() - 0.5) * 120, alpha: 0, duration: 1200 + Math.random() * 600, delay: Math.random() * 400 });
+    }
   }
 
   private finisherSlash(layer: Phaser.GameObjects.Container) {

@@ -2,6 +2,7 @@
 import type { CharId, PassiveId, UnlockStats, UpgradeId, WeaponId } from '../config/balance';
 import type { ModuleItem, Slot } from '../config/meta';
 import type { PoolId, SpiritId } from '../config/gacha';
+import type { StageId } from '../config/stages';
 
 const KEY = 'cyber-ronin.save.v1';
 
@@ -56,6 +57,10 @@ export interface SaveData extends UnlockStats {
   /** 自選頭像（已解鎖的角色）與頭像框 */
   avatar?: CharId;
   avatarFrame: string;
+  /** 已通關（並領過首通獎勵）的關卡 */
+  stagesCleared: StageId[];
+  stageBest: Partial<Record<StageId, { time: number; kills: number }>>;
+  lastStage: StageId;
 }
 
 const EMPTY: SaveData = {
@@ -105,6 +110,9 @@ const EMPTY: SaveData = {
   spirits: {},
   jade: 0,
   avatarFrame: 'default',
+  stagesCleared: [],
+  stageBest: {},
+  lastStage: 'slums',
 };
 
 export function loadSave(): SaveData {

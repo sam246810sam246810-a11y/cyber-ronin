@@ -115,19 +115,26 @@ export class GachaScene extends Phaser.Scene {
       const glow = this.add.ellipse(W / 2, cy + h * 0.42, 420, 70, 0xff3d81, 0.18);
       this.tweens.add({ targets: glow, alpha: 0.5, yoyo: true, repeat: -1, duration: 1400 });
       const order: [CharId, number, number][] = [
-        ['zero', -140, 0.82],
-        ['tetsu', 140, 0.82],
-        ['jin', 0, 1],
+        ['oboro', -150, 0.8],
+        ['hayabusa', 150, 0.8],
       ];
       for (const [id, dx, sc] of order) {
         const key = this.textures.exists(`hd-${id}`) ? `hd-${id}` : `char-${id}`;
-        const img = this.fitImage(key, W / 2 + dx, cy + h * 0.05 * (1 - sc) * 6, 300 * sc, h * sc);
-        if (sc < 1) img.setTint(0xb0a8d0);
-        if (!s.chars.includes(id)) img.setTint(0x403a58);
+        const img = this.fitImage(key, W / 2 + dx, cy + h * 0.05, 300 * sc, h * sc);
+        img.setTint(s.chars.includes(id) ? 0xb0a8d0 : 0x5a5478);
         img.setName('machine');
       }
-      this.add.text(W / 2, cy - h / 2 + 10, '抽 SR／SSR 角色，N／R 是角色碎片', textStyle(16, '#ff6a9a')).setOrigin(0.5).setStroke('#07060d', 4);
-      this.add.text(W / 2, cy + h / 2 - 6, '碎片集滿可以解鎖角色、升星（最高 5 星）', textStyle(13, '#ffffff', false)).setOrigin(0.5).setStroke('#07060d', 4);
+      // SSR 神樂在中間（有動態立繪就用動態）
+      const aura = this.add.ellipse(W / 2, cy, 260, h * 0.9, 0xffc83d, 0.12).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: aura, alpha: 0.28, yoyo: true, repeat: -1, duration: 1200 });
+      let star: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+      if (this.anims.exists('live-kagura')) {
+        star = this.add.sprite(W / 2, cy + h / 2 - 20, 'live-kagura-0').setOrigin(0.5, 1);
+        (star as Phaser.GameObjects.Sprite).play('live-kagura');
+      } else star = this.add.image(W / 2, cy + h / 2 - 20, this.textures.exists('hd-kagura') ? 'hd-kagura' : 'char-kagura').setOrigin(0.5, 1);
+      star.setScale((h * 0.98) / star.texture.getSourceImage().height).setName('machine');
+      this.add.text(W / 2, cy - h / 2 + 10, 'SSR 陰陽師・神樂 登場！', textStyle(18, '#ffd84d')).setOrigin(0.5).setStroke('#7a1a4a', 5);
+      this.add.text(W / 2, cy + h / 2 - 6, 'SR：刃・零・鐵・朧・隼　碎片集滿可以解鎖、升星', textStyle(13, '#ffffff', false)).setOrigin(0.5).setStroke('#07060d', 4);
       return;
     }
     // 靈物池
@@ -180,7 +187,67 @@ export class GachaScene extends Phaser.Scene {
         Audio.play('sfx-levelup', 0.7);
         vibrate(150);
       }
-      this.time.delayedCall(450, () => this.showResults(res));
+      const ssrChar = res.find((it) => it.kind === 'char' && it.rarity === 3);
+      this.time.delayedCall(450, () => {
+        if (ssrChar && ssrChar.kind === 'char') this.ssrReveal(ssrChar.char, () => this.showResults(res));
+        else this.showResults(res);
+      });
+    });
+  }
+
+  /** SSR 角色登場演出：金色光柱 → 動態立繪登場 → 名字打字效果 */
+  private ssrReveal(id: CharId, done: () => void) {
+    const layer = this.add.container(0, 0).setDepth(20);
+    const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x07060d, 1).setInteractive();
+    layer.add(bg);
+    Audio.play('sfx-levelup', 0.8);
+    vibrate(200);
+    this.cameras.main.flash(500, 255, 220, 120);
+    // 金色光柱
+    for (let i = 0; i < 7; i++) {
+      const beam = this.add.rectangle(W / 2 + (i - 3) * 80, H / 2, 40 + Math.random() * 40, H * 1.4, 0xffc83d, 0.18).setAngle(-8 + Math.random() * 16).setBlendMode(Phaser.BlendModes.ADD);
+      layer.add(beam);
+      this.tweens.add({ targets: beam, alpha: 0.45, yoyo: true, repeat: -1, duration: 500 + i * 80 });
+    }
+    const halo = this.add.circle(W / 2, H * 0.42, 220, 0xffd84d, 0.18).setBlendMode(Phaser.BlendModes.ADD);
+    layer.add(halo);
+    this.tweens.add({ targets: halo, scale: 1.15, alpha: 0.35, yoyo: true, repeat: -1, duration: 900 });
+    // 立繪（有動態立繪就用動態）
+    let hero: Phaser.GameObjects.Image | Phaser.GameObjects.Sprite;
+    if (this.anims.exists(`live-${id}`)) {
+      hero = this.add.sprite(W / 2, H * 0.78, `live-${id}-0`).setOrigin(0.5, 1);
+      (hero as Phaser.GameObjects.Sprite).play(`live-${id}`);
+    } else hero = this.add.image(W / 2, H * 0.78, this.textures.exists(`hd-${id}`) ? `hd-${id}` : `char-${id}`).setOrigin(0.5, 1);
+    const hs = (H * 0.62) / hero.texture.getSourceImage().height;
+    hero.setScale(hs * 1.3).setAlpha(0).setY(H * 0.86);
+    layer.add(hero);
+    this.tweens.add({ targets: hero, scale: hs, alpha: 1, y: H * 0.78, duration: 650, delay: 350, ease: 'Cubic.Out' });
+    // 金色粒子往上飄
+    for (let i = 0; i < 40; i++) {
+      const p = this.add.circle(Math.random() * W, H + 10, 2 + Math.random() * 3, Math.random() < 0.6 ? 0xffd84d : 0xff8ac8, 0.9).setBlendMode(Phaser.BlendModes.ADD);
+      layer.add(p);
+      this.tweens.add({ targets: p, y: -20, x: p.x + (Math.random() - 0.5) * 100, alpha: 0, duration: 1600 + Math.random() * 1200, delay: Math.random() * 1500, repeat: -1 });
+    }
+    const ssr = this.add.text(W / 2, H * 0.1, 'SSR', textStyle(66, '#ffd84d')).setOrigin(0.5).setStroke('#7a4a00', 8).setScale(3).setAlpha(0);
+    ssr.setShadow(0, 0, '#ffc83d', 24, true, true);
+    layer.add(ssr);
+    this.tweens.add({ targets: ssr, scale: 1, alpha: 1, delay: 900, duration: 260, ease: 'Back.Out' });
+    // 名字一個字一個字打出來
+    const full = CHARACTERS[id].name;
+    const nameT = this.add.text(W / 2, H * 0.84, '', textStyle(33, '#ffffff')).setOrigin(0.5).setStroke('#ff4fa0', 6);
+    layer.add(nameT);
+    const role = this.add.text(W / 2, H * 0.89, CHARACTERS[id].role, textStyle(16, '#ffd84d')).setOrigin(0.5).setAlpha(0).setStroke('#07060d', 4);
+    layer.add(role);
+    for (let i = 1; i <= full.length; i++) this.time.delayedCall(1200 + i * 110, () => nameT.setText(full.slice(0, i)));
+    this.tweens.add({ targets: role, alpha: 1, delay: 1300 + full.length * 110, duration: 300 });
+    const hint = this.add.text(W / 2, H * 0.95, '點一下繼續', textStyle(14, COLORS.dim, false)).setOrigin(0.5).setAlpha(0);
+    layer.add(hint);
+    this.tweens.add({ targets: hint, alpha: 1, delay: 2200, duration: 300 });
+    const openedAt = this.time.now;
+    bg.on('pointerup', () => {
+      if (this.time.now - openedAt < 1500) return;
+      layer.destroy();
+      done();
     });
   }
 
@@ -313,21 +380,21 @@ export class GachaScene extends Phaser.Scene {
     layer.add(this.add.text(W / 2, CONTENT_TOP + 76, `萬能碎片 ×${s.wildShards}`, textStyle(15, '#ffd84d')).setOrigin(0.5));
     const ids = Object.keys(CHARACTERS) as CharId[];
     ids.forEach((id, i) => {
-      const y = CONTENT_TOP + 160 + i * 150;
+      const y = CONTENT_TOP + 150 + i * 116;
       const st = starOf(s, id);
-      layer.add(this.add.rectangle(W / 2, y, 510, 136, COLORS.panel, 0.96).setStrokeStyle(2, MOD_RARITY[CHAR_RARITY[id]].color, 0.8));
+      layer.add(this.add.rectangle(W / 2, y, 510, 108, COLORS.panel, 0.96).setStrokeStyle(2, MOD_RARITY[CHAR_RARITY[id]].color, 0.8));
       const pk = this.textures.exists(`portrait-${id}`) ? `portrait-${id}` : `char-${id}`;
-      const p = this.add.image(78, y, pk);
-      p.setScale(110 / Math.max(p.width, p.height));
+      const p = this.add.image(72, y, pk);
+      p.setScale(92 / Math.max(p.width, p.height));
       if (!st) p.setTint(0x403a58);
       layer.add(p);
-      layer.add(this.add.text(146, y - 52, `${CHARACTERS[id].name}　${RAR[CHAR_RARITY[id]]}`, textStyle(17, '#ffffff')).setOrigin(0, 0));
-      layer.add(this.add.text(146, y - 26, st ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : '尚未擁有', textStyle(18, st ? '#ffd84d' : COLORS.dim)).setOrigin(0, 0));
+      layer.add(this.add.text(136, y - 46, `${CHARACTERS[id].name}　${RAR[CHAR_RARITY[id]]}`, textStyle(17, '#ffffff')).setOrigin(0, 0));
+      layer.add(this.add.text(136, y - 22, st ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : '尚未擁有', textStyle(18, st ? '#ffd84d' : COLORS.dim)).setOrigin(0, 0));
       const cost = starUpCost(s, id);
       const own = s.shards[id] ?? 0;
       const need = st ? cost : unlockCost(id);
-      layer.add(this.add.text(146, y + 4, st >= MAX_STAR ? '已滿星' : st ? `下一星：${STAR_PERKS[st]}` : `抽到角色，或集滿碎片解鎖`, { ...textStyle(13, '#c9c6e0', false), wordWrap: { width: 240 } }).setOrigin(0, 0));
-      layer.add(this.add.text(146, y + 44, `碎片 ${own}${need ? ` / ${need}` : ''}`, textStyle(13, COLORS.dim, false)).setOrigin(0, 0.5));
+      layer.add(this.add.text(270, y - 20, st >= MAX_STAR ? '已滿星' : st ? `下一星：${STAR_PERKS[st]}` : `抽到角色，或集滿碎片解鎖`, { ...textStyle(13, '#c9c6e0', false), wordWrap: { width: 170 } }).setOrigin(0, 0));
+      layer.add(this.add.text(136, y + 30, `碎片 ${own}${need ? ` / ${need}` : ''}`, textStyle(13, COLORS.dim, false)).setOrigin(0, 0.5));
       if (!st) {
         const b = makeButton(this, W - 76, y, 112, 56, '解鎖', COLORS.gold, () => {
           const save = loadSave();

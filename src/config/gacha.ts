@@ -27,7 +27,7 @@ export const POOL_ORDER: PoolId[] = ['equip', 'char', 'spirit'];
 
 // ---------- 角色池 ----------
 /** 角色的稀有度：角色最低就是 SR，N／R 只會抽到角色碎片 */
-export const CHAR_RARITY: Record<CharId, 2 | 3> = { jin: 2, zero: 2, tetsu: 2 };
+export const CHAR_RARITY: Record<CharId, 2 | 3> = { jin: 2, zero: 2, tetsu: 2, oboro: 2, hayabusa: 2, kagura: 3 };
 /** 一開始就擁有的角色（其他角色都要從角色池取得） */
 export const STARTER: CharId = 'jin';
 /** 用碎片直接解鎖角色需要的數量 */

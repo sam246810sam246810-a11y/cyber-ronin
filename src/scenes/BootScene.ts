@@ -37,6 +37,18 @@ export class BootScene extends Phaser.Scene {
       keys.sort((a, b) => +a.split('-').pop()! - +b.split('-').pop()!);
       if (!this.anims.exists(`fx-${name}`)) this.anims.create({ key: `fx-${name}`, frames: keys.map((key) => ({ key })), frameRate: 24 });
     }
+    // SSR 動態立繪：live-<角色>-<影格>，來回播放成循環
+    const lives = new Map<string, string[]>();
+    for (const k of this.textures.getTextureKeys()) {
+      const m = /^live-(.+)-(\d+)$/.exec(k);
+      if (!m) continue;
+      if (!lives.has(m[1])) lives.set(m[1], []);
+      lives.get(m[1])!.push(k);
+    }
+    for (const [name, keys] of lives) {
+      keys.sort((a, b) => +a.split('-').pop()! - +b.split('-').pop()!);
+      if (!this.anims.exists(`live-${name}`)) this.anims.create({ key: `live-${name}`, frames: keys.map((key) => ({ key })), frameRate: 8, yoyo: true, repeat: -1 });
+    }
     // 角色／敵人動畫：<名稱>-<idle|run|atk|move>-<影格>
     const rates: Record<string, number> = { idle: 6, run: 12, move: 10, atk: 16 };
     const sets = new Map<string, string[]>();

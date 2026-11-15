@@ -44,7 +44,11 @@ export type WeaponId =
   | 'sakura'
   | 'crows'
   | 'fuma'
-  | 'raijin';
+  | 'raijin'
+  // 新角色的專屬武器（不會出現在一般升級選項裡）
+  | 'shadow'
+  | 'railgun'
+  | 'talisman';
 
 export interface WeaponStats {
   damage: number;
@@ -251,6 +255,55 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     levels: [],
     evolved: true,
   },
+  shadow: {
+    id: 'shadow',
+    name: '影分身',
+    desc: '專屬武器：分身瞬移到附近的敵人身邊斬擊。',
+    color: 0xb46bff,
+    base: S({ damage: 14, cooldown: 1.1, area: 1, amount: 2 }),
+    levels: [
+      { delta: { damage: 5 }, desc: '傷害 +5' },
+      { delta: { amount: 1 }, desc: '分身 +1' },
+      { delta: { cooldown: -0.15 }, desc: '冷卻 -0.15 秒' },
+      { delta: { area: 0.2, damage: 4 }, desc: '斬擊範圍 +20%、傷害 +4' },
+      { delta: { amount: 1 }, desc: '分身 +1' },
+      { delta: { damage: 8 }, desc: '傷害 +8' },
+      { delta: { amount: 1, cooldown: -0.15 }, desc: '分身 +1、冷卻 -0.15 秒' },
+    ],
+  },
+  railgun: {
+    id: 'railgun',
+    name: '電磁狙擊槍',
+    desc: '專屬武器：瞄準血量最高的敵人，射出貫穿一切的光束。',
+    color: 0xff9a3d,
+    base: S({ damage: 42, cooldown: 1.6, area: 1, amount: 1 }),
+    levels: [
+      { delta: { damage: 12 }, desc: '傷害 +12' },
+      { delta: { area: 0.25 }, desc: '光束加粗 25%' },
+      { delta: { cooldown: -0.2 }, desc: '冷卻 -0.2 秒' },
+      { delta: { amount: 1 }, desc: '連射 +1 發' },
+      { delta: { damage: 18 }, desc: '傷害 +18' },
+      { delta: { cooldown: -0.2, area: 0.2 }, desc: '冷卻 -0.2 秒、光束加粗 20%' },
+      { delta: { amount: 1, damage: 15 }, desc: '連射 +1 發、傷害 +15' },
+    ],
+  },
+  talisman: {
+    id: 'talisman',
+    name: '追蹤符咒',
+    desc: '專屬武器：射出會追蹤敵人的符咒，命中後炸開成櫻花。',
+    color: 0xff6ab0,
+    base: S({ damage: 16, cooldown: 1.2, area: 1, amount: 2, speed: 300 }),
+    projectile: true,
+    levels: [
+      { delta: { amount: 1 }, desc: '符咒 +1' },
+      { delta: { damage: 6 }, desc: '傷害 +6' },
+      { delta: { area: 0.25 }, desc: '爆炸範圍 +25%' },
+      { delta: { cooldown: -0.2 }, desc: '冷卻 -0.2 秒' },
+      { delta: { amount: 1, damage: 4 }, desc: '符咒 +1、傷害 +4' },
+      { delta: { area: 0.25, damage: 6 }, desc: '爆炸範圍 +25%、傷害 +6' },
+      { delta: { amount: 2 }, desc: '符咒 +2' },
+    ],
+  },
 };
 
 export const WEAPON_POOL: WeaponId[] = ['katana', 'drones', 'shuriken', 'field', 'laser', 'virus', 'orbital', 'hook'];
@@ -288,7 +341,7 @@ export const EVOLUTIONS: { weapon: WeaponId; passive: PassiveId; result: WeaponI
 ];
 
 // ---------- 角色 ----------
-export type CharId = 'jin' | 'zero' | 'tetsu';
+export type CharId = 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura';
 
 export interface CharDef {
   id: CharId;
@@ -301,7 +354,17 @@ export interface CharDef {
   armor: number;
   intentMult: number;
   extraAmount: number;
-  cost: number; // 用信用點解鎖（0 = 預設角色）
+  cost: number; // 舊版信用點解鎖（已改成抽卡），保留欄位
+  /** 受到攻擊時閃避的機率 */
+  dodge?: number;
+  /** 額外暴擊率 */
+  critBonus?: number;
+  /** 敵人越遠傷害越高（最多加成） */
+  farBonus?: number;
+  /** 攻擊力倍率 */
+  mightMult?: number;
+  /** 式神（靈物池）加成倍率 */
+  spiritMult?: number;
 }
 
 export const CHARACTERS: Record<CharId, CharDef> = {
@@ -344,9 +407,53 @@ export const CHARACTERS: Record<CharId, CharDef> = {
     extraAmount: 0,
     cost: 500,
   },
+  oboro: {
+    id: 'oboro',
+    name: '影忍・朧',
+    role: '高速分身型',
+    trait: '移動 +12%、15% 閃避、最大生命 85',
+    weapon: 'shadow',
+    maxHp: 85,
+    speedMult: 1.12,
+    armor: 0,
+    intentMult: 1,
+    extraAmount: 0,
+    cost: 0,
+    dodge: 0.15,
+  },
+  hayabusa: {
+    id: 'hayabusa',
+    name: '狙擊手・隼',
+    role: '遠距爆發型',
+    trait: '暴擊率 +10%、敵人越遠傷害越高（最多 +30%）',
+    weapon: 'railgun',
+    maxHp: 90,
+    speedMult: 0.95,
+    armor: 0,
+    intentMult: 1,
+    extraAmount: 0,
+    cost: 0,
+    critBonus: 0.1,
+    farBonus: 0.3,
+  },
+  kagura: {
+    id: 'kagura',
+    name: '陰陽師・神樂',
+    role: 'SSR 式神召喚型',
+    trait: '攻擊 +15%、移動 +5%、大招能量 +25%、式神加成 ×1.5、生命 110',
+    weapon: 'talisman',
+    maxHp: 110,
+    speedMult: 1.05,
+    armor: 1,
+    intentMult: 1.25,
+    extraAmount: 0,
+    cost: 0,
+    mightMult: 1.15,
+    spiritMult: 1.5,
+  },
 };
 
-export const CHAR_ORDER: CharId[] = ['jin', 'zero', 'tetsu'];
+export const CHAR_ORDER: CharId[] = ['jin', 'zero', 'tetsu', 'oboro', 'hayabusa', 'kagura'];
 
 // ---------- 局外強化 ----------
 export type UpgradeId = 'might' | 'hp' | 'speed' | 'pickup' | 'growth' | 'reroll' | 'banish' | 'lock';
