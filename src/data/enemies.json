@@ -73,7 +73,7 @@
   "bonespider": {
     "name": "骨蜘蛛",
     "hp": 35,
-    "atk": 9,
+    "atk": 16,
     "def": 3,
     "speed": 34,
     "exp": 24,
@@ -97,7 +97,7 @@
   "chochin": {
     "name": "提燈鬼",
     "hp": 120,
-    "atk": 12,
+    "atk": 22,
     "def": 4,
     "speed": 32,
     "exp": 90,
@@ -143,7 +143,7 @@
   "kappa": {
     "name": "河童",
     "hp": 90,
-    "atk": 26,
+    "atk": 30,
     "def": 8,
     "speed": 55,
     "exp": 40,
@@ -162,7 +162,7 @@
   "dorotabou": {
     "name": "泥田坊",
     "hp": 110,
-    "atk": 24,
+    "atk": 28,
     "def": 10,
     "speed": 24,
     "exp": 45,
@@ -189,7 +189,7 @@
   "aokitsunebi": {
     "name": "青鬼火",
     "hp": 60,
-    "atk": 22,
+    "atk": 25,
     "def": 6,
     "speed": 42,
     "exp": 30,
@@ -256,7 +256,7 @@
   "karasu": {
     "name": "烏天狗",
     "hp": 150,
-    "atk": 40,
+    "atk": 46,
     "def": 14,
     "speed": 40,
     "exp": 70,
@@ -278,7 +278,7 @@
   "yamawaro": {
     "name": "山童",
     "hp": 200,
-    "atk": 44,
+    "atk": 51,
     "def": 16,
     "speed": 120,
     "exp": 80,
@@ -297,7 +297,7 @@
   "kamaitachi": {
     "name": "鎌鼬",
     "hp": 110,
-    "atk": 38,
+    "atk": 44,
     "def": 12,
     "speed": 80,
     "exp": 65,
@@ -364,7 +364,7 @@
   "gaki": {
     "name": "餓鬼",
     "hp": 120,
-    "atk": 48,
+    "atk": 55,
     "def": 14,
     "speed": 46,
     "exp": 60,
@@ -383,7 +383,7 @@
   "aka_oni": {
     "name": "赤鬼",
     "hp": 320,
-    "atk": 58,
+    "atk": 67,
     "def": 22,
     "speed": 34,
     "exp": 140,
@@ -403,7 +403,7 @@
   "ao_oni": {
     "name": "青鬼",
     "hp": 260,
-    "atk": 54,
+    "atk": 62,
     "def": 20,
     "speed": 60,
     "exp": 130,
@@ -423,7 +423,7 @@
   "onibi": {
     "name": "鬼火",
     "hp": 160,
-    "atk": 50,
+    "atk": 57,
     "def": 16,
     "speed": 36,
     "exp": 110,
@@ -471,7 +471,7 @@
   },
   "shuten": {
     "name": "酒吞童子",
-    "hp": 5000,
+    "hp": 4000,
     "atk": 70,
     "def": 26,
     "speed": 40,
@@ -487,7 +487,7 @@
   },
   "hyakki": {
     "name": "百鬼之主",
-    "hp": 7000,
+    "hp": 5200,
     "atk": 76,
     "def": 28,
     "speed": 40,
