@@ -1,0 +1,192 @@
+<title>RPG 規格選單</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one reading column of numbered question cards (they are a real sequence of decisions), sticky progress bar, answer summary at the end */
+:root{
+  --bg:#f3f2f8; --panel:#ffffff; --fg:#1c1a2e; --muted:#62607a; --line:#dcdae8;
+  --accent:#4b3fd1; --accent-soft:#e7e4fb; --gold:#b7791f; --gold-soft:#fbf0dc;
+  --f-display:"Space Grotesk","Noto Sans TC",system-ui,sans-serif;
+  --f-body:"Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#13121f; --panel:#1c1b2c; --fg:#ecebf6; --muted:#a3a1bb; --line:#2f2d45;
+  --accent:#9d93ff; --accent-soft:#2a2650; --gold:#e8b44f; --gold-soft:#3a2f17; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13121f; --panel:#1c1b2c; --fg:#ecebf6; --muted:#a3a1bb; --line:#2f2d45;
+  --accent:#9d93ff; --accent-soft:#2a2650; --gold:#e8b44f; --gold-soft:#3a2f17; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 80px;display:flex;flex-direction:column;gap:28px}
+header h1{font-family:var(--f-display);font-size:1.9rem;line-height:1.2;margin:0 0 8px;text-wrap:balance}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.track{flex:1 1 180px;height:8px;background:var(--line);border-radius:4px;overflow:hidden}
+.fill{height:100%;background:var(--accent);width:0;transition:width .25s}
+.count{font-family:var(--f-display);font-variant-numeric:tabular-nums;font-size:.9rem;color:var(--muted)}
+button{font:inherit;cursor:pointer}
+.btn{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:8px;padding:6px 14px;font-weight:500}
+.btn.primary{background:var(--accent);color:var(--panel)}
+.btn:focus-visible,.opt:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+section.group{display:flex;flex-direction:column;gap:14px}
+section.group>h2{font-family:var(--f-display);font-size:1.15rem;margin:0;letter-spacing:.02em;color:var(--accent)}
+.q{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px}
+.q.done{border-color:var(--accent)}
+.qh{display:flex;gap:10px;align-items:baseline}
+.qn{font-family:var(--f-display);font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;min-width:2.2em}
+.qt{font-weight:700;margin:0}
+.qm{font-size:.78rem;color:var(--muted);letter-spacing:.04em}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.opt{text-align:left;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.opt:hover{border-color:var(--accent)}
+.opt[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent)}
+.opt b{font-weight:500}
+.opt small{color:var(--muted);font-size:.8rem;line-height:1.4}
+.rec{display:inline-block;font-size:.7rem;background:var(--gold-soft);color:var(--gold);border-radius:4px;padding:0 6px;margin-left:6px;vertical-align:1px;letter-spacing:.04em}
+.other{width:100%;box-sizing:border-box;border:1px dashed var(--line);background:transparent;color:var(--fg);border-radius:8px;padding:8px 10px;font:inherit;font-size:.9rem}
+.summary{background:var(--panel);border:1px solid var(--accent);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.summary h2{font-family:var(--f-display);margin:0;font-size:1.15rem}
+textarea#out{width:100%;box-sizing:border-box;min-height:260px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);font:13px/1.55 ui-monospace,Menlo,Consolas,monospace;padding:10px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toast{color:var(--accent);font-size:.9rem}
+@media (prefers-reduced-motion:reduce){.fill{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>2D 探險尋寶 RPG：規格選單</h1>
+    <p>每題點選你要的選項，標「推薦」的是我建議的預設。可多選的題目會標示。想補充就填下面的「其他」欄。全部選完後，按最底下的「複製答案」，貼回對話給我，我就依此寫 PRD。</p>
+  </header>
+
+  <div class="bar">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <span class="count" id="count">0 / 0</span>
+    <button class="btn" id="applyRec" type="button">未答題目套用推薦</button>
+  </div>
+
+  <div id="form"></div>
+
+  <div class="summary">
+    <h2>你的答案</h2>
+    <label for="note" class="qm">整體補充（例如參考遊戲、特別想要的點子）</label>
+    <input class="other" id="note" placeholder="例如：想要有寵物系統、喜歡某某遊戲的地圖感覺…">
+    <textarea id="out" readonly aria-label="答案摘要"></textarea>
+    <div class="row">
+      <button class="btn primary" id="copy" type="button">複製答案</button>
+      <span class="toast" id="toast"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const G=[
+["一、基本方向",[
+ ["視角","s",[["俯視角 Top-down","自由走地圖，最適合探險尋寶",1],["橫向卷軸","有跳躍平台元素"],["等角 45°","立體感強，美術成本高"]]],
+ ["平台","m",[["網頁瀏覽器","開網址就能玩，最快上手",1],["PC 下載版","Windows / Mac"],["手機","需要觸控搖桿"]]],
+ ["美術風格","s",[["16-bit 像素風","經典 SNES 感，素材好找",1],["8-bit 復古","色數少、極簡"],["手繪 Q 版","可愛、卡通"],["高解析插畫風","精緻但成本高"]]],
+ ["主線遊玩時長","s",[["1–2 小時（小品）","適合第一版快速完成",1],["3–5 小時","中型"],["10 小時以上","大型、內容量大"]]]
+]],
+["二、世界觀與劇情",[
+ ["題材","s",[["賽博龐克 × 武士","霓虹都市＋浪人，呼應 repo 名 cyber-ronin",1],["奇幻中世紀","劍、魔法、地下城"],["東方和風妖怪","神社、妖怪、古代日本"],["後末日廢土","廢墟、變種生物"]]],
+ ["主角","s",[["固定主角","有名字、個性與背景故事",1],["自訂主角","選性別、外觀、名字"],["多位可切換主角","不同主角不同路線"]]],
+ ["劇情結構","s",[["線性章節","第1章→第2章…依序推進",1],["半開放","主線章節＋可自由探索區域"],["完全開放世界","任意順序完成"]]],
+ ["結局","s",[["單一結局","",1],["多結局（2–3 個）","依選擇或收集度分歧"],["多結局＋隱藏真結局",""]]],
+ ["劇情呈現方式","m",[["對話框＋角色頭像","經典 RPG 對話",1],["劇情過場（角色在地圖上演出）","",1],["插圖 CG",""],["對話選項影響劇情",""]]],
+ ["故事調性","s",[["熱血冒險","",1],["黑暗嚴肅",""],["輕鬆幽默",""],["懸疑解謎",""]]]
+]],
+["三、戰鬥",[
+ ["戰鬥系統","s",[["即時動作","地圖上直接砍怪、閃避",1],["回合制","遇敵切換戰鬥畫面選指令"],["ATB 半即時","時間條跑滿才能行動"]]],
+ ["隊伍","s",[["單人主角","",1],["主角＋1 名 AI 夥伴",""],["3–4 人隊伍","回合制較適合"]]],
+ ["攻擊手段","m",[["近戰武器","",1],["遠程（槍、弓、飛鏢）","",1],["技能／魔法（耗 MP/能量）","",1],["閃避翻滾","",1],["格擋／彈反",""]]],
+ ["難度","s",[["可選難度（簡單／普通／困難）","",1],["單一固定難度",""],["硬核（類魂系）",""]]],
+ ["死亡懲罰","s",[["回到最近存檔點，保留道具","",1],["掉落部分金幣","可回原地撿回"],["永久死亡 Roguelike","重來"]]]
+]],
+["四、角色成長",[
+ ["成長方式","s",[["等級＋經驗值","打怪升級",1],["只靠裝備變強","無等級"],["技能點技能樹","不靠等級"]]],
+ ["屬性","s",[["簡化：HP／攻擊／防禦／速度","",1],["經典：力量、敏捷、智力、體力…","升級可自由配點"],["無屬性","只看裝備"]]],
+ ["技能樹","s",[["有，2–3 條分支","例如：劍術／駭客／潛行",1],["固定解鎖（劇情給）",""],["職業轉職系統",""],["不要技能樹",""]]]
+]],
+["五、探險與尋寶",[
+ ["地圖結構","s",[["區域地圖用出入口相連","城鎮、野外、地城分開",1],["一張大無縫世界地圖",""],["隨機生成地城","每次不同"]]],
+ ["寶箱與尋寶","m",[["普通寶箱","",1],["上鎖寶箱（要鑰匙）","",1],["隱藏寶藏（牆後、密道）","",1],["藏寶圖線索任務","",1],["稀有寶箱有守衛怪",""]]],
+ ["謎題","m",[["推箱子／機關開關","",1],["密碼鎖（從劇情找線索）","",1],["光線／電路類","賽博題材適合"],["不要謎題",""]]],
+ ["探索輔助","m",[["小地圖","",1],["戰爭迷霧（走過才顯示）",""],["收集度百分比","",1],["傳送點快速移動","",1]]],
+ ["區域能力鎖","s",[["有：拿到新能力才能進新區","類銀河戰士設計",1],["沒有：靠劇情解鎖區域",""]]]
+]],
+["六、裝備、道具、經濟",[
+ ["裝備欄位","s",[["武器＋防具＋飾品 ×2","",1],["只有武器＋防具",""],["完整：頭、身、手、腳、武器、飾品",""]]],
+ ["裝備稀有度","s",[["5 級：普通／優良／稀有／史詩／傳說","以顏色區分",1],["3 級",""],["無稀有度，固定裝備",""]]],
+ ["裝備來源","m",[["寶箱","",1],["怪物掉落（隨機）","",1],["商店購買","",1],["打造／合成",""],["任務獎勵","",1]]],
+ ["背包","s",[["格子有上限，可擴充","",1],["無限背包",""],["重量系統",""]]],
+ ["消耗品","m",[["補血藥","",1],["補 MP 藥","",1],["解狀態異常","",1],["戰鬥增益道具",""],["食物料理",""]]]
+]],
+["七、怪物與 Boss",[
+ ["一般怪物種類","s",[["8–12 種","第一版夠用",1],["15–25 種",""],["30 種以上",""]]],
+ ["Boss 數量","s",[["每章 1 個，共 3–5 個","",1],["每區 1 個＋隱藏 Boss",""],["只有最終 Boss",""]]],
+ ["怪物出現方式","s",[["地圖上看得見，可避開","",1],["隨機遇敵（踩草叢）",""],["固定配置不重生",""],["離開區域後重生",""]]],
+ ["Boss 戰設計","m",[["多階段（血量低換招式）","",1],["招式預兆提示","",1],["場地機關","",1],["Boss 戰前劇情對話","",1]]]
+]],
+["八、任務與 NPC",[
+ ["任務類型","m",[["主線任務","",1],["支線任務","",1],["討伐任務（殺 X 隻）",""],["收集任務","",1],["每日／重複任務",""]]],
+ ["NPC 互動","m",[["對話給線索","",1],["商人","",1],["好感度系統",""],["可招募夥伴",""]]],
+ ["任務日誌","s",[["有，顯示目標與地圖標記","",1],["有，只有文字",""],["沒有，靠玩家記","硬核"]]]
+]],
+["九、存檔、操作、介面",[
+ ["存檔方式","s",[["存檔點＋自動存檔","",1],["隨時存檔",""],["只有存檔點",""]]],
+ ["存檔欄位","s",[["3 個","",1],["1 個",""],["無限",""]]],
+ ["操作方式","m",[["鍵盤","WASD／方向鍵",1],["手把","",1],["觸控虛擬搖桿",""],["滑鼠點擊移動",""]]],
+ ["語言","m",[["繁體中文","",1],["英文",""],["日文",""]]]
+]],
+["十、技術與製作",[
+ ["開發技術","s",[["Phaser 3 + TypeScript","網頁 2D 遊戲引擎，可直接寫在 repo",1],["Godot 4","免費引擎，需在電腦上用編輯器"],["純 HTML5 Canvas","不用引擎，自己寫"],["你幫我選",""]]],
+ ["美術素材","s",[["先用免費像素素材包＋程式色塊","最快做出可玩版",1],["AI 生成美術","你的環境已可下載 Higgsfield 圖"],["我自己畫／找",""]]],
+ ["音樂音效","s",[["免費授權音樂音效","",1],["AI 生成",""],["第一版不要聲音",""]]],
+ ["第一版（MVP）範圍","s",[["1 章：1 城鎮＋1 野外＋1 地城＋1 Boss","先做完整小循環",1],["完整第 1–2 章",""],["整部遊戲一次做完",""]]]
+]]
+];
+const state={}; let total=0;
+const form=document.getElementById('form');
+G.forEach(([gname,qs],gi)=>{
+  const sec=document.createElement('section');sec.className='group';
+  sec.innerHTML=`<h2>${gname}</h2>`;
+  qs.forEach(([title,mode,opts],qi)=>{
+    total++; const id=`q${gi}_${qi}`; const n=total;
+    state[id]={title,group:gname,mode,sel:new Set(),other:'',opts};
+    const q=document.createElement('div');q.className='q';q.id=id;
+    q.innerHTML=`<div class="qh"><span class="qn">${String(n).padStart(2,'0')}</span><div><p class="qt">${title}</p><span class="qm">${mode==='m'?'可多選':'單選'}</span></div></div>
+    <div class="opts">${opts.map((o,i)=>`<button type="button" class="opt" id="${id}_o${i}" aria-pressed="false" data-i="${i}"><b>${o[0]}${o[2]?'<span class="rec">推薦</span>':''}</b>${o[1]?`<small>${o[1]}</small>`:''}</button>`).join('')}</div>
+    <input class="other" id="${id}_other" placeholder="其他／補充（選填）">`;
+    q.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>toggle(id,+b.dataset.i)));
+    q.querySelector('.other').addEventListener('input',e=>{state[id].other=e.target.value.trim();render()});
+    sec.appendChild(q);
+  });
+  form.appendChild(sec);
+});
+form.style.cssText='display:flex;flex-direction:column;gap:28px';
+function toggle(id,i){const s=state[id];
+  if(s.mode==='s'){if(s.sel.has(i))s.sel.clear();else{s.sel.clear();s.sel.add(i)}}
+  else{s.sel.has(i)?s.sel.delete(i):s.sel.add(i)}
+  render();}
+function answered(s){return s.sel.size>0||s.other}
+function render(){let done=0;const lines=['【2D 探險尋寶 RPG 規格選擇】'];let lastG='';
+  for(const id in state){const s=state[id];
+    s.opts.forEach((_,i)=>document.getElementById(`${id}_o${i}`).setAttribute('aria-pressed',s.sel.has(i)));
+    const ok=answered(s);document.getElementById(id).classList.toggle('done',!!ok);if(ok)done++;
+    if(s.group!==lastG){lines.push('',s.group);lastG=s.group}
+    const picks=[...s.sel].sort((a,b)=>a-b).map(i=>s.opts[i][0]);
+    let v=picks.join('、')||'（未選）'; if(s.other)v+=`；補充：${s.other}`;
+    lines.push(`- ${s.title}：${v}`);
+  }
+  const note=document.getElementById('note').value.trim();if(note)lines.push('','整體補充：'+note);
+  document.getElementById('out').value=lines.join('\n');
+  document.getElementById('count').textContent=`已答 ${done} / ${total}`;
+  document.getElementById('fill').style.width=(done/total*100)+'%';
+}
+document.getElementById('note').addEventListener('input',render);
+document.getElementById('applyRec').addEventListener('click',()=>{for(const id in state){const s=state[id];if(!answered(s))s.opts.forEach((o,i)=>{if(o[2])s.sel.add(i)})}render()});
+document.getElementById('copy').addEventListener('click',()=>{const t=document.getElementById('out');const msg=document.getElementById('toast');
+  const fallback=()=>{t.focus();t.select();msg.textContent='已選取全部文字，請按 Ctrl+C／長按複製';};
+  try{navigator.clipboard.writeText(t.value).then(()=>msg.textContent='已複製，貼回對話給 Claude 即可',fallback)}catch(e){fallback()}});
+render();
+</script>
