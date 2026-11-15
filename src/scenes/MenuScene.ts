@@ -1,58 +1,66 @@
 import Phaser from 'phaser';
 import { T } from '../i18n/zh-TW';
+import { CHARACTERS } from '../config/balance';
 import { COLORS, H, W, textStyle } from '../game/layout';
-import { makeButton, setupLogicalCamera } from '../game/ui';
+import { Button, makeButton, menuBackground, setupLogicalCamera } from '../game/ui';
 import { formatTime, loadSave } from '../game/storage';
-import { TEX } from '../game/textures';
+import { Audio } from '../game/audio';
 
 export class MenuScene extends Phaser.Scene {
-  private bg!: Phaser.GameObjects.Graphics;
-
   constructor() {
     super('Menu');
   }
 
   create() {
     setupLogicalCamera(this);
-    this.bg = this.add.graphics();
+    menuBackground(this);
+    Audio.playMusic('bgm-menu');
+    const save = loadSave();
 
-    const cy = H * 0.3;
-    const title = this.add.text(W / 2, cy, T.title, textStyle(58, '#ffffff')).setOrigin(0.5);
+    const cy = H * 0.17;
+    const title = this.add.text(W / 2, cy, T.title, textStyle(56, '#ffffff')).setOrigin(0.5);
     title.setStroke('#ff3d81', 3);
     title.setShadow(0, 0, '#3df5ff', 18, true, true);
-    this.add.text(W / 2, cy + 54, T.subtitle, textStyle(26, '#3df5ff')).setOrigin(0.5);
-    this.add.text(W / 2, cy + 92, T.mvpTag, textStyle(14, COLORS.dim, false)).setOrigin(0.5);
+    this.add.text(W / 2, cy + 52, T.subtitle, textStyle(26, '#3df5ff')).setOrigin(0.5);
+    this.add.text(W / 2, cy + 88, T.alphaTag, textStyle(14, COLORS.dim, false)).setOrigin(0.5);
 
-    const hero = this.add.image(W / 2, H * 0.53, 'player').setScale(2.2 / TEX);
-    this.tweens.add({ targets: hero, y: hero.y - 8, yoyo: true, repeat: -1, duration: 1400, ease: 'Sine.InOut' });
-    const ring = this.add.image(W / 2, H * 0.53, 'ring').setScale(0.9 / TEX).setTint(COLORS.magenta).setAlpha(0.5);
-    this.tweens.add({ targets: ring, scale: 1.1 / TEX, alpha: 0.15, yoyo: true, repeat: -1, duration: 1400 });
+    // 上次使用的角色
+    const char = CHARACTERS[save.lastChar] ?? CHARACTERS.jin;
+    const heroY = H * 0.43;
+    const glow = this.add.ellipse(W / 2, heroY + 70, 180, 40, COLORS.cyan, 0.15);
+    const portraitKey = this.textures.exists(`portrait-${char.id}`) ? `portrait-${char.id}` : `char-${char.id}`;
+    const hero = this.add.image(W / 2, heroY, portraitKey).setDisplaySize(190, 190);
+    this.tweens.add({ targets: hero, y: heroY - 8, yoyo: true, repeat: -1, duration: 1600, ease: 'Sine.InOut' });
+    this.tweens.add({ targets: glow, alpha: 0.05, yoyo: true, repeat: -1, duration: 1600 });
 
-    makeButton(this, W / 2, H * 0.68, 320, 78, T.start, COLORS.cyan, () => this.scene.start('Game'), 30);
+    const by = H * 0.64;
+    makeButton(this, W / 2, by, 320, 76, T.sortie, COLORS.cyan, () => this.scene.start('CharSelect'), 30);
+    makeButton(this, W / 2 - 82, by + 96, 156, 60, T.shop, COLORS.gold, () => this.scene.start('Shop'), 22);
+    makeButton(this, W / 2 + 82, by + 96, 156, 60, T.codex, COLORS.violet, () => this.scene.start('Codex'), 22);
 
-    this.add
-      .text(W / 2, H * 0.68 + 80, T.howTo, { ...textStyle(17, '#c9c6e0', false), align: 'center', lineSpacing: 6 })
-      .setOrigin(0.5, 0);
-    this.add.text(W / 2, H * 0.68 + 150, T.intentHint, textStyle(15, '#ff7ab0', false)).setOrigin(0.5, 0);
+    this.add.text(W / 2, by + 150, T.howTo, { ...textStyle(15, '#c9c6e0', false), align: 'center', lineSpacing: 5 }).setOrigin(0.5, 0);
 
-    const save = loadSave();
-    this.add
-      .text(W / 2, H - 46, save.runs > 0 ? T.best(formatTime(save.bestTime), save.bestKills) : T.noBest, textStyle(15, COLORS.dim, false))
-      .setOrigin(0.5);
+    this.add.text(16, H - 24, save.runs > 0 ? T.best(formatTime(save.bestTime), save.bestKills) : T.noBest, textStyle(13, COLORS.dim, false)).setOrigin(0, 0.5);
+    this.add.text(W - 16, 26, `◆ ${save.credits}`, textStyle(18, '#ffd84d')).setOrigin(1, 0.5);
 
-    this.input.keyboard?.once('keydown-ENTER', () => this.scene.start('Game'));
-    this.input.keyboard?.once('keydown-SPACE', () => this.scene.start('Game'));
-  }
+    // 音樂／音效開關
+    let musicBtn: Button;
+    let sfxBtn: Button;
+    const refresh = () => {
+      musicBtn.setLabel(Audio.musicOn ? T.musicOn : T.musicOff).setActive2(Audio.musicOn);
+      sfxBtn.setLabel(Audio.sfxOn ? T.sfxOn : T.sfxOff).setActive2(Audio.sfxOn);
+    };
+    musicBtn = makeButton(this, W - 156, H - 26, 96, 36, '', COLORS.cyan, () => {
+      Audio.setMusic(!Audio.musicOn);
+      if (Audio.musicOn) Audio.playMusic('bgm-menu');
+      refresh();
+    }, 14);
+    sfxBtn = makeButton(this, W - 56, H - 26, 96, 36, '', COLORS.cyan, () => {
+      Audio.setSfx(!Audio.sfxOn);
+      refresh();
+    }, 14);
+    refresh();
 
-  update(time: number) {
-    // 緩慢捲動的霓虹格線
-    const g = this.bg;
-    g.clear();
-    const off = (time / 40) % 64;
-    g.lineStyle(1, COLORS.grid, 1);
-    for (let x = 0; x <= W; x += 64) g.lineBetween(x, 0, x, H);
-    for (let y = -64 + off; y <= H; y += 64) g.lineBetween(0, y, W, y);
-    g.fillStyle(COLORS.magenta, 0.05);
-    g.fillRect(0, H * 0.3 - 60, W, 120);
+    this.input.keyboard?.once('keydown-ENTER', () => this.scene.start('CharSelect'));
   }
 }

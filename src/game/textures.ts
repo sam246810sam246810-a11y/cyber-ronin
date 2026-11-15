@@ -14,6 +14,7 @@ function poly(_g: Phaser.GameObjects.Graphics, cx: number, cy: number, r: number
 }
 
 function make(scene: Phaser.Scene, key: string, size: number, draw: (g: Phaser.GameObjects.Graphics, s: number) => void) {
+  if (scene.textures.exists(key)) return;
   const s = size * TEX;
   const g = scene.make.graphics({ x: 0, y: 0 }, false);
   draw(g, s);
@@ -22,8 +23,6 @@ function make(scene: Phaser.Scene, key: string, size: number, draw: (g: Phaser.G
 }
 
 export function createTextures(scene: Phaser.Scene): void {
-  if (scene.textures.exists('player')) return;
-
   // 玩家：深色核心＋青色外框
   make(scene, 'player', 32, (g, s) => {
     const c = s / 2;
@@ -42,7 +41,7 @@ export function createTextures(scene: Phaser.Scene): void {
     g.fillTriangle(s, s / 2, 0, 0, 0, s);
   });
 
-  const enemyShape: Record<string, number> = { drone: 4, thug: 4, husk: 0, elite: 6, boss: 8 };
+  const enemyShape: Record<string, number> = { drone: 4, thug: 4, husk: 0, gunner: 5, elite: 6, boss: 8 };
   for (const def of Object.values(ENEMIES)) {
     const size = def.radius * 2 + 4;
     make(scene, `e-${def.kind}`, size, (g, s) => {
@@ -164,6 +163,12 @@ export function createTextures(scene: Phaser.Scene): void {
   // 道具圖示（升級卡片與 HUD 用）
   for (const w of Object.values(WEAPONS)) iconTexture(scene, `icon-${w.id}`, w.color, w.id);
   for (const p of Object.values(PASSIVES)) iconTexture(scene, `icon-${p.id}`, p.color, p.id);
+  for (const c of ['jin', 'zero', 'tetsu']) {
+    if (!scene.textures.exists(`char-${c}`)) make(scene, `char-${c}`, 32, (g, s) => {
+      g.fillStyle(0x3df5ff, 1);
+      g.fillCircle(s / 2, s / 2, s / 2 - TEX);
+    });
+  }
   iconTexture(scene, 'icon-heal', 0x5dff7a, 'heal');
   iconTexture(scene, 'icon-credits', 0xffd84d, 'credits');
 }

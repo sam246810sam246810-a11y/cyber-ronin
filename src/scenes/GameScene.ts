@@ -1,6 +1,10 @@
 import Phaser from 'phaser';
 import {
-  BOSS_SPAWNS,
+  BOSSES,
+  BossDef,
+  CHARACTERS,
+  CharDef,
+  CharId,
   DROPS,
   ELITE_TIMES,
   ENEMIES,
@@ -13,21 +17,23 @@ import {
   PLAYER,
   PassiveId,
   RUN,
-  STARTER_WEAPON,
   SWARMS,
+  UNLOCKS,
   WAVES,
   WEAPONS,
   WEAPON_POOL,
   WeaponId,
   WeaponStats,
   enemyHpMult,
+  runReward,
   xpToNext,
 } from '../config/balance';
 import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, Z, textStyle } from '../game/layout';
 import { SpatialGrid } from '../game/SpatialGrid';
 import { TEX } from '../game/textures';
-import { loadSave, writeSave } from '../game/storage';
+import { SaveData, loadSave, writeSave } from '../game/storage';
+import { Audio } from '../game/audio';
 import type { UIScene } from './UIScene';
 
 // ---------- 型別 ----------
@@ -48,18 +54,32 @@ interface Enemy {
   flash: number;
   slow: number;
   lastDrone: number;
+  phase: number;
+  baseScale: number;
+  // 病毒
+  virusT: number;
+  virusDps: number;
+  virusSpread: number;
+  virusTick: number;
+  // 槍兵
+  gunT: number;
   // Boss 專用
-  bossState: 'chase' | 'tele' | 'dash';
+  boss: BossDef | null;
+  bossState: 'chase' | 'tele' | 'dash' | 'spiral';
   bossT: number;
   ringT: number;
+  spiralT: number;
+  summonT: number;
+  fireT: number;
+  spinA: number;
   aimX: number;
   aimY: number;
-  final: boolean;
   title: string;
 }
 
 interface Projectile {
   active: boolean;
+  kind: 'shuriken' | 'fuma';
   img: Phaser.GameObjects.Image;
   x: number;
   y: number;
@@ -69,6 +89,30 @@ interface Projectile {
   damage: number;
   bounces: number;
   last: Enemy | null;
+  hits: Set<Enemy>;
+  returning: boolean;
+}
+
+interface Hook {
+  active: boolean;
+  img: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  target: Enemy;
+  speed: number;
+  damage: number;
+  radius: number;
+  life: number;
+}
+
+interface Strike {
+  active: boolean;
+  img: Phaser.GameObjects.Image;
+  x: number;
+  y: number;
+  t: number;
+  r: number;
+  damage: number;
 }
 
 interface Bullet {
@@ -109,8 +153,9 @@ export interface WeaponInst {
   id: WeaponId;
   level: number;
   timer: number;
+  timer2: number;
   stats: WeaponStats;
-  angle: number; // 無人機角度
+  angle: number;
 }
 
 export type Choice =
@@ -129,14 +174,25 @@ export interface RunResult {
   kills: number;
   level: number;
   credits: number;
+  bonus: number;
   newBest: boolean;
+  unlocked: string[];
 }
 
 const tmp: Enemy[] = [];
 const tmp2: Enemy[] = [];
 
+const PICKUP_TEX: Record<Exclude<PickupKind, 'gem'>, string> = {
+  heal: 'pickup-heal',
+  magnet: 'pickup-magnet',
+  chest: 'pickup-chest',
+  credit: 'pickup-credit',
+};
+
 export class GameScene extends Phaser.Scene {
   ui!: UIScene;
+  save!: SaveData;
+  char!: CharDef;
 
   // 玩家
   px = 0;
@@ -145,20 +201,28 @@ export class GameScene extends Phaser.Scene {
   maxHp = PLAYER.maxHp;
   faceX = 0;
   faceY = -1;
+  moving = false;
   invuln = 0;
   hurtFlash = 0;
   playerImg!: Phaser.GameObjects.Image;
   facingImg!: Phaser.GameObjects.Image;
+  shadowG!: Phaser.GameObjects.Graphics;
 
   // 衍生屬性
   might = 1;
   cdMult = 1;
   armor = 0;
   pickupR = PLAYER.pickupRadius;
+  speed = PLAYER.speed;
+  areaMult = 1;
+  regen = 0;
+  intentMult = 1;
+  xpMult = 1;
 
   // 局內狀態
   t = 0;
   kills = 0;
+  bossKills = 0;
   level = 1;
   xp = 0;
   xpNext = xpToNext(1);
@@ -181,6 +245,7 @@ export class GameScene extends Phaser.Scene {
   finalKilled = false;
   dawnAnnounced = false;
   inventoryVersion = 0;
+  seenEnemies = new Set<string>();
 
   weapons: WeaponInst[] = [];
   passives = new Map<PassiveId, number>();
@@ -190,12 +255,15 @@ export class GameScene extends Phaser.Scene {
   activeEnemies: Enemy[] = [];
   bosses: Enemy[] = [];
   projectiles: Projectile[] = [];
+  hooks: Hook[] = [];
+  strikes: Strike[] = [];
   bullets: Bullet[] = [];
   pickups: Pickup[] = [];
   gemCount = 0;
   slashes: Slash[] = [];
   dmgTexts: DmgText[] = [];
   droneImgs: Phaser.GameObjects.Image[] = [];
+  groundTiles: Phaser.GameObjects.Image[] = [];
   fieldImg!: Phaser.GameObjects.Image;
   grid = new SpatialGrid<Enemy>(64);
 
@@ -205,13 +273,17 @@ export class GameScene extends Phaser.Scene {
   nextBoss = 0;
   nextSwarm = 0;
 
-  bg!: Phaser.GameObjects.Graphics;
   fx!: Phaser.GameObjects.Graphics;
   hpBar!: Phaser.GameObjects.Graphics;
   sparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   keys!: Record<string, Phaser.Input.Keyboard.Key>;
   /** 由 UIScene 寫入的搖桿方向（長度 0～1） */
   joy = { x: 0, y: 0 };
+
+  /** 除錯用：每幀模擬幾步（自動化平衡測試用） */
+  simSpeed = 1;
+  /** 除錯用：自動操作（自動化平衡測試用） */
+  debugBot: ((g: GameScene) => void) | null = null;
 
   private onVisibility = () => {
     if (document.hidden) this.pauseByUser();
@@ -222,18 +294,33 @@ export class GameScene extends Phaser.Scene {
   }
 
   // ---------- 初始化 ----------
-  create() {
+  create(data: { char?: CharId }) {
     this.resetState();
+    this.save = loadSave();
+    const charId = data?.char && this.save.chars.includes(data.char) ? data.char : this.save.lastChar;
+    this.char = CHARACTERS[this.save.chars.includes(charId) ? charId : 'jin'];
+
     const cam = this.cameras.main;
     cam.setZoom(Z);
     cam.setBackgroundColor(COLORS.bg);
 
-    this.bg = this.add.graphics().setDepth(-10);
+    // 地面：用幾張無縫圖塊鋪滿畫面
+    const tile = this.textures.exists('ground') ? 'ground' : null;
+    if (tile) {
+      const size = this.groundSize();
+      const cols = Math.ceil(W / size) + 1;
+      const rows = Math.ceil(H / size) + 1;
+      for (let i = 0; i < cols * rows; i++) {
+        this.groundTiles.push(this.add.image(0, 0, tile).setOrigin(0).setDisplaySize(size, size).setDepth(-10).setAlpha(0.5));
+      }
+    }
+
+    this.shadowG = this.add.graphics().setDepth(0);
     this.fx = this.add.graphics().setDepth(3);
     this.hpBar = this.add.graphics().setDepth(11);
     this.fieldImg = this.add.image(0, 0, 'ring').setDepth(4).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
-    this.playerImg = this.add.image(0, 0, 'player').setScale(1 / TEX).setDepth(10);
-    this.facingImg = this.add.image(0, 0, 'facing').setScale(1 / TEX).setDepth(10).setAlpha(0.8);
+    this.playerImg = this.add.image(0, 0, `char-${this.char.id}`).setScale(0.62).setDepth(10).setOrigin(0.5, 0.8);
+    this.facingImg = this.add.image(0, 0, 'facing').setScale(1 / TEX).setDepth(10).setAlpha(0.7);
     this.sparks = this.add.particles(0, 0, 'spark', {
       lifespan: 380,
       speed: { min: 60, max: 220 },
@@ -250,15 +337,18 @@ export class GameScene extends Phaser.Scene {
     }
 
     const kb = this.input.keyboard;
-    this.keys = kb
-      ? (kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as Record<string, Phaser.Input.Keyboard.Key>)
-      : {};
+    this.keys = kb ? (kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT') as Record<string, Phaser.Input.Keyboard.Key>) : {};
 
-    this.addWeapon(STARTER_WEAPON);
+    // 局外強化
+    const up = this.save.upgrades;
+    this.rerolls = RUN.rerolls + (up.reroll ?? 0);
+    this.banishes = RUN.banishes + (up.banish ?? 0);
+    this.locks = RUN.locks + (up.lock ?? 0);
+
+    this.addWeapon(this.char.weapon);
     this.recalc();
     this.hp = this.maxHp;
 
-    // 第一波先在畫面外放幾隻
     for (let i = 0; i < 12; i++) this.spawnEnemy('drone');
 
     document.addEventListener('visibilitychange', this.onVisibility);
@@ -268,6 +358,11 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch('UI');
     this.ui = this.scene.get('UI') as UIScene;
+    Audio.playMusic('bgm-battle');
+  }
+
+  private groundSize() {
+    return 384;
   }
 
   private resetState() {
@@ -275,10 +370,12 @@ export class GameScene extends Phaser.Scene {
     this.py = 0;
     this.faceX = 0;
     this.faceY = -1;
+    this.moving = false;
     this.invuln = 0;
     this.hurtFlash = 0;
     this.t = 0;
     this.kills = 0;
+    this.bossKills = 0;
     this.level = 1;
     this.xp = 0;
     this.xpNext = xpToNext(1);
@@ -289,9 +386,6 @@ export class GameScene extends Phaser.Scene {
     this.lastKillT = -99;
     this.iaiFreeze = 0;
     this.revivesLeft = RUN.revives;
-    this.rerolls = RUN.rerolls;
-    this.banishes = RUN.banishes;
-    this.locks = RUN.locks;
     this.banished = new Set();
     this.locked = null;
     this.modal = false;
@@ -301,23 +395,29 @@ export class GameScene extends Phaser.Scene {
     this.finalKilled = false;
     this.dawnAnnounced = false;
     this.inventoryVersion = 0;
+    this.seenEnemies = new Set();
     this.weapons = [];
     this.passives = new Map();
     this.enemies = [];
     this.activeEnemies = [];
     this.bosses = [];
     this.projectiles = [];
+    this.hooks = [];
+    this.strikes = [];
     this.bullets = [];
     this.pickups = [];
     this.gemCount = 0;
     this.slashes = [];
     this.dmgTexts = [];
     this.droneImgs = [];
+    this.groundTiles = [];
     this.spawnAcc = 0;
     this.nextElite = 0;
     this.nextBoss = 0;
     this.nextSwarm = 0;
     this.joy = { x: 0, y: 0 };
+    this.simSpeed = 1;
+    this.debugBot = null;
   }
 
   // ---------- 屬性 ----------
@@ -326,13 +426,21 @@ export class GameScene extends Phaser.Scene {
   }
 
   recalc() {
-    this.might = 1 + 0.1 * this.passiveLevel('might');
+    const up = this.save.upgrades;
+    this.might = 1 + 0.1 * this.passiveLevel('might') + 0.05 * (up.might ?? 0);
     this.cdMult = 1 - 0.07 * this.passiveLevel('haste');
-    this.armor = PLAYER.armor + this.passiveLevel('armor');
-    const newMax = PLAYER.maxHp + 10 * this.passiveLevel('armor');
+    this.armor = PLAYER.armor + this.char.armor + this.passiveLevel('armor');
+    const newMax = this.char.maxHp + 10 * this.passiveLevel('armor') + 10 * (up.hp ?? 0);
     if (newMax > this.maxHp) this.hp += newMax - this.maxHp;
     this.maxHp = newMax;
-    this.pickupR = PLAYER.pickupRadius * (1 + 0.3 * this.passiveLevel('magnet'));
+    this.hp = Math.min(this.hp, this.maxHp);
+    this.pickupR = PLAYER.pickupRadius * (1 + 0.3 * this.passiveLevel('magnet') + 0.1 * (up.pickup ?? 0));
+    this.speed = PLAYER.speed * this.char.speedMult * (1 + 0.08 * this.passiveLevel('camo') + 0.03 * (up.speed ?? 0));
+    this.areaMult = 1 + 0.1 * this.passiveLevel('overclock');
+    this.regen = 0.4 * this.passiveLevel('nano');
+    this.intentMult = this.char.intentMult * (1 + 0.15 * this.passiveLevel('intent'));
+    this.xpMult = 1 + 0.05 * (up.growth ?? 0);
+    for (const w of this.weapons) w.stats = this.computeStats(w.id, w.level);
     this.inventoryVersion++;
   }
 
@@ -343,24 +451,31 @@ export class GameScene extends Phaser.Scene {
       const d = def.levels[i].delta;
       for (const k of Object.keys(d) as (keyof WeaponStats)[]) s[k] += d[k] ?? 0;
     }
+    if (def.projectile) s.amount += this.char?.extraAmount ?? 0;
+    s.area *= this.areaMult;
     return s;
   }
 
   addWeapon(id: WeaponId) {
-    this.weapons.push({ id, level: 1, timer: 0.3, stats: this.computeStats(id, 1), angle: 0 });
+    this.weapons.push({ id, level: 1, timer: 0.3, timer2: 1, stats: this.computeStats(id, 1), angle: 0 });
+    this.markSeenWeapon(id);
     this.inventoryVersion++;
+  }
+
+  private markSeenWeapon(id: WeaponId) {
+    if (!this.save.seenWeapons.includes(id)) this.save.seenWeapons.push(id);
   }
 
   maxLevel(id: WeaponId): number {
     return WEAPONS[id].levels.length + 1;
   }
 
-  // ---------- 主迴圈 ----------
-  /** 除錯用：每幀模擬幾步（自動化平衡測試用） */
-  simSpeed = 1;
-  /** 除錯用：自動操作（自動化平衡測試用） */
-  debugBot: ((g: GameScene) => void) | null = null;
+  /** 已解鎖（不需要成就，或已達成成就） */
+  isUnlocked(id: WeaponId | PassiveId): boolean {
+    return !UNLOCKS.some((u) => u.id === id) || this.save.unlocked.includes(id);
+  }
 
+  // ---------- 主迴圈 ----------
   update(_time: number, deltaMs: number) {
     const dt = Math.min(deltaMs, 50) / 1000;
     for (let i = 0; i < this.simSpeed; i++) {
@@ -391,6 +506,8 @@ export class GameScene extends Phaser.Scene {
     this.updateEnemies(dt);
     this.updateWeapons(dt);
     this.updateProjectiles(dt);
+    this.updateHooks(dt);
+    this.updateStrikes(dt);
     this.updateBullets(dt);
     this.updatePickups(dt);
     this.updateIntent(dt);
@@ -425,10 +542,12 @@ export class GameScene extends Phaser.Scene {
       this.spawnSwarm();
       this.ui.banner(T.swarmWarn, '#ff3d81');
     }
-    while (this.nextBoss < BOSS_SPAWNS.length && this.t >= BOSS_SPAWNS[this.nextBoss].at) {
-      const b = BOSS_SPAWNS[this.nextBoss++];
-      this.spawnBoss(b.hp, b.title, b.final);
+    while (this.nextBoss < BOSSES.length && this.t >= BOSSES[this.nextBoss].at) {
+      const b = BOSSES[this.nextBoss++];
+      this.spawnBoss(b);
       this.ui.banner(T.bossWarn(b.title), '#ff2244', 2.6);
+      Audio.play('sfx-bosswarn', 0.6);
+      Audio.playMusic('bgm-boss');
       if (b.final) this.finalSpawned = true;
     }
     if (!this.dawnAnnounced && this.t >= RUN.duration) {
@@ -448,32 +567,8 @@ export class GameScene extends Phaser.Scene {
 
   private obtainEnemy(): Enemy {
     for (const e of this.enemies) if (!e.active && !e.img.visible) return e;
-    const img = this.add.image(0, 0, 'e-drone').setScale(1 / TEX).setDepth(5).setVisible(false);
-    const e: Enemy = {
-      active: false,
-      def: ENEMIES.drone,
-      img,
-      x: 0,
-      y: 0,
-      hp: 1,
-      maxHp: 1,
-      speed: 0,
-      damage: 0,
-      radius: 8,
-      xp: 1,
-      kx: 0,
-      ky: 0,
-      flash: 0,
-      slow: 0,
-      lastDrone: -99,
-      bossState: 'chase',
-      bossT: 0,
-      ringT: 0,
-      aimX: 0,
-      aimY: 0,
-      final: false,
-      title: '',
-    };
+    const img = this.add.image(0, 0, 'e-drone').setDepth(5).setVisible(false);
+    const e = { img, active: false } as Enemy;
     this.enemies.push(e);
     return e;
   }
@@ -483,25 +578,44 @@ export class GameScene extends Phaser.Scene {
     const e = this.obtainEnemy();
     const [x, y] = at ?? this.spawnPoint(def.radius + 30);
     const mult = kind === 'boss' ? 1 : enemyHpMult(this.t);
-    e.active = true;
-    e.def = def;
-    e.x = x;
-    e.y = y;
-    e.maxHp = e.hp = def.hp * mult;
-    e.speed = def.speed * (0.92 + Math.random() * 0.16);
-    e.damage = def.damage * (1 + this.t / 600);
-    e.radius = def.radius;
-    e.xp = def.xp;
-    e.kx = e.ky = 0;
-    e.flash = 0;
-    e.slow = 0;
-    e.lastDrone = -99;
-    e.bossState = 'chase';
-    e.bossT = 0;
-    e.ringT = 0;
-    e.final = false;
-    e.title = def.name;
-    e.img.setTexture(`e-${kind}`).setVisible(true).setPosition(x, y).clearTint().setAlpha(1);
+    Object.assign(e, {
+      active: true,
+      def,
+      x,
+      y,
+      hp: def.hp * mult,
+      maxHp: def.hp * mult,
+      speed: def.speed * (0.92 + Math.random() * 0.16),
+      damage: def.damage * (1 + this.t / 600),
+      radius: def.radius,
+      xp: def.xp,
+      kx: 0,
+      ky: 0,
+      flash: 0,
+      slow: 0,
+      lastDrone: -99,
+      phase: Math.random() * 10,
+      baseScale: 0.5,
+      virusT: 0,
+      virusDps: 0,
+      virusSpread: 0,
+      virusTick: 0,
+      gunT: 1 + Math.random() * 2,
+      boss: null,
+      bossState: 'chase',
+      bossT: 0,
+      ringT: 2,
+      spiralT: 4,
+      summonT: 3,
+      fireT: 0,
+      spinA: 0,
+      aimX: 0,
+      aimY: 0,
+      title: def.name,
+    });
+    const tex = this.textures.exists(def.tex) ? def.tex : `e-${kind}`;
+    e.baseScale = tex === def.tex ? 0.5 : 1 / TEX;
+    e.img.setTexture(tex).setVisible(true).setPosition(x, y).clearTint().setAlpha(1).setScale(e.baseScale).setFlipX(false);
     e.img.setDepth(kind === 'boss' ? 7 : kind === 'elite' ? 6 : 5);
     this.activeEnemies.push(e);
     return e;
@@ -515,16 +629,18 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private spawnBoss(hp: number, title: string, final: boolean) {
-    const e = this.spawnEnemy('boss', [this.px, this.py - H / 2 - 80]);
-    e.maxHp = e.hp = hp;
-    e.final = final;
-    e.title = title;
-    e.speed = ENEMIES.boss.speed * (final ? 1.15 : 1);
-    e.ringT = 2;
-    if (final) e.img.setScale(1.25 / TEX);
-    else e.img.setScale(1 / TEX);
-    e.radius = ENEMIES.boss.radius * (final ? 1.25 : 1);
+  private spawnBoss(b: BossDef) {
+    const e = this.spawnEnemy('boss', [this.px, this.py - H / 2 - 90]);
+    e.maxHp = e.hp = b.hp;
+    e.boss = b;
+    e.title = b.title;
+    e.speed = b.speed;
+    e.radius = b.radius;
+    if (this.textures.exists(b.tex)) {
+      e.img.setTexture(b.tex);
+      e.baseScale = 0.5;
+      e.img.setScale(0.5);
+    }
     this.bosses.push(e);
   }
 
@@ -542,15 +658,17 @@ export class GameScene extends Phaser.Scene {
       mx /= len;
       my /= len;
     }
-    if (len > 0.05) {
+    this.moving = len > 0.05;
+    if (this.moving) {
       const l = Math.hypot(mx, my);
       this.faceX = mx / l;
       this.faceY = my / l;
     }
-    this.px += mx * PLAYER.speed * dt;
-    this.py += my * PLAYER.speed * dt;
+    this.px += mx * this.speed * dt;
+    this.py += my * this.speed * dt;
     if (this.invuln > 0) this.invuln -= dt;
     if (this.hurtFlash > 0) this.hurtFlash -= dt;
+    if (this.regen > 0 && this.hp > 0) this.hp = Math.min(this.maxHp, this.hp + this.regen * dt);
   }
 
   private hurt(amount: number) {
@@ -559,6 +677,7 @@ export class GameScene extends Phaser.Scene {
     this.invuln = PLAYER.iframes;
     this.hurtFlash = 0.15;
     this.cameras.main.shake(90, 0.004);
+    Audio.play('sfx-hurt', 0.5, 120);
     if (this.invincible) return;
     this.hp -= dmg;
     if (this.hp <= 0) {
@@ -572,14 +691,14 @@ export class GameScene extends Phaser.Scene {
     const pr = PLAYER.radius;
     for (const e of this.activeEnemies) {
       if (!e.active) continue;
-      if (e.def.kind === 'boss') {
+      const kind = e.def.kind;
+      if (kind === 'boss') {
         this.updateBoss(e, dt);
       } else {
         let dx = this.px - e.x;
         let dy = this.py - e.y;
         const d = Math.hypot(dx, dy) || 1;
-        // 太遠的一般敵人移到玩家附近重新出現
-        if (d > 950 && e.def.kind !== 'elite') {
+        if (d > 950 && kind !== 'elite') {
           const [nx, ny] = this.spawnPoint(e.radius + 30);
           e.x = nx;
           e.y = ny;
@@ -587,7 +706,26 @@ export class GameScene extends Phaser.Scene {
         }
         dx /= d;
         dy /= d;
-        const sp = e.speed * (e.slow > 0 ? 0.6 : 1);
+        let sp = e.speed * (e.slow > 0 ? 0.6 : 1);
+        if (kind === 'gunner') {
+          // 保持距離：太近就後退，適中就側移
+          if (d < 170) sp = -sp * 0.8;
+          else if (d < 250) {
+            const side = e.phase > 5 ? 1 : -1;
+            const ox = -dy * side;
+            const oy = dx * side;
+            dx = ox;
+            dy = oy;
+            sp *= 0.6;
+          }
+          e.gunT -= dt;
+          if (e.gunT <= 0 && d < 420) {
+            e.gunT = 3.2 + Math.random();
+            const bx = (this.px - e.x) / d;
+            const by = (this.py - e.y) / d;
+            this.fireBullet(e.x, e.y, bx * 150, by * 150, e.damage, 0x9dff3d);
+          }
+        }
         e.x += (dx * sp + e.kx) * dt;
         e.y += (dy * sp + e.ky) * dt;
       }
@@ -595,8 +733,16 @@ export class GameScene extends Phaser.Scene {
       e.ky *= 0.86;
       if (e.slow > 0) e.slow -= dt;
       if (e.flash > 0) e.flash -= dt;
+      if (e.virusT > 0) {
+        e.virusT -= dt;
+        e.virusTick -= dt;
+        if (e.virusTick <= 0) {
+          e.virusTick = 0.5;
+          this.damageEnemy(e, e.virusDps * 0.5 * this.might, 0, 0, false, true);
+          if (!e.active) continue;
+        }
+      }
 
-      // 互相推開，避免全部疊在一起
       const near = this.grid.query(e.x, e.y, e.radius + 18, tmp);
       for (let i = 0; i < near.length; i++) {
         const o = near[i];
@@ -607,7 +753,7 @@ export class GameScene extends Phaser.Scene {
         const d2 = ox * ox + oy * oy;
         if (d2 < min * min && d2 > 0.0001) {
           const dd = Math.sqrt(d2);
-          const push = ((min - dd) / dd) * (e.def.kind === 'boss' ? 0.05 : 0.35);
+          const push = ((min - dd) / dd) * (kind === 'boss' ? 0.05 : 0.35);
           e.x += ox * push;
           e.y += oy * push;
         }
@@ -621,25 +767,52 @@ export class GameScene extends Phaser.Scene {
   }
 
   private updateBoss(e: Enemy, dt: number) {
+    const b = e.boss!;
     e.bossT += dt;
     const dx = this.px - e.x;
     const dy = this.py - e.y;
     const d = Math.hypot(dx, dy) || 1;
+    const canDash = b.variant !== 'spider';
+    const canRing = b.variant !== 'spider';
+    const canSpiral = b.variant !== 'oni';
+    const canSummon = b.variant === 'spider';
+
     if (e.bossState === 'chase') {
       const sp = e.speed * (e.slow > 0 ? 0.85 : 1) * (d > 700 ? 2.5 : 1);
       e.x += (dx / d) * sp * dt;
       e.y += (dy / d) * sp * dt;
-      e.ringT -= dt;
-      if (e.ringT <= 0) {
-        e.ringT = e.final ? 3.6 : 5.5;
-        const n = e.final ? 20 : e.maxHp > 5000 ? 16 : 12;
-        const off = Math.random() * Math.PI;
-        for (let i = 0; i < n; i++) {
-          const a = off + (i / n) * Math.PI * 2;
-          this.fireBullet(e.x, e.y, Math.cos(a) * 150, Math.sin(a) * 150, e.damage * 0.6);
+      if (canRing) {
+        e.ringT -= dt;
+        if (e.ringT <= 0) {
+          e.ringT = b.final ? 3.6 : 5.5;
+          const n = b.final ? 20 : 12;
+          const off = Math.random() * Math.PI;
+          for (let i = 0; i < n; i++) {
+            const a = off + (i / n) * Math.PI * 2;
+            this.fireBullet(e.x, e.y, Math.cos(a) * 150, Math.sin(a) * 150, e.damage * 0.6);
+          }
         }
       }
-      if (e.bossT > (e.final ? 3.5 : 4.5) && d < 600) {
+      if (canSummon) {
+        e.summonT -= dt;
+        if (e.summonT <= 0) {
+          e.summonT = 7;
+          for (let i = 0; i < 6; i++) {
+            const a = (i / 6) * Math.PI * 2;
+            this.spawnEnemy('drone', [e.x + Math.cos(a) * 70, e.y + Math.sin(a) * 70]);
+          }
+        }
+      }
+      if (canSpiral) {
+        e.spiralT -= dt;
+        if (e.spiralT <= 0 && d < 650) {
+          e.bossState = 'spiral';
+          e.bossT = 0;
+          e.spiralT = b.final ? 9 : 5.5;
+          return;
+        }
+      }
+      if (canDash && e.bossT > (b.final ? 3.5 : 4.5) && d < 600) {
         e.bossState = 'tele';
         e.bossT = 0;
         e.aimX = dx / d;
@@ -650,10 +823,25 @@ export class GameScene extends Phaser.Scene {
         e.bossState = 'dash';
         e.bossT = 0;
       }
-    } else {
+    } else if (e.bossState === 'dash') {
       e.x += e.aimX * 460 * dt;
       e.y += e.aimY * 460 * dt;
       if (e.bossT > 0.55) {
+        e.bossState = 'chase';
+        e.bossT = 0;
+      }
+    } else {
+      // 旋轉彈幕：原地噴出 3 條旋轉的子彈
+      e.fireT -= dt;
+      e.spinA += dt * 2.2;
+      if (e.fireT <= 0) {
+        e.fireT = 0.13;
+        for (let i = 0; i < 3; i++) {
+          const a = e.spinA + (i / 3) * Math.PI * 2;
+          this.fireBullet(e.x, e.y, Math.cos(a) * 140, Math.sin(a) * 140, e.damage * 0.5, 0xff7ad9);
+        }
+      }
+      if (e.bossT > 2.4) {
         e.bossState = 'chase';
         e.bossT = 0;
       }
@@ -670,9 +858,9 @@ export class GameScene extends Phaser.Scene {
     this.bosses = this.bosses.filter((b) => b.active);
   }
 
-  damageEnemy(e: Enemy, amount: number, kx = 0, ky = 0, fromIai = false) {
+  damageEnemy(e: Enemy, amount: number, kx = 0, ky = 0, fromIai = false, quiet = false) {
     if (!e.active) return;
-    const dmg = Math.round(amount);
+    const dmg = Math.max(1, Math.round(amount));
     e.hp -= dmg;
     e.flash = 0.08;
     if (e.def.kind !== 'boss') {
@@ -681,6 +869,7 @@ export class GameScene extends Phaser.Scene {
       e.ky += ky * res;
     }
     this.showDamage(e.x, e.y - e.radius, dmg);
+    if (!quiet) Audio.play('sfx-hit', 0.18, 70, 400);
     if (e.hp <= 0) this.killEnemy(e, fromIai);
   }
 
@@ -690,18 +879,33 @@ export class GameScene extends Phaser.Scene {
     this.kills++;
     this.sparks.setParticleTint(e.def.color);
     const kind = e.def.kind;
+    this.seenEnemies.add(e.boss ? `boss-${e.boss.variant}` : kind);
     this.sparks.explode(kind === 'boss' ? 40 : kind === 'elite' ? 18 : 5, e.x, e.y);
+    Audio.play('sfx-kill', 0.22, 45, 500);
     if (!fromIai) {
-      this.intent += kind === 'elite' ? INTENT.eliteBonus : kind === 'boss' ? 0 : 1;
+      this.intent += (kind === 'elite' ? INTENT.eliteBonus : kind === 'boss' ? 0 : 1) * this.intentMult;
       this.lastKillT = this.t;
+    }
+    // 病毒擴散
+    if (e.virusT > 0 && e.virusSpread > 0) {
+      const near = this.grid.query(e.x, e.y, 130, tmp2);
+      let n = e.virusSpread;
+      for (const o of near) {
+        if (n <= 0) break;
+        if (!o.active || o === e || o.virusT > 0) continue;
+        this.infect(o, e.virusDps, 3, e.virusSpread - 1);
+        n--;
+      }
     }
     this.dropGem(e.x, e.y, e.xp);
     if (kind === 'elite' || kind === 'boss') {
       this.dropPickup('chest', e.x + 12, e.y);
       if (kind === 'boss') {
+        this.bossKills++;
         this.cameras.main.shake(300, 0.012);
         this.ui.banner(T.bossDown, '#ffc83d');
-        if (e.final) {
+        if (!this.bosses.some((b) => b.active && b !== e)) Audio.playMusic('bgm-battle');
+        if (e.boss?.final) {
           this.finalKilled = true;
           if (this.t < RUN.duration) this.ui.banner(T.waitDawn, '#3df5ff', 2.4);
         }
@@ -712,6 +916,13 @@ export class GameScene extends Phaser.Scene {
       else if (r < DROPS.heal + DROPS.magnet) this.dropPickup('magnet', e.x, e.y);
       else if (r < DROPS.heal + DROPS.magnet + DROPS.credit) this.dropPickup('credit', e.x, e.y, 1 + Math.floor(Math.random() * 4));
     }
+  }
+
+  private infect(e: Enemy, dps: number, duration: number, spread: number) {
+    e.virusT = duration;
+    e.virusDps = dps;
+    e.virusSpread = Math.max(0, spread);
+    e.virusTick = 0.5;
   }
 
   // ---------- 武器 ----------
@@ -727,9 +938,9 @@ export class GameScene extends Phaser.Scene {
           w.timer -= dt;
           if (w.timer <= 0) {
             w.timer = Math.max(0.2, s.cooldown * this.cdMult);
+            Audio.play('sfx-slash', 0.32, 90, 300);
             if (w.id === 'sakura') this.slashCircle(105 * s.area, dmg);
             else {
-              // 自動朝最近的敵人斬擊；附近沒有敵人時朝移動方向
               const R = 105 * s.area;
               let ax = this.faceX;
               let ay = this.faceY;
@@ -745,21 +956,24 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         }
-        case 'drones': {
+        case 'drones':
+        case 'crows': {
           w.angle += s.speed * dt;
-          const r = 78 * s.area;
+          const pulse = w.id === 'crows' ? 0.75 + 0.4 * Math.sin(this.t * 2.2) : 1;
+          const r = 78 * s.area * pulse;
           const n = s.amount;
           const hitCd = Math.max(0.2, s.cooldown * this.cdMult);
           for (let i = 0; i < n; i++) {
             const a = w.angle + (i / n) * Math.PI * 2;
             const x = this.px + Math.cos(a) * r;
             const y = this.py + Math.sin(a) * r;
-            const img = this.droneImg(droneIdx++);
+            const img = this.droneImg(droneIdx++, w.id === 'crows');
             img.setPosition(x, y).setRotation(a + Math.PI / 2);
-            const near = this.grid.query(x, y, 40, tmp2);
+            const near = this.grid.query(x, y, 44, tmp2);
+            const hitR = w.id === 'crows' ? 18 : 12;
             for (const e of near) {
               if (!e.active) continue;
-              const rr = e.radius + 12;
+              const rr = e.radius + hitR;
               const ex = e.x - x;
               const ey = e.y - y;
               if (ex * ex + ey * ey < rr * rr && this.t - e.lastDrone >= hitCd) {
@@ -771,7 +985,8 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         }
-        case 'shuriken': {
+        case 'shuriken':
+        case 'fuma': {
           w.timer -= dt;
           if (w.timer <= 0) {
             const targets = this.nearestEnemies(s.amount, 420);
@@ -780,27 +995,28 @@ export class GameScene extends Phaser.Scene {
               break;
             }
             w.timer = Math.max(0.25, s.cooldown * this.cdMult);
+            Audio.play('sfx-throw', 0.3, 80, 300);
             for (let i = 0; i < s.amount; i++) {
               const tgt = targets[i % targets.length];
-              const dx = tgt.x - this.px;
-              const dy = tgt.y - this.py;
-              const l = Math.hypot(dx, dy) || 1;
-              const spread = i >= targets.length ? (i - targets.length + 1) * 0.25 : 0;
-              const a = Math.atan2(dy / l, dx / l) + spread;
-              this.fireProjectile(Math.cos(a) * s.speed, Math.sin(a) * s.speed, dmg, s.bounce);
+              const a0 = Math.atan2(tgt.y - this.py, tgt.x - this.px);
+              const spread = i >= targets.length ? (i - targets.length + 1) * 0.3 : 0;
+              const a = a0 + spread;
+              this.fireProjectile(w.id, Math.cos(a) * s.speed, Math.sin(a) * s.speed, dmg, s.bounce, s.area);
             }
           }
           break;
         }
-        case 'field': {
+        case 'field':
+        case 'raijin': {
           fieldOn = true;
           const r = 64 * s.area;
+          const col = w.id === 'raijin' ? 0x7fa8ff : WEAPONS.field.color;
           this.fieldImg
             .setVisible(true)
             .setPosition(this.px, this.py)
             .setScale((2 * r) / (128 * TEX))
-            .setTint(WEAPONS.field.color)
-            .setAlpha(0.55 + Math.sin(this.t * 6) * 0.12);
+            .setTint(col)
+            .setAlpha(0.5 + Math.sin(this.t * 6) * 0.12);
           w.timer -= dt;
           if (w.timer <= 0) {
             w.timer = Math.max(0.2, s.cooldown * this.cdMult);
@@ -812,9 +1028,91 @@ export class GameScene extends Phaser.Scene {
               const ey = e.y - this.py;
               if (ex * ex + ey * ey < rr * rr) {
                 e.slow = 0.6;
-                this.damageEnemy(e, dmg);
+                this.damageEnemy(e, dmg, 0, 0, false, true);
               }
             }
+          }
+          if (w.id === 'raijin') {
+            w.timer2 -= dt;
+            if (w.timer2 <= 0) {
+              w.timer2 = s.duration;
+              this.lightning(s.amount, r * 2.2, dmg * 3);
+            }
+          }
+          break;
+        }
+        case 'laser': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            const targets = this.nearestEnemies(8, 380);
+            if (targets.length === 0) {
+              w.timer = 0.2;
+              break;
+            }
+            w.timer = Math.max(0.3, s.cooldown * this.cdMult);
+            Audio.play('sfx-laser', 0.3, 80, 300);
+            for (let i = 0; i < s.amount; i++) {
+              const tgt = targets[Math.floor(Math.random() * targets.length)];
+              const a = Math.atan2(tgt.y - this.py, tgt.x - this.px) + (i > 0 ? (Math.random() - 0.5) * 0.6 : 0);
+              this.fireLaser(Math.cos(a), Math.sin(a), 330 * s.area, 9 * s.area, dmg);
+            }
+          }
+          break;
+        }
+        case 'virus': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            const cands = this.nearestEnemies(s.amount + 6, 380).filter((e) => e.virusT <= 0);
+            if (cands.length === 0) {
+              w.timer = 0.3;
+              break;
+            }
+            w.timer = Math.max(0.4, s.cooldown * this.cdMult);
+            for (let i = 0; i < Math.min(s.amount, cands.length); i++) {
+              const e = cands[i];
+              this.infect(e, s.damage, s.duration, s.bounce);
+              this.sparks.setParticleTint(0x5dff7a);
+              this.sparks.explode(4, e.x, e.y);
+            }
+          }
+          break;
+        }
+        case 'orbital': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            w.timer = Math.max(0.5, s.cooldown * this.cdMult);
+            const onScreen = this.activeEnemies.filter(
+              (e) => e.active && Math.abs(e.x - this.px) < W / 2 && Math.abs(e.y - this.py) < H / 2,
+            );
+            for (let i = 0; i < s.amount; i++) {
+              let x: number;
+              let y: number;
+              if (onScreen.length) {
+                const e = onScreen[Math.floor(Math.random() * onScreen.length)];
+                x = e.x;
+                y = e.y;
+              } else {
+                x = this.px + (Math.random() - 0.5) * 300;
+                y = this.py + (Math.random() - 0.5) * 300;
+              }
+              this.addStrike(x, y, 56 * s.area, dmg);
+            }
+          }
+          break;
+        }
+        case 'hook': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            const targets = this.nearestEnemies(s.amount + 4, 320).filter((e) => e.def.kind !== 'boss');
+            if (targets.length === 0) {
+              w.timer = 0.3;
+              break;
+            }
+            w.timer = Math.max(0.4, s.cooldown * this.cdMult);
+            Audio.play('sfx-throw', 0.25, 80, 600);
+            // 優先抓遠一點的敵人
+            const sorted = targets.reverse();
+            for (let i = 0; i < Math.min(s.amount, sorted.length); i++) this.fireHook(sorted[i], s.speed, dmg, 46 * s.area);
           }
           break;
         }
@@ -824,11 +1122,17 @@ export class GameScene extends Phaser.Scene {
     if (!fieldOn) this.fieldImg.setVisible(false);
   }
 
-  private droneImg(i: number) {
+  private droneImg(i: number, crow: boolean) {
     while (this.droneImgs.length <= i) {
-      this.droneImgs.push(this.add.image(0, 0, 'drone').setScale(1 / TEX).setDepth(9));
+      const key = this.textures.exists('proj-kunai') ? 'proj-kunai' : 'drone';
+      this.droneImgs.push(this.add.image(0, 0, key).setScale(key === 'drone' ? 1 / TEX : 0.55).setDepth(9));
     }
-    return this.droneImgs[i].setVisible(true);
+    const img = this.droneImgs[i].setVisible(true);
+    const base = img.texture.key === 'drone' ? 1 / TEX : 0.55;
+    img.setScale(crow ? base * 1.5 : base);
+    if (crow) img.setTint(0x223322);
+    else img.clearTint();
+    return img;
   }
 
   private slashFan(fx: number, fy: number, R: number, dmg: number, color: number) {
@@ -890,6 +1194,153 @@ export class GameScene extends Phaser.Scene {
     this.sparks.explode(8, this.px, this.py);
   }
 
+  private fireLaser(dx: number, dy: number, len: number, halfW: number, dmg: number) {
+    const x0 = this.px;
+    const y0 = this.py;
+    const x1 = x0 + dx * len;
+    const y1 = y0 + dy * len;
+    const mx = (x0 + x1) / 2;
+    const my = (y0 + y1) / 2;
+    const near = this.grid.query(mx, my, len / 2 + 30, tmp2);
+    for (const e of near) {
+      if (!e.active) continue;
+      const ex = e.x - x0;
+      const ey = e.y - y0;
+      const proj = ex * dx + ey * dy;
+      if (proj < 0 || proj > len) continue;
+      const perp = Math.abs(ex * dy - ey * dx);
+      if (perp <= halfW + e.radius) this.damageEnemy(e, dmg, dx * 120, dy * 120);
+    }
+    this.addSlash((g) => {
+      g.lineStyle(halfW * 2.6, 0x3df5ff, 0.35);
+      g.lineBetween(x0, y0, x1, y1);
+      g.lineStyle(halfW * 0.9, 0xffffff, 1);
+      g.lineBetween(x0, y0, x1, y1);
+    }, 0.14);
+  }
+
+  private lightning(n: number, range: number, dmg: number) {
+    const cands = this.activeEnemies.filter((e) => e.active && (e.x - this.px) ** 2 + (e.y - this.py) ** 2 < range * range);
+    if (cands.length === 0) return;
+    Audio.play('sfx-laser', 0.25, 100, 900);
+    for (let i = 0; i < n; i++) {
+      const e = cands[Math.floor(Math.random() * cands.length)];
+      if (!e.active) continue;
+      const x = e.x;
+      const y = e.y;
+      this.damageEnemy(e, dmg, 0, 0, false, true);
+      // 同時打到附近的敵人
+      for (const o of this.grid.query(x, y, 40, tmp)) if (o.active && o !== e && (o.x - x) ** 2 + (o.y - y) ** 2 < 40 * 40) this.damageEnemy(o, dmg * 0.5, 0, 0, false, true);
+      this.addSlash((g) => {
+        g.lineStyle(3, 0xbfd4ff, 1);
+        g.beginPath();
+        let lx = x + (Math.random() - 0.5) * 30;
+        let ly = y - 220;
+        g.moveTo(lx, ly);
+        for (let k = 1; k <= 6; k++) {
+          lx = x + (Math.random() - 0.5) * 24 * (1 - k / 6);
+          ly = y - 220 + (220 * k) / 6;
+          g.lineTo(lx, ly);
+        }
+        g.strokePath();
+        g.fillStyle(0x7fa8ff, 0.4);
+        g.fillCircle(x, y, 26);
+      }, 0.18);
+    }
+  }
+
+  private addStrike(x: number, y: number, r: number, dmg: number) {
+    let s = this.strikes.find((q) => !q.active);
+    if (!s) {
+      const key = this.textures.exists('proj-reticle') ? 'proj-reticle' : 'ring';
+      s = { active: false, img: this.add.image(0, 0, key).setDepth(3), x: 0, y: 0, t: 0, r: 0, damage: 0 };
+      this.strikes.push(s);
+    }
+    Object.assign(s, { active: true, x, y, t: 0.7, r, damage: dmg });
+    s.img.setPosition(x, y).setVisible(true).setAlpha(0.9).setDisplaySize(r * 2, r * 2);
+  }
+
+  private updateStrikes(dt: number) {
+    for (const s of this.strikes) {
+      if (!s.active) continue;
+      s.t -= dt;
+      s.img.setRotation(s.img.rotation + dt * 3).setAlpha(0.5 + 0.5 * Math.sin(s.t * 30));
+      if (s.t > 0) continue;
+      s.active = false;
+      s.img.setVisible(false);
+      const near = this.grid.query(s.x, s.y, s.r + 30, tmp2);
+      for (const e of near) {
+        if (!e.active) continue;
+        const dx = e.x - s.x;
+        const dy = e.y - s.y;
+        const d = Math.hypot(dx, dy) || 1;
+        if (d <= s.r + e.radius * 0.5) this.damageEnemy(e, s.damage, (dx / d) * 140, (dy / d) * 140, false, true);
+      }
+      Audio.play('sfx-orbital', 0.32, 120);
+      this.sparks.setParticleTint(0xff4d5e);
+      this.sparks.explode(14, s.x, s.y);
+      const x = s.x;
+      const y = s.y;
+      const r = s.r;
+      this.addSlash((g) => {
+        g.fillStyle(0xff4d5e, 0.35);
+        g.fillCircle(x, y, r);
+        g.fillStyle(0xffd0d8, 0.8);
+        g.fillCircle(x, y, r * 0.45);
+        g.lineStyle(6, 0xff4d5e, 0.6);
+        g.lineBetween(x, y - 260, x, y);
+      }, 0.22);
+    }
+  }
+
+  private fireHook(target: Enemy, speed: number, dmg: number, radius: number) {
+    let h = this.hooks.find((q) => !q.active);
+    if (!h) {
+      const key = this.textures.exists('proj-kunai') ? 'proj-kunai' : 'drone';
+      h = { active: false, img: this.add.image(0, 0, key).setScale(0.6).setDepth(9).setTint(0xd8e0f0), x: 0, y: 0, target, speed: 0, damage: 0, radius: 0, life: 0 };
+      this.hooks.push(h);
+    }
+    Object.assign(h, { active: true, x: this.px, y: this.py, target, speed, damage: dmg, radius, life: 1.2 });
+    h.img.setVisible(true);
+  }
+
+  private updateHooks(dt: number) {
+    for (const h of this.hooks) {
+      if (!h.active) continue;
+      h.life -= dt;
+      const tx = h.target.x;
+      const ty = h.target.y;
+      const dx = tx - h.x;
+      const dy = ty - h.y;
+      const d = Math.hypot(dx, dy) || 1;
+      const step = h.speed * dt;
+      if (!h.target.active || h.life <= 0) {
+        h.active = false;
+        h.img.setVisible(false);
+        continue;
+      }
+      if (d <= step + h.target.radius) {
+        // 命中：把目標和附近的敵人拉向玩家
+        const near = this.grid.query(tx, ty, h.radius + 30, tmp2);
+        for (const e of near) {
+          if (!e.active || e.def.kind === 'boss') continue;
+          if ((e.x - tx) ** 2 + (e.y - ty) ** 2 > h.radius * h.radius && e !== h.target) continue;
+          const px = this.px - e.x;
+          const py = this.py - e.y;
+          const pd = Math.hypot(px, py) || 1;
+          const pull = Math.max(0, pd - 50) * 3.2;
+          this.damageEnemy(e, h.damage, (px / pd) * pull, (py / pd) * pull);
+        }
+        h.active = false;
+        h.img.setVisible(false);
+        continue;
+      }
+      h.x += (dx / d) * step;
+      h.y += (dy / d) * step;
+      h.img.setPosition(h.x, h.y).setRotation(Math.atan2(dy, dx));
+    }
+  }
+
   private addSlash(draw: (g: Phaser.GameObjects.Graphics) => void, life: number) {
     let s = this.slashes.find((x) => x.life <= 0);
     if (!s) {
@@ -921,12 +1372,14 @@ export class GameScene extends Phaser.Scene {
     return res.map((r) => r.e);
   }
 
-  private fireProjectile(vx: number, vy: number, damage: number, bounces: number) {
+  private fireProjectile(kind: 'shuriken' | 'fuma', vx: number, vy: number, damage: number, bounces: number, area: number) {
     let p = this.projectiles.find((x) => !x.active);
     if (!p) {
+      const key = this.textures.exists('proj-shuriken') ? 'proj-shuriken' : 'shuriken';
       p = {
         active: false,
-        img: this.add.image(0, 0, 'shuriken').setScale(1 / TEX).setDepth(8),
+        kind,
+        img: this.add.image(0, 0, key).setDepth(8),
         x: 0,
         y: 0,
         vx: 0,
@@ -935,24 +1388,36 @@ export class GameScene extends Phaser.Scene {
         damage: 0,
         bounces: 0,
         last: null,
+        hits: new Set(),
+        returning: false,
       };
       this.projectiles.push(p);
     }
-    p.active = true;
-    p.x = this.px;
-    p.y = this.py;
-    p.vx = vx;
-    p.vy = vy;
-    p.life = 1.4;
-    p.damage = damage;
-    p.bounces = bounces;
-    p.last = null;
-    p.img.setVisible(true).setPosition(p.x, p.y);
+    const base = p.img.texture.key === 'shuriken' ? 1 / TEX : 0.5;
+    Object.assign(p, { active: true, kind, x: this.px, y: this.py, vx, vy, life: kind === 'fuma' ? 2.2 : 1.4, damage, bounces, last: null, returning: false });
+    p.hits.clear();
+    p.img.setVisible(true).setPosition(p.x, p.y).setScale(kind === 'fuma' ? base * 2.3 * area : base);
   }
 
   private updateProjectiles(dt: number) {
     for (const p of this.projectiles) {
       if (!p.active) continue;
+      if (p.kind === 'fuma') {
+        // 飛出去再飛回來
+        if (!p.returning && p.life < 1.5) {
+          p.returning = true;
+          p.hits.clear();
+        }
+        if (p.returning) {
+          const dx = this.px - p.x;
+          const dy = this.py - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const sp = Math.hypot(p.vx, p.vy);
+          p.vx = (dx / d) * sp;
+          p.vy = (dy / d) * sp;
+          if (d < 20) p.life = 0;
+        }
+      }
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.life -= dt;
@@ -962,14 +1427,21 @@ export class GameScene extends Phaser.Scene {
         p.img.setVisible(false);
         continue;
       }
-      const near = this.grid.query(p.x, p.y, 40, tmp2);
+      const hitR = p.kind === 'fuma' ? 26 : 8;
+      const near = this.grid.query(p.x, p.y, 40 + hitR, tmp2);
       for (const e of near) {
         if (!e.active || e === p.last) continue;
-        const rr = e.radius + 8;
+        const rr = e.radius + hitR;
         const dx = e.x - p.x;
         const dy = e.y - p.y;
         if (dx * dx + dy * dy > rr * rr) continue;
         const sp = Math.hypot(p.vx, p.vy) || 1;
+        if (p.kind === 'fuma') {
+          if (p.hits.has(e)) continue;
+          p.hits.add(e);
+          this.damageEnemy(e, p.damage, (p.vx / sp) * 100, (p.vy / sp) * 100);
+          continue;
+        }
         this.damageEnemy(e, p.damage, (p.vx / sp) * 80, (p.vy / sp) * 80);
         p.last = e;
         if (p.bounces > 0) {
@@ -1007,7 +1479,7 @@ export class GameScene extends Phaser.Scene {
     return best;
   }
 
-  private fireBullet(x: number, y: number, vx: number, vy: number, damage: number) {
+  private fireBullet(x: number, y: number, vx: number, vy: number, damage: number, tint = 0xffffff) {
     let b = this.bullets.find((q) => !q.active);
     if (!b) {
       b = { active: false, img: this.add.image(0, 0, 'bullet').setScale(1 / TEX).setDepth(9), x: 0, y: 0, vx: 0, vy: 0, life: 0, damage: 0 };
@@ -1015,6 +1487,8 @@ export class GameScene extends Phaser.Scene {
     }
     Object.assign(b, { active: true, x, y, vx, vy, life: 5, damage });
     b.img.setVisible(true).setPosition(x, y);
+    if (tint === 0xffffff) b.img.clearTint();
+    else b.img.setTint(tint);
   }
 
   private updateBullets(dt: number) {
@@ -1054,7 +1528,6 @@ export class GameScene extends Phaser.Scene {
 
   dropGem(x: number, y: number, value: number) {
     if (this.gemCount >= RUN.maxGems) {
-      // 經驗晶片太多時合併到既有的晶片上
       const gems = this.pickups.filter((p) => p.active && p.kind === 'gem' && !p.flying);
       if (gems.length) {
         const g = gems[Math.floor(Math.random() * gems.length)];
@@ -1065,14 +1538,16 @@ export class GameScene extends Phaser.Scene {
     }
     const p = this.obtainPickup();
     Object.assign(p, { active: true, kind: 'gem', x, y, value, flying: false, speed: 0 });
-    p.img.setTexture(this.gemTexture(value)).setVisible(true).setPosition(x, y).setDepth(1);
+    p.img.setTexture(this.gemTexture(value)).setScale(1 / TEX).setVisible(true).setPosition(x, y).setDepth(1);
     this.gemCount++;
   }
 
   dropPickup(kind: Exclude<PickupKind, 'gem'>, x: number, y: number, value = 0) {
     const p = this.obtainPickup();
     Object.assign(p, { active: true, kind, x, y, value, flying: false, speed: 0 });
-    p.img.setTexture(kind).setVisible(true).setPosition(x, y).setDepth(2);
+    const tex = this.textures.exists(PICKUP_TEX[kind]) ? PICKUP_TEX[kind] : kind;
+    const scale = tex === kind ? 1 / TEX : kind === 'chest' ? 0.55 : 0.5;
+    p.img.setTexture(tex).setScale(scale).setVisible(true).setPosition(x, y).setDepth(2);
   }
 
   private updatePickups(dt: number) {
@@ -1105,21 +1580,27 @@ export class GameScene extends Phaser.Scene {
     switch (p.kind) {
       case 'gem':
         this.gemCount--;
-        this.addXp(p.value);
+        Audio.play('sfx-gem', 0.16, 45, 300);
+        this.addXp(p.value * this.xpMult);
         break;
       case 'heal':
         this.hp = Math.min(this.maxHp, this.hp + DROPS.healAmount);
+        Audio.play('sfx-revive', 0.3);
         break;
       case 'magnet':
-        for (const q of this.pickups) if (q.active && q.kind === 'gem' && !q.flying) {
-          q.flying = true;
-          q.speed = 200;
-        }
+        for (const q of this.pickups)
+          if (q.active && q.kind === 'gem' && !q.flying) {
+            q.flying = true;
+            q.speed = 200;
+          }
+        Audio.play('sfx-chest', 0.3);
         break;
       case 'credit':
         this.credits += p.value;
+        Audio.play('sfx-gem', 0.25, 45, 900);
         break;
       case 'chest':
+        Audio.play('sfx-chest', 0.5);
         this.openChest();
         break;
     }
@@ -1144,9 +1625,11 @@ export class GameScene extends Phaser.Scene {
         w.level = 1;
         w.stats = this.computeStats(evo.result, 1);
         w.timer = 0.1;
+        this.markSeenWeapon(evo.result);
         this.inventoryVersion++;
         this.ui.banner(T.evolved(WEAPONS[evo.result].name), '#ff7ad9', 2.6);
         this.cameras.main.flash(250, 255, 122, 217);
+        Audio.play('sfx-levelup', 0.6);
         return;
       }
     }
@@ -1180,6 +1663,7 @@ export class GameScene extends Phaser.Scene {
       this.iaiCount++;
       this.iaiFreeze = INTENT.freeze;
       this.ui.playIai();
+      Audio.play('sfx-iai', 0.7);
     }
   }
 
@@ -1191,26 +1675,21 @@ export class GameScene extends Phaser.Scene {
     for (const e of this.activeEnemies) {
       if (!e.active || e.x < x0 || e.x > x1 || e.y < y0 || e.y > y1) continue;
       const kind = e.def.kind;
-      const dmg =
-        kind === 'boss'
-          ? e.maxHp * INTENT.bossDamagePct
-          : kind === 'elite'
-            ? e.maxHp * INTENT.eliteDamagePct
-            : e.hp + 1;
-      this.damageEnemy(e, dmg, 0, 0, true);
+      const dmg = kind === 'boss' ? e.maxHp * INTENT.bossDamagePct : kind === 'elite' ? e.maxHp * INTENT.eliteDamagePct : e.hp + 1;
+      this.damageEnemy(e, dmg, 0, 0, true, true);
     }
     this.cameras.main.shake(260, 0.012);
-    // 一閃之後，畫面上的經驗晶片全部吸過來
     for (const p of this.pickups) {
       if (!p.active || p.kind !== 'gem' || p.flying) continue;
       if (p.x < x0 || p.x > x1 || p.y < y0 || p.y > y1) continue;
       p.flying = true;
       p.speed = 250;
     }
-    for (const b of this.bullets) if (b.active) {
-      b.active = false;
-      b.img.setVisible(false);
-    }
+    for (const b of this.bullets)
+      if (b.active) {
+        b.active = false;
+        b.img.setVisible(false);
+      }
   }
 
   // ---------- 升級選擇 ----------
@@ -1218,13 +1697,14 @@ export class GameScene extends Phaser.Scene {
     const list: Choice[] = [];
     const hasEvolvedFrom = (id: WeaponId) => EVOLUTIONS.some((ev) => ev.weapon === id && this.weapons.some((w) => w.id === ev.result));
     for (const id of WEAPON_POOL) {
-      if (hasEvolvedFrom(id)) continue;
+      if (hasEvolvedFrom(id) || !this.isUnlocked(id)) continue;
       const w = this.weapons.find((x) => x.id === id);
       if (w) {
         if (w.level < this.maxLevel(id)) list.push({ kind: 'weapon', id });
       } else if (this.weapons.length < RUN.weaponSlots) list.push({ kind: 'weapon', id });
     }
     for (const id of PASSIVE_POOL) {
+      if (!this.isUnlocked(id)) continue;
       const lv = this.passives.get(id);
       if (lv !== undefined) {
         if (lv < PASSIVES[id].maxLevel) list.push({ kind: 'passive', id });
@@ -1248,7 +1728,6 @@ export class GameScene extends Phaser.Scene {
     return out;
   }
 
-  /** 放逐：換掉一張卡片；回傳替代的卡片（沒有可換的就回傳 null） */
   banishChoice(c: Choice, shown: Choice[]): Choice | null {
     if (this.banishes <= 0 || c.kind === 'heal' || c.kind === 'credits') return c;
     this.banishes--;
@@ -1278,13 +1757,15 @@ export class GameScene extends Phaser.Scene {
       case 'weapon': {
         const w = this.weapons.find((x) => x.id === c.id);
         if (w) {
-          w.level++;
+          w.level = Math.min(this.maxLevel(w.id), w.level + 1);
           w.stats = this.computeStats(w.id, w.level);
-        } else this.addWeapon(c.id);
+        } else if (this.weapons.length < RUN.weaponSlots) this.addWeapon(c.id);
         break;
       }
       case 'passive':
-        this.passives.set(c.id, this.passiveLevel(c.id) + 1);
+        if (!this.passives.has(c.id) && this.passives.size >= RUN.passiveSlots) break;
+        this.passives.set(c.id, Math.min(PASSIVES[c.id].maxLevel, this.passiveLevel(c.id) + 1));
+        if (!this.save.seenPassives.includes(c.id)) this.save.seenPassives.push(c.id);
         break;
       case 'heal':
         this.hp = Math.min(this.maxHp, this.hp + DROPS.healAmount);
@@ -1296,34 +1777,38 @@ export class GameScene extends Phaser.Scene {
     this.recalc();
   }
 
-  choiceInfo(c: Choice): { name: string; desc: string; tag: string; icon: string; color: number; isNew: boolean } {
+  choiceInfo(c: Choice): { name: string; desc: string; tag: string; icon: string; color: number; isNew: boolean; evoHint: string } {
     switch (c.kind) {
       case 'weapon': {
         const def = WEAPONS[c.id];
         const w = this.weapons.find((x) => x.id === c.id);
-        if (!w) return { name: def.name, desc: def.desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true };
-        return { name: def.name, desc: def.levels[w.level - 1]?.desc ?? '', tag: T.lv(w.level, w.level + 1), icon: `icon-${c.id}`, color: def.color, isNew: false };
+        const evo = EVOLUTIONS.find((e) => e.weapon === c.id);
+        const evoHint = evo ? T.evoHint(PASSIVES[evo.passive].name, WEAPONS[evo.result].name) : '';
+        if (!w) return { name: def.name, desc: def.desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint };
+        return { name: def.name, desc: def.levels[w.level - 1]?.desc ?? '', tag: T.lv(w.level, w.level + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint };
       }
       case 'passive': {
         const def = PASSIVES[c.id];
         const lv = this.passives.get(c.id);
-        if (lv === undefined) return { name: def.name, desc: def.desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true };
-        return { name: def.name, desc: def.desc, tag: T.lv(lv, lv + 1), icon: `icon-${c.id}`, color: def.color, isNew: false };
+        const evo = EVOLUTIONS.find((e) => e.passive === c.id);
+        const evoHint = evo ? T.evoHintP(WEAPONS[evo.weapon].name, WEAPONS[evo.result].name) : '';
+        if (lv === undefined) return { name: def.name, desc: def.desc, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint };
+        return { name: def.name, desc: def.desc, tag: T.lv(lv, lv + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint };
       }
       case 'heal':
-        return { name: T.heal, desc: T.healDesc, tag: '', icon: 'icon-heal', color: 0x5dff7a, isNew: false };
+        return { name: T.heal, desc: T.healDesc, tag: '', icon: 'icon-heal', color: 0x5dff7a, isNew: false, evoHint: '' };
       case 'credits':
-        return { name: T.credits, desc: T.creditsDesc, tag: '', icon: 'icon-credits', color: 0xffd84d, isNew: false };
+        return { name: T.credits, desc: T.creditsDesc, tag: '', icon: 'icon-credits', color: 0xffd84d, isNew: false, evoHint: '' };
     }
   }
 
   private openLevelUp() {
     this.modal = true;
     this.scene.pause();
+    Audio.play('sfx-levelup', 0.45, 300);
     this.ui.showLevelUp(this.level - this.pendingLevels + 1, this.rollChoices());
   }
 
-  /** UI 選完一張卡之後呼叫 */
   levelChoiceDone() {
     this.pendingLevels--;
     if (this.pendingLevels > 0) {
@@ -1361,13 +1846,15 @@ export class GameScene extends Phaser.Scene {
     this.invuln = 2.5;
     for (const e of this.activeEnemies) {
       if (!e.active || e.def.kind === 'boss') continue;
-      if ((e.x - this.px) ** 2 + (e.y - this.py) ** 2 < 280 * 280) this.damageEnemy(e, e.hp + 1, 0, 0, true);
+      if ((e.x - this.px) ** 2 + (e.y - this.py) ** 2 < 280 * 280) this.damageEnemy(e, e.hp + 1, 0, 0, true, true);
     }
-    for (const b of this.bullets) if (b.active) {
-      b.active = false;
-      b.img.setVisible(false);
-    }
+    for (const b of this.bullets)
+      if (b.active) {
+        b.active = false;
+        b.img.setVisible(false);
+      }
     this.cameras.main.flash(300, 61, 245, 255);
+    Audio.play('sfx-revive', 0.6);
     this.closeModal();
   }
 
@@ -1376,15 +1863,33 @@ export class GameScene extends Phaser.Scene {
     this.ended = true;
     this.modal = true;
     const wasRunning = this.scene.isActive();
-    const save = loadSave();
+    const save = this.save;
     const newBest = this.t > save.bestTime || (victory && this.kills > save.bestKills);
+    const bonus = runReward({ time: this.t, kills: this.kills, bossKills: this.bossKills, victory });
     save.bestTime = Math.max(save.bestTime, this.t);
     save.bestKills = Math.max(save.bestKills, this.kills);
-    save.totalCredits += this.credits;
+    save.bestLevel = Math.max(save.bestLevel, this.level);
+    save.totalKills += this.kills;
+    save.bossKills += this.bossKills;
+    save.iaiTotal += this.iaiCount;
     save.runs++;
+    if (victory) save.wins++;
+    save.credits += this.credits + bonus;
+    save.totalCredits += this.credits + bonus;
+    save.lastChar = this.char.id;
+    for (const k of this.seenEnemies) if (!save.seenEnemies.includes(k)) save.seenEnemies.push(k);
+    // 檢查新解鎖
+    const unlocked: string[] = [];
+    for (const u of UNLOCKS) {
+      if (save.unlocked.includes(u.id) || !u.check(save)) continue;
+      save.unlocked.push(u.id);
+      unlocked.push(u.kind === 'weapon' ? WEAPONS[u.id as WeaponId].name : PASSIVES[u.id as PassiveId].name);
+    }
     writeSave(save);
     if (wasRunning) this.scene.pause();
-    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, newBest };
+    Audio.stopMusic();
+    Audio.play(victory ? 'sfx-victory' : 'sfx-defeat', 0.6);
+    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked };
     this.ui.showResults(result);
   }
 
@@ -1398,13 +1903,17 @@ export class GameScene extends Phaser.Scene {
   debugChest() {
     this.dropPickup('chest', this.px, this.py - 20);
   }
-  debugMaxKatana() {
-    const w = this.weapons.find((x) => x.id === 'katana');
-    if (w) {
-      w.level = this.maxLevel('katana');
-      w.stats = this.computeStats('katana', w.level);
+  debugMaxWeapons() {
+    for (const w of this.weapons) {
+      w.level = this.maxLevel(w.id);
+      w.stats = this.computeStats(w.id, w.level);
+      const evo = EVOLUTIONS.find((e) => e.weapon === w.id);
+      if (evo && !this.passives.has(evo.passive) && this.passives.size < RUN.passiveSlots) this.passives.set(evo.passive, 1);
     }
-    if (!this.passives.has('haste')) this.passives.set('haste', 1);
+    this.recalc();
+  }
+  debugGive(id: WeaponId) {
+    if (!this.weapons.some((w) => w.id === id)) this.addWeapon(id);
     this.recalc();
   }
 
@@ -1437,46 +1946,43 @@ export class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     cam.centerOn(this.px, this.py);
 
-    // 背景格線與霓虹裝飾
-    const g = this.bg;
-    g.clear();
-    const x0 = this.px - W / 2 - 64;
-    const y0 = this.py - H / 2 - 64;
-    const gs = 64;
-    g.lineStyle(1, COLORS.grid, 1);
-    for (let x = Math.floor(x0 / gs) * gs; x < x0 + W + 128; x += gs) g.lineBetween(x, y0, x, y0 + H + 128);
-    for (let y = Math.floor(y0 / gs) * gs; y < y0 + H + 128; y += gs) g.lineBetween(x0, y, x0 + W + 128, y);
-    const cs = 256;
-    for (let cx = Math.floor(x0 / cs); cx * cs < x0 + W + 128; cx++) {
-      for (let cy = Math.floor(y0 / cs); cy * cs < y0 + H + 128; cy++) {
-        const h = hash(cx, cy);
-        if (h % 3 !== 0) continue;
-        const col = [0xff3d81, 0x3df5ff, 0x8a5cff][h % 7 % 3];
-        const rx = cx * cs + (h % 160) + 20;
-        const ry = cy * cs + ((h >> 8) % 160) + 20;
-        const rw = 30 + ((h >> 4) % 50);
-        const rh = 10 + ((h >> 12) % 26);
-        g.fillStyle(col, 0.06);
-        g.fillRect(rx, ry, rw, rh);
-        g.lineStyle(1, col, 0.22);
-        g.strokeRect(rx, ry, rw, rh);
-      }
+    // 地面圖塊
+    if (this.groundTiles.length) {
+      const size = this.groundSize();
+      const cols = Math.ceil(W / size) + 1;
+      const x0 = Math.floor((this.px - W / 2) / size) * size;
+      const y0 = Math.floor((this.py - H / 2) / size) * size;
+      this.groundTiles.forEach((img, i) => img.setPosition(x0 + (i % cols) * size, y0 + Math.floor(i / cols) * size));
     }
 
-    // 玩家
+    // 影子
+    const sg = this.shadowG;
+    sg.clear();
+    sg.fillStyle(0x000000, 0.35);
+    sg.fillEllipse(this.px, this.py + 4, 26, 9);
+
+    // 玩家：走路時上下晃動
     const blink = this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0;
-    this.playerImg.setPosition(this.px, this.py).setAlpha(blink ? 0.45 : 1);
+    const bob = this.moving ? Math.abs(Math.sin(this.t * 12)) * 3 : Math.sin(this.t * 3) * 0.8;
+    this.playerImg
+      .setPosition(this.px, this.py + 6 - bob)
+      .setAlpha(blink ? 0.45 : 1)
+      .setFlipX(this.faceX < -0.1);
     if (this.hurtFlash > 0) this.playerImg.setTintFill(0xff3d81);
     else this.playerImg.clearTint();
-    this.facingImg.setPosition(this.px + this.faceX * 20, this.py + this.faceY * 20).setRotation(Math.atan2(this.faceY, this.faceX));
+    this.facingImg.setPosition(this.px + this.faceX * 26, this.py + this.faceY * 26).setRotation(Math.atan2(this.faceY, this.faceX));
 
     // 敵人
     for (const e of this.activeEnemies) {
       if (!e.active) continue;
-      e.img.setPosition(e.x, e.y);
+      const wob = Math.sin(this.t * 8 + e.phase);
+      e.img.setPosition(e.x, e.y + wob * 1.5).setFlipX(e.x > this.px);
+      e.img.setScale(e.baseScale * (1 + wob * 0.03), e.baseScale * (1 - wob * 0.03));
       if (e.flash > 0) e.img.setTintFill(0xffffff);
+      else if (e.virusT > 0) e.img.setTint(0x9dffb0);
       else if (e.slow > 0) e.img.setTint(0x9fb0ff);
       else e.img.clearTint();
+      if (e.def.kind === 'boss' || e.def.kind === 'elite') sg.fillEllipse(e.x, e.y + e.radius * 0.8, e.radius * 2, e.radius * 0.6);
     }
 
     // Boss 預警線
@@ -1492,15 +1998,21 @@ export class GameScene extends Phaser.Scene {
         fx.lineBetween(b.x, b.y, b.x + b.aimX * 520, b.y + b.aimY * 520);
       }
     }
+    // 鉤爪鎖鏈
+    for (const h of this.hooks) {
+      if (!h.active) continue;
+      fx.lineStyle(2, 0xb8c4d8, 0.9);
+      fx.lineBetween(this.px, this.py, h.x, h.y);
+    }
 
     // 生命條
     const hb = this.hpBar;
     hb.clear();
     const bw = 40;
     hb.fillStyle(0x000000, 0.6);
-    hb.fillRect(this.px - bw / 2 - 1, this.py + 21, bw + 2, 6);
+    hb.fillRect(this.px - bw / 2 - 1, this.py + 13, bw + 2, 6);
     hb.fillStyle(this.hp / this.maxHp < 0.3 ? 0xff3d81 : 0x5dff7a, 1);
-    hb.fillRect(this.px - bw / 2, this.py + 22, bw * (this.hp / this.maxHp), 4);
+    hb.fillRect(this.px - bw / 2, this.py + 14, bw * (this.hp / this.maxHp), 4);
   }
 }
 
@@ -1510,8 +2022,8 @@ function currentWave(t: number) {
   return seg;
 }
 
-function pickWeighted(weights: Partial<Record<'drone' | 'thug' | 'husk', number>>): EnemyKind {
-  const entries = Object.entries(weights) as ['drone' | 'thug' | 'husk', number][];
+function pickWeighted(weights: Partial<Record<'drone' | 'thug' | 'husk' | 'gunner', number>>): EnemyKind {
+  const entries = Object.entries(weights) as ['drone' | 'thug' | 'husk' | 'gunner', number][];
   const total = entries.reduce((s, [, w]) => s + w, 0);
   let r = Math.random() * total;
   for (const [k, w] of entries) {
@@ -1519,10 +2031,4 @@ function pickWeighted(weights: Partial<Record<'drone' | 'thug' | 'husk', number>
     if (r <= 0) return k;
   }
   return entries[0][0];
-}
-
-function hash(x: number, y: number): number {
-  let h = (x * 374761393 + y * 668265263) | 0;
-  h = (h ^ (h >>> 13)) * 1274126177;
-  return (h ^ (h >>> 16)) >>> 0;
 }

@@ -2,7 +2,7 @@
 
 直式手機肉鴿除草遊戲。規劃文件：[`docs/PRD.md`](docs/PRD.md)。
 
-目前進度：**M1 MVP**（用色塊代替美術，可在手機瀏覽器完整玩一局 10 分鐘）。
+目前進度：**M2 Alpha**（3 名角色、8 把武器、4 種進化、3 隻 Boss、局外強化與圖鑑；美術與音效由 Higgsfield 生成）。
 
 ## 開發
 
@@ -13,7 +13,7 @@ npm run build          # 型別檢查＋打包成單一檔案 dist/index.html
 npm run build:artifact # 另外產生可發布成 Claude Artifact 的 artifact/cyber-ronin.html
 ```
 
-網址後面加上 `#debug` 會出現除錯按鈕：無敵、時間 +60 秒、直接升級、生成寶箱、刀直接滿級。
+網址後面加上 `#debug` 會出現除錯按鈕：無敵、時間 +60 秒、直接升級、生成寶箱、目前武器全部滿級。
 
 ## 程式結構
 
@@ -24,5 +24,14 @@ npm run build:artifact # 另外產生可發布成 Claude Artifact 的 artifact/c
 | `src/scenes/GameScene.ts` | 遊戲邏輯：移動、敵人、武器、掉落物、升級、殺意與居合・一閃、復活、結算 |
 | `src/scenes/UIScene.ts` | HUD、浮動搖桿、升級卡片、暫停、復活、結算畫面 |
 | `src/scenes/MenuScene.ts` | 主選單 |
-| `src/game/textures.ts` | 用程式畫出來的佔位圖（之後換成 Higgsfield 生成的素材） |
+| `src/game/textures.ts` | 程式畫的備用圖（經驗晶片、特效；正式素材缺漏時也用它） |
+| `src/assets/` | 遊戲用的精靈圖與音效（由 `art/tools/` 從 Higgsfield 原始檔轉出） |
+| `src/scenes/CharSelectScene.ts`、`ShopScene.ts`、`CodexScene.ts` | 角色選擇、義體強化中心、圖鑑 |
 | `src/game/SpatialGrid.ts` | 空間格網，加速大量敵人的碰撞查詢 |
+
+## 美術與音效流程
+
+1. 在 Higgsfield 以 `art/style-refs/style-A-selected.png` 為參考圖生成（透明背景）
+2. `art/tools/fetch.sh <名稱> <網址>` 下載到 `art/raw/`（不進版控）
+3. `python3 -I art/tools/process.py art/raw/<檔> <名稱> <最大邊長>`：裁切、縮小成 `src/assets/sprites/`；圖示表用 `--grid 4x4 --names ...` 切開
+4. `art/tools/audio.sh`：音樂與音效壓縮、統一音量，輸出到 `src/assets/audio/`

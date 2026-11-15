@@ -2,3 +2,6 @@ node_modules/
 dist/
 artifact/
 *.log
+# Higgsfield 原始輸出（檔案很大，不進版控；處理後的素材在 src/assets/）
+art/raw/
+art/style-refs/style-[0-9].png

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, H, W, Z, textStyle } from './layout';
+import { Audio } from './audio';
 
 /** 讓場景用 540 寬的邏輯座標作畫（畫布本身是 Z 倍解析度） */
 export function setupLogicalCamera(scene: Phaser.Scene): void {
@@ -45,7 +46,10 @@ export function makeButton(
   c.on('pointerout', () => c.setScale(1));
   c.on('pointerup', () => {
     c.setScale(1);
-    if (enabled) onClick();
+    if (enabled) {
+      Audio.play('sfx-click', 0.35, 30);
+      onClick();
+    }
   });
   c.setEnabled = (on: boolean) => {
     enabled = on;
@@ -62,4 +66,27 @@ export function makeButton(
     return c;
   };
   return c;
+}
+
+/** 畫面頂端的標題列：返回鍵＋標題＋信用點 */
+export function header(scene: Phaser.Scene, title: string, credits: number | null, onBack: () => void) {
+  const bg = scene.add.rectangle(W / 2, 40, W, 80, 0x0b0916, 0.92);
+  const line = scene.add.rectangle(W / 2, 80, W, 2, COLORS.magenta, 0.5);
+  const back = makeButton(scene, 52, 40, 80, 48, '‹', COLORS.cyan, onBack, 28);
+  const t = scene.add.text(W / 2, 40, title, textStyle(24)).setOrigin(0.5);
+  const c = scene.add.text(W - 16, 40, credits === null ? '' : `◆ ${credits}`, textStyle(18, '#ffd84d')).setOrigin(1, 0.5);
+  return { bg, line, back, title: t, credits: c };
+}
+
+/** 背景：緩慢捲動的地面＋霓虹格線 */
+export function menuBackground(scene: Phaser.Scene) {
+  if (scene.textures.exists('ground')) {
+    const tile = scene.add.tileSprite(W / 2, H / 2, W, H, 'ground').setTileScale(0.5).setAlpha(0.55);
+    const fn = (time: number) => {
+      tile.tilePositionY = -time / 30;
+    };
+    scene.events.on('update', fn);
+    tile.once('destroy', () => scene.events.off('update', fn));
+  }
+  scene.add.rectangle(W / 2, H / 2, W, H, 0x07060d, 0.35);
 }

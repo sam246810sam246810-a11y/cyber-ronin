@@ -389,7 +389,8 @@ export class UIScene extends Phaser.Scene {
           .text(-240 + 100, -cardH / 2 + 60, info.desc, { ...textStyle(17, '#c9c6e0', false), wordWrap: { width: 360, useAdvancedWrap: true } })
           .setOrigin(0, 0);
         const num = this.add.text(-240 + 54, cardH / 2 - 14, String(i + 1), textStyle(12, COLORS.dim)).setOrigin(0.5);
-        card.add([bg, glow, icon, name, tag, desc, num]);
+        const evo = this.add.text(-240 + 100, cardH / 2 - 12, info.evoHint, textStyle(13, '#ff7ad9', false)).setOrigin(0, 1);
+        card.add([bg, glow, icon, name, tag, desc, num, evo]);
         card.setSize(480, cardH);
         card.setInteractive({ useHandCursor: true });
         card.on('pointerdown', () => card.setScale(0.98));
@@ -489,7 +490,7 @@ export class UIScene extends Phaser.Scene {
       [T.statTime, formatTime(r.time)],
       [T.statKills, String(r.kills)],
       [T.statLevel, String(r.level)],
-      [T.statCredits, String(r.credits)],
+      [T.statCredits, `${r.credits} ＋ ${r.bonus}`],
     ];
     const panelY = top + 90;
     const panel = this.add.rectangle(W / 2, panelY + 100, 420, 200, COLORS.panel, 1).setStrokeStyle(1, 0x2e2650);
@@ -507,8 +508,14 @@ export class UIScene extends Phaser.Scene {
     const save = loadSave();
     const best = this.add.text(W / 2, panelY + 252, T.best(formatTime(save.bestTime), save.bestKills), textStyle(14, COLORS.dim, false)).setOrigin(0.5);
     this.modalLayer.add(best);
+    if (r.unlocked.length) {
+      const u = this.add
+        .text(W / 2, panelY + 282, T.newUnlocks(r.unlocked.join('、')), { ...textStyle(17, '#5dff7a'), align: 'center', wordWrap: { width: 440 } })
+        .setOrigin(0.5, 0);
+      this.modalLayer.add(u);
+    }
 
-    const by = panelY + 320;
+    const by = panelY + (r.unlocked.length ? 360 : 320);
     const again = makeButton(this, W / 2, by, 300, 66, T.playAgain, COLORS.cyan, () => this.restartRun(), 24);
     const menu = makeButton(this, W / 2, by + 86, 300, 58, T.toMenu, COLORS.magenta, () => this.toMenu());
     this.modalLayer.add([again, menu]);
@@ -517,8 +524,9 @@ export class UIScene extends Phaser.Scene {
 
   private restartRun() {
     this.closeModalUI();
+    const char = this.g.char.id;
     this.scene.stop('Game');
-    this.scene.start('Game');
+    this.scene.start('Game', { char });
   }
 
   private toMenu() {
@@ -535,7 +543,7 @@ export class UIScene extends Phaser.Scene {
       ['+60s', () => this.g.debugSkip(60)],
       ['升級', () => this.g.debugLevel()],
       ['寶箱', () => this.g.debugChest()],
-      ['刀滿級', () => this.g.debugMaxKatana()],
+      ['武器滿級', () => this.g.debugMaxWeapons()],
     ];
     items.forEach(([label, fn], i) => {
       makeButton(this, 56 + i * 107, y, 100, 44, label, 0x888888, fn, 15).setAlpha(0.7);
