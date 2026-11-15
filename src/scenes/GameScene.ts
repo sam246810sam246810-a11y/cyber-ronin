@@ -929,7 +929,9 @@ export class GameScene extends Phaser.Scene {
   private useInteractable(it: Interactable) {
     switch (it.kind) {
       case 'merchant':
-        it.life = Math.min(it.life, 1.5);
+        // 只做一次生意：關掉黑市後商人就離開，避免站在旁邊又馬上被打開
+        it.used = true;
+        it.img.destroy();
         this.openShop();
         return;
       case 'altar':
@@ -998,7 +1000,10 @@ export class GameScene extends Phaser.Scene {
         return 'close';
       }
       return true;
-    }, () => this.closeModal());
+    }, () => {
+      this.ui.banner('黑市商人離開了', '#ffd84d');
+      this.closeModal();
+    });
   }
 
   /** 三選一遺物；回傳是否有遺物可選 */
