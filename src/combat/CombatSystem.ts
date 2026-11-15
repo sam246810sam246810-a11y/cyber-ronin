@@ -604,9 +604,9 @@ export class CombatSystem {
   }
 
   /** 站在毒池裡：小傷害＋中毒 */
-  poolHit(atk: number, at: Vec2): void {
+  poolHit(atk: number, at: Vec2, kind: 'poison' | 'burn' = 'poison'): void {
     if (this.now < this.barrierUntil) return;
-    this.damagePlayer(atk, at, { poison: 1 }, 0.5);
+    this.damagePlayer(atk, at, kind === 'burn' ? { burn: 1 } : { poison: 1 }, 0.5);
   }
 
   private die(): void {

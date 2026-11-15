@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { inputState, type Action } from '../systems/inputState';
-import { EV, type BannerInfo, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
+import { EV, type BannerInfo, type CreditsInfo, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
 import { currentObjective, gameState, className } from '../systems/gameState';
 import { hudState } from '../systems/hudState';
 import { STATUS_NAME, type StatusKind } from '../systems/combat';
@@ -98,6 +98,7 @@ export class UIScene extends Phaser.Scene {
       [EV.area, (name: string) => { if (this.dialogue.isOpen) { this.dialogue.close(); this.showButtons(true); } this.showAreaName(name); }],
       [EV.banner, (b: BannerInfo) => this.banner(b)],
       [EV.shop, (id: string) => this.openOverlay(() => this.overlay.openShop(id, () => this.closeOverlay()))],
+      [EV.credits, (c: CreditsInfo) => this.openOverlay(() => this.overlay.openCredits(c, () => { this.closeOverlay(); this.scene.stop(SCENES.world); this.scene.start(SCENES.title); }, () => this.closeOverlay()))],
       [EV.forge, () => this.openOverlay(() => this.overlay.openForge(() => this.closeOverlay()))],
       [EV.board, () => this.openOverlay(() => this.overlay.openBoard(() => this.closeOverlay()))],
       [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay()))],

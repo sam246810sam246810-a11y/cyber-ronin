@@ -397,5 +397,45 @@
         "萬能符": 2
       }
     }
+  },
+  "hunt_oni": {
+    "type": "hunt",
+    "name": "討伐：赤鬼與青鬼",
+    "giver": "board",
+    "requires": [
+      "ch4_started"
+    ],
+    "desc": "鬼之城的鬼開始襲擊竹林。打倒 4 隻赤鬼。",
+    "target": {
+      "kill": "aka_oni",
+      "count": 4
+    },
+    "reward": {
+      "money": 800,
+      "exp": 800,
+      "items": {
+        "大回復丸": 3
+      }
+    }
+  },
+  "collect_horn": {
+    "type": "collect",
+    "name": "收集：鬼的角",
+    "giver": "board",
+    "requires": [
+      "ch4_started"
+    ],
+    "desc": "神社要做驅鬼的護符。帶 4 支鬼的角來。",
+    "target": {
+      "item": "鬼的角",
+      "count": 4
+    },
+    "reward": {
+      "money": 700,
+      "exp": 600,
+      "items": {
+        "萬能符": 3
+      }
+    }
   }
 }

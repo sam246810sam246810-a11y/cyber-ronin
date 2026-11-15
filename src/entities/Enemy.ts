@@ -12,6 +12,7 @@ const BEHAVIOUR: Record<string, Behaviour> = {
   kitsunebi: 'chase', aokitsunebi: 'chase', karakasa: 'hop', nogitsune: 'dash', kappa: 'dash',
   bonespider: 'shooter', dorotabou: 'shooter', chochin: 'slam', suiko: 'slam', dummy: 'none',
   karasu: 'shooter', yamawaro: 'hop', kamaitachi: 'dash', oogarasu: 'slam',
+  gaki: 'chase', aka_oni: 'slam', ao_oni: 'dash', onibi: 'shooter', ibaraki: 'slam',
 };
 
 const SIGHT = 100;   // 進入視野開始追擊
@@ -98,8 +99,8 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
       return;
     }
 
-    const dashTele = ({ kappa: 500, kamaitachi: 380 } as Record<string, number>)[this.kind] ?? 600;
-    const dashSpeed = ({ kappa: 230, kamaitachi: 280 } as Record<string, number>)[this.kind] ?? 190;
+    const dashTele = ({ kappa: 500, kamaitachi: 380, ao_oni: 450 } as Record<string, number>)[this.kind] ?? 600;
+    const dashSpeed = ({ kappa: 230, kamaitachi: 280, ao_oni: 250 } as Record<string, number>)[this.kind] ?? 190;
     switch (this.behaviour) {
       case 'chase': {
         if (dist < SIGHT) this.setVelocity(toward.x * this.info.speed, toward.y * this.info.speed);

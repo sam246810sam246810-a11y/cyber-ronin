@@ -191,7 +191,16 @@ export function className(s: GameState): string {
 /** 目前的主線目標（顯示在畫面上方）。 */
 export function currentObjective(flags: ReadonlySet<string>): string {
   // 先看章節：已經結束的章節不再回頭看裡面的旗標
-  if (flags.has('chapter3_done')) return '第三章完成！感謝遊玩（第四章製作中）';
+  if (flags.has('game_cleared')) return '全破！感謝遊玩《狐火行》';
+  if (flags.has('yomi_open')) return '黃泉之門：和夜叉丸一起打倒百鬼之主';
+  if (flags.has('chapter3_done')) {
+    if (!flags.has('ch4_started')) return '最終章：到神社找宮司爺爺';
+    if (!flags.has('visited:oni_road')) return '穿過竹林深處，前往鬼之城';
+    if (!flags.has('visited:oni_castle1')) return '鬼之城下：從城門進入鬼之城';
+    if (!flags.has('visited:oni_castle2')) return '鬼之城一樓：找到往上的路';
+    if (!flags.has('reached_shuten_door')) return '鬼之城二樓：找到天守閣';
+    return '打倒酒吞童子，阻止夜叉丸';
+  }
   if (flags.has('chapter2_done')) {
     if (!flags.has('ch3_started')) return '第三章：到神社找宮司爺爺';
     if (!flags.has('visited:mountain')) return '從狐火村西邊前往天狗山';
@@ -220,6 +229,13 @@ export function currentObjective(flags: ReadonlySet<string>): string {
   if (!flags.has('visited:b3')) return '古井地城 B2：找到往下的路';
   if (!flags.has('reached_boss_door')) return '古井地城 B3：找到土蜘蛛的巢穴';
   return '打倒土蜘蛛，救出孩子們';
+}
+
+/** 結局判定（PRD 2.6）：羈絆值 ≥ 10 且神器碎片 5 枚 → 真結局路線；否則怒火值較高 → A「封印」，其餘 → B「共存」 */
+export const TRUE_BOND = 10;
+export function endingRoute(s: { bond: number; anger: number; items: Record<string, number> }): 'true' | 'a' | 'b' {
+  if (s.bond >= TRUE_BOND && (s.items['神器碎片'] ?? 0) >= 5) return 'true';
+  return s.anger > s.bond ? 'a' : 'b';
 }
 
 /** 全域唯一的進度。 */

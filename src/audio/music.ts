@@ -52,6 +52,25 @@ export const TRACKS: Record<string, Track> = {
     ],
     drums: [2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 1, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2, 0, 1, 0, 1, 0, 0, 0],
   },
+  // 鬼之城：沉重的低音與不安的高音
+  oni: {
+    bpm: 76,
+    voices: [
+      { wave: 'sawtooth', octave: -2, gain: 0.08, decay: 0.8, notes: [0, _, _, 1, _, _, 0, _, 3, _, _, 1, _, _, 0, _, 0, _, _, 1, _, _, 4, _, 3, _, 1, _, 0, _, _, _] },
+      { wave: 'triangle', octave: 1, gain: 0.08, decay: 0.25, notes: [_, _, 6, _, _, _, _, 5, _, _, _, _, 6, _, 7, _, _, _, 6, _, _, _, _, 5, _, _, 4, _, _, _, _, _] },
+    ],
+    drums: [2, 0, 0, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 1, 0, 2, 0, 0, 1, 0, 0, 0, 0],
+  },
+  // 黃泉之門：最終戰，三味線＋太鼓全開
+  final: {
+    bpm: 160,
+    voices: [
+      { wave: 'square', octave: -1, gain: 0.08, decay: 0.14, notes: [0, 0, 1, 0, 2, 0, 1, 0, 0, 0, 1, 0, 3, 2, 1, 2, 0, 0, 1, 0, 2, 0, 4, 3, 2, 1, 2, 3, 4, 3, 2, 1] },
+      { wave: 'sawtooth', octave: 0, gain: 0.06, decay: 0.4, notes: [7, _, _, _, 8, _, 7, _, 6, _, 5, _, 4, _, 5, _, 7, _, _, _, 9, _, 8, _, 7, _, 6, _, 5, _, 4, _] },
+      { wave: 'sine', octave: -2, gain: 0.14, decay: 0.5, notes: [0, _, _, _, 0, _, _, _, 3, _, _, _, 1, _, _, _, 0, _, _, _, 0, _, _, _, 4, _, _, _, 3, _, _, _] },
+    ],
+    drums: [2, 0, 1, 0, 2, 0, 1, 1, 2, 0, 1, 0, 2, 1, 2, 1, 2, 0, 1, 0, 2, 0, 1, 1, 2, 0, 1, 0, 1, 1, 2, 2],
+  },
   // 土蜘蛛：太鼓＋三味線般的快速頑固音型
   boss: {
     bpm: 148,
@@ -68,8 +87,10 @@ export function trackForMap(map: string): string {
   if (map === 'forest') return 'forest';
   if (map === 'swamp') return 'swamp';
   if (map === 'mountain' || map === 'tengu_temple') return 'mountain';
+  if (map === 'oni_road' || /^oni_castle\d$/.test(map)) return 'oni';
+  if (map === 'yomi') return 'final';
   if (/^b\d$/.test(map) || /^suijin\d$/.test(map)) return 'dungeon';
-  if (map === 'lair' || map === 'kappa_lair' || map === 'tengu_lair') return 'boss';
+  if (map === 'lair' || map === 'kappa_lair' || map === 'tengu_lair' || map === 'shuten_lair') return 'boss';
   return 'village';
 }
 

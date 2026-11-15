@@ -20,9 +20,12 @@ export const EV = {
   board: 'board',
   /** World → UI：打開鍛冶屋 */
   forge: 'forge',
+  /** World → UI：結局的片尾名單 */
+  credits: 'credits',
 } as const;
 
 export interface DialogueRequest { lines: Line[]; choices?: string[]; onDone: (choice?: number) => void }
 export interface HudInfo { canInteract: boolean; label: string }
 export interface BannerInfo { title: string; sub: string; duration?: number }
 export interface SaveRequest { map: string; spawn: string; areaName: string }
+export interface CreditsInfo { title: string; sub: string; hint: string }

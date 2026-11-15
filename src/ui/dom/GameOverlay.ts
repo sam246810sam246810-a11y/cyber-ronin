@@ -13,7 +13,7 @@ import { OVERLAY_CSS } from './overlay.css';
 import { MAPS } from '../../data/maps';
 import { collectionReport } from '../../systems/collection';
 import { MANUAL_SLOTS, formatPlayTime, readSave, serialize, writeSave, type SaveFile, type SlotId } from '../../systems/save';
-import type { SaveRequest } from '../../systems/events';
+import type { CreditsInfo, SaveRequest } from '../../systems/events';
 import { accept, dailyBounties, dateKey, isReady, offersFrom, progressOf, questDef, rewardText, turnIn, type QuestDef } from '../../systems/quests';
 import { className, currentObjective, learnedSkills, setSkillSlot } from '../../systems/gameState';
 import skillData from '../../data/skills.json';
@@ -39,6 +39,10 @@ const ITEM_DESC: Record<string, string> = {
   '玉鋼': '素材。鍛冶屋打造武器用的好鋼。',
   '河童的皿碎片': '素材。又硬又光滑。',
   '泥塊': '素材。黏性很強的泥。',
+  '酒吞的葫蘆': '酒吞童子的酒葫蘆。已經空了。',
+  '真・神器': '5 枚碎片合而為一的神器。散發著溫暖的光。',
+  '鬼的角': '素材。堅硬，帶著怒氣。',
+  '神器碎片': '散落在各地的神器碎片。集齊 5 枚，或許會發生什麼……',
   '天狗的羽': '素材。輕盈，帶著風的力量。',
   '鎌鼬的爪': '素材。鋒利得能削斷鐵。',
   '大天狗的團扇': '大天狗交給你的團扇。（第四章）',
@@ -70,7 +74,9 @@ export function getOverlay(): GameOverlay { return (shared ??= new GameOverlay()
 
 export class GameOverlay {
   private root: HTMLDivElement;
-  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' | 'forge' = 'menu';
+  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' | 'forge' | 'credits' = 'menu';
+  private credits?: CreditsInfo;
+  private onTitle: () => void = () => {};
   private forgeTab: 'craft' | 'enhance' | 'synth' = 'craft';
   private recipe = '';
   private synthSel: number[] = [];
@@ -103,6 +109,7 @@ export class GameOverlay {
 
   openMenu(onClose: () => void): void { this.mode = 'menu'; this.open(onClose); }
   openShop(shopId: string, onClose: () => void): void { this.mode = 'shop'; this.shopId = shopId; this.shopTab = 'buy'; this.open(onClose); }
+  openCredits(info: CreditsInfo, onTitle: () => void, onContinue: () => void): void { this.mode = 'credits'; this.credits = info; this.onTitle = onTitle; this.open(onContinue); }
   openBoard(onClose: () => void): void { this.mode = 'board'; this.open(onClose); }
   openForge(onClose: () => void): void { this.mode = 'forge'; this.forgeTab = 'craft'; this.recipe = ''; this.synthSel = []; this.open(onClose); }
   openSave(req: SaveRequest, onClose: () => void): void { this.mode = 'save'; this.saveReq = req; this.open(onClose); }
@@ -256,7 +263,24 @@ export class GameOverlay {
         <div class="kf-btns"><button class="kf-btn" data-act="synth" ${ok ? '' : 'disabled'}>合成</button><button class="kf-btn secondary" data-act="synthClear">清除選擇</button></div></div><div class="kf-msg">${esc(this.msg)}</div></div>`;
   }
 
+  private creditsView(): string {
+    const c = this.credits!;
+    const staff = [['企劃・PRD', '你'], ['程式・關卡・劇本', 'Claude'], ['像素美術', '程式產生（原創）'], ['音樂・音效', 'Web Audio 即時合成（原創）'], ['遊戲引擎', 'Phaser 3'], ['特別感謝', '一路陪燈走到最後的你']];
+    return `<div class="kf-col" style="grid-column:1 / -1;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding:16px">
+      <div style="font-size:12px;color:#a39fb8;letter-spacing:.3em">狐火行　KITSUNEBI</div>
+      <h2 style="margin:0;font-size:26px;color:#f2e6c9;text-shadow:0 3px 0 #c23b2f">${esc(c.title)}</h2>
+      <div class="kf-tag">${esc(c.sub)}</div>
+      <div style="display:grid;grid-template-columns:auto auto;gap:4px 18px;margin:8px 0">${staff.map(([k, v]) => `<span class="kf-mute" style="text-align:right">${k}</span><span style="text-align:left">${v}</span>`).join('')}</div>
+      <div style="max-width:46ch;color:#f2c94c;font-size:12px">${esc(c.hint)}</div>
+      <div class="kf-btns" style="justify-content:center"><button class="kf-btn" data-act="toTitle">回到標題</button><button class="kf-btn secondary" data-act="close">繼續遊玩</button></div>
+    </div>`;
+  }
+
   private render(): void {
+    if (this.mode === 'credits') {
+      this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="片尾"><div class="kf-body">${this.creditsView()}</div></div>`;
+      return;
+    }
     if (this.mode === 'forge') {
       const tabs = ([['craft', '打造'], ['enhance', '強化'], ['synth', '合成']] as const).map(([k, t]) => `<button class="kf-tab" data-ftab="${k}" aria-selected="${this.forgeTab === k}">${t}</button>`).join('');
       this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="鍛冶屋"><div class="kf-head"><span class="kf-title">鍛冶屋</span>${tabs}<span class="kf-spacer"></span>
@@ -445,6 +469,7 @@ export class GameOverlay {
       if (order.indexOf(d.diff) <= order.indexOf(s.difficulty)) { s.difficulty = d.diff as typeof s.difficulty; this.msg = `難度改成「${DIFFICULTY[s.difficulty].name}」`; }
       this.render(); return;
     }
+    if (d.act === 'toTitle') { this.root.hidden = true; this.onTitle(); return; }
     if (d.ftab) { this.forgeTab = d.ftab as 'craft' | 'enhance' | 'synth'; this.sel = null; this.msg = ''; this.synthSel = []; this.render(); return; }
     if (d.recipe) { this.recipe = d.recipe; this.msg = ''; this.render(); return; }
     if (d.synth) {

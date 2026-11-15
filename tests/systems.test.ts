@@ -23,7 +23,8 @@ describe('pickVariant', () => {
     const stages = [[], ['talked_priest'], ['talked_priest', 'found_well'], ['talked_priest', 'found_well', 'prologue_done'],
       ['talked_priest', 'found_well', 'prologue_done', 'reached_boss_door'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done'],
       ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'visited:swamp'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done', 'ch2_started', 'kappa_defeated'],
-      ['chapter1_done', 'ch2_started', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'visited:mountain'], ['chapter1_done', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'tengu_defeated', 'chapter3_done']];
+      ['chapter1_done', 'ch2_started', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'visited:mountain'], ['chapter1_done', 'kappa_defeated', 'chapter2_done', 'ch3_started', 'tengu_defeated', 'chapter3_done'],
+      ['chapter3_done', 'tengu_defeated', 'ch4_started', 'visited:oni_road'], ['chapter3_done', 'ch4_started', 'shuten_defeated', 'game_cleared']];
     for (const [id, variants] of Object.entries(dialogues)) {
       for (const s of stages) expect(pickVariant(variants as DialogueVariant[], new Set(s)), `${id} @ ${s}`).toBeDefined();
     }
@@ -129,6 +130,20 @@ describe('第二章目標', () => {
     expect(currentObjective(new Set(['chapter1_done', 'ch2_started', 'visited:swamp']))).toContain('拉桿');
     expect(currentObjective(new Set(['chapter2_done']))).toContain('第三章');
     expect(currentObjective(new Set(['chapter2_done', 'ch3_started', 'visited:mountain', 'trial:power']))).toContain('1/3');
-    expect(currentObjective(new Set(['chapter3_done']))).toContain('第三章完成');
+    expect(currentObjective(new Set(['chapter3_done']))).toContain('最終章');
+    expect(currentObjective(new Set(['chapter3_done', 'game_cleared']))).toContain('全破');
+  });
+});
+
+import { endingRoute } from '../src/systems/gameState';
+describe('結局判定', () => {
+  it('羈絆值 ≥ 10 且 5 枚神器碎片 → 真結局', () => {
+    expect(endingRoute({ bond: 10, anger: 0, items: { 神器碎片: 5 } })).toBe('true');
+    expect(endingRoute({ bond: 12, anger: 0, items: { 神器碎片: 4 } })).toBe('b');
+    expect(endingRoute({ bond: 9, anger: 0, items: { 神器碎片: 5 } })).toBe('b');
+  });
+  it('怒火值比較高 → A「封印」；一樣或羈絆較高 → B「共存」', () => {
+    expect(endingRoute({ bond: 3, anger: 5, items: {} })).toBe('a');
+    expect(endingRoute({ bond: 4, anger: 4, items: {} })).toBe('b');
   });
 });

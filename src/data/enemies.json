@@ -360,5 +360,148 @@
         "chance": 1
       }
     ]
+  },
+  "gaki": {
+    "name": "餓鬼",
+    "hp": 120,
+    "atk": 48,
+    "def": 14,
+    "speed": 46,
+    "exp": 60,
+    "money": [
+      10,
+      20
+    ],
+    "frame": 26,
+    "drops": [
+      {
+        "item": "玉鋼",
+        "chance": 0.2
+      }
+    ]
+  },
+  "aka_oni": {
+    "name": "赤鬼",
+    "hp": 320,
+    "atk": 58,
+    "def": 22,
+    "speed": 34,
+    "exp": 140,
+    "money": [
+      30,
+      50
+    ],
+    "frame": 24,
+    "tint": 16743018,
+    "drops": [
+      {
+        "item": "鬼的角",
+        "chance": 0.5
+      }
+    ]
+  },
+  "ao_oni": {
+    "name": "青鬼",
+    "hp": 260,
+    "atk": 54,
+    "def": 20,
+    "speed": 60,
+    "exp": 130,
+    "money": [
+      30,
+      50
+    ],
+    "frame": 24,
+    "tint": 8038655,
+    "drops": [
+      {
+        "item": "鬼的角",
+        "chance": 0.5
+      }
+    ]
+  },
+  "onibi": {
+    "name": "鬼火",
+    "hp": 160,
+    "atk": 50,
+    "def": 16,
+    "speed": 36,
+    "exp": 110,
+    "money": [
+      20,
+      40
+    ],
+    "frame": 0,
+    "tint": 16738874,
+    "shot": {
+      "frame": 2
+    },
+    "burnChance": 0.4,
+    "drops": [
+      {
+        "item": "狐火的殘焰",
+        "chance": 0.5
+      }
+    ]
+  },
+  "ibaraki": {
+    "name": "茨木童子",
+    "hp": 1400,
+    "atk": 66,
+    "def": 26,
+    "speed": 40,
+    "exp": 700,
+    "money": [
+      200,
+      300
+    ],
+    "frame": 24,
+    "elite": true,
+    "tint": 15259903,
+    "drops": [
+      {
+        "item": "鬼的角",
+        "chance": 1
+      },
+      {
+        "item": "玉鋼",
+        "chance": 1
+      }
+    ]
+  },
+  "shuten": {
+    "name": "酒吞童子",
+    "hp": 5000,
+    "atk": 70,
+    "def": 26,
+    "speed": 40,
+    "exp": 3000,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 0,
+    "elite": true,
+    "burnChance": 0.5,
+    "drops": []
+  },
+  "hyakki": {
+    "name": "百鬼之主",
+    "hp": 7000,
+    "atk": 76,
+    "def": 28,
+    "speed": 40,
+    "exp": 5000,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 0,
+    "elite": true,
+    "poisonChance": 0.4,
+    "shot": {
+      "frame": 4
+    },
+    "drops": []
   }
 }
