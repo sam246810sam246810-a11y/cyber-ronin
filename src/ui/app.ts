@@ -1,13 +1,13 @@
 import { Battle } from '../game/battle';
 import { Run, Member } from '../game/run';
 import { Input } from '../core/input';
-import { sfx, unlockAudio, setMuted, setVibrate, vibrate } from '../core/audio';
+import { sfx, unlockAudio, setMuted, setVibrate, vibrate, playMusic, setMusic } from '../core/audio';
 import { iconHtml, hasImage } from '../core/assets';
 import { getEvents, track } from '../core/track';
 import { CHAPTERS, MAP_ROWS, MapNode, NODE_INFO } from '../data/chapters';
 import { EQUIP_TPLS, Item, RARITIES, SLOTS, SLOT_NAME, TPL_MAP, itemStats, statLines, upgradeCost, MERGE_COUNT } from '../data/equipment';
 import { Card, cardInfo } from '../data/skills';
-import { MAX_FOLLOWERS, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE } from '../data/partners';
+import { ALL_PARTNERS, EGG, MAX_FOLLOWERS, MAX_PLV, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, plvGold, plvMul, shardCost } from '../data/partners';
 import { BREAKTHROUGH_OFFER, CHESTS, DAILY_AD_GEMS, GEM_PACKS, NTD_PER_GEM, REVIVE_GEMS, FIRST_PURCHASE_GIFT } from '../data/shop';
 import { CARNIVAL_CLAIM_DAYS, CARNIVAL_DAYS, CARNIVAL_PACK, MILESTONES, QUESTS, QUEST_TOTAL_POINTS } from '../data/quests';
 import { BUILDINGS, BuildingId, buildCost, buildSeconds, rushGems, AD_RUSH_SEC } from '../data/village';
@@ -32,6 +32,7 @@ export class App {
   cardCtx: 'level' | 'chest' | 'rescue' = 'level';
   bot = params.has('bot');
   payCb: (() => void) | null = null;
+  equipTab: 'gear' | 'partners' = 'gear';
 
   constructor(private canvas: HTMLCanvasElement) {
     this.root = document.getElementById('ui')!;
@@ -39,17 +40,19 @@ export class App {
     this.root.innerHTML = `<div id="screen"></div><div id="tabs"></div><div id="modals"></div><div id="toasts"></div>`;
     this.root.addEventListener('click', (e) => {
       unlockAudio();
+      this.syncMusic();
       const el = (e.target as HTMLElement).closest<HTMLElement>('[data-a]');
       if (!el || el.classList.contains('disabled')) return;
       const fn = this.actions[el.dataset.a!];
       if (fn) { e.stopPropagation(); fn(el.dataset.arg ?? '', el); }
     });
-    canvas.addEventListener('pointerdown', () => unlockAudio());
+    canvas.addEventListener('pointerdown', () => { unlockAudio(); this.syncMusic(); });
     window.addEventListener('resize', () => this.battle?.resize());
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.battle?.state === 'play') this.showPause(); });
     setInterval(() => this.tick(), 1000);
     setMuted(S.save.settings.muted);
     setVibrate(S.save.settings.vibrate);
+    setMusic(S.save.settings.music);
     this.carnivalDay = Math.min(S.currentDay(), CARNIVAL_DAYS);
     S.tickVillage();
     this.go('home');
@@ -59,8 +62,11 @@ export class App {
   // ================= 共用 =================
   $(sel: string) { return this.root.querySelector<HTMLElement>(sel)!; }
 
+  syncMusic() { playMusic(this.screen === 'battle' ? 'battle' : 'menu'); }
+
   go(s: Screen) {
     this.screen = s;
+    this.syncMusic();
     document.body.classList.toggle('in-battle', s === 'battle');
     this.renderScreen();
   }
@@ -72,6 +78,7 @@ export class App {
     const bare = s === 'battle' || s === 'map';
     this.$('#screen').innerHTML = s === 'battle' ? html : (s === 'map' ? '' : this.topbarHtml()) + `<div class="page page-${s}">${html}</div>`;
     this.$('#tabs').innerHTML = bare ? '' : this.tabsHtml();
+    if (s === 'map' && this.run && !this.bot) S.saveRun(this.run.snapshot());
     if (s === 'map') requestAnimationFrame(() => this.$('.node.can')?.scrollIntoView({ block: 'center' }));
     this.tick();
   }
@@ -93,7 +100,7 @@ export class App {
       `<button class="tab ${this.screen === id ? 'on' : ''}" data-a="tab" data-arg="${id}"><span>${icon}</span>${name}${dot(d)}</button>`;
     const v = S.save.village;
     return t('shop', '🛒', '商店', !S.save.daily.freeChest || S.save.daily.adGems < DAILY_AD_GEMS.max)
-      + t('equip', '🎒', '裝備', this.mergeableCount() > 0)
+      + t('equip', '🎒', '隊伍', this.mergeableCount() > 0 || S.partnerUpgradable())
       + t('home', '⚔️', '冒險')
       + t('village', '🏘️', '村莊', !v.building && BUILDINGS.some((b) => S.bLevel(b.id) < b.maxLv && S.save.gold >= buildCost(b, S.bLevel(b.id))))
       + t('carnival', '🎉', '嘉年華', this.carnivalClaimable() && !S.carnivalEnded());
@@ -210,7 +217,8 @@ export class App {
         </div>
         <button class="arrow" data-a="chapter" data-arg="1" ${ch.id === CHAPTERS.length ? 'disabled' : ''}>▶</button>
       </div>
-      <button class="btn big green start ${locked ? 'disabled' : ''}" data-a="start">出發冒險</button>
+      ${S.save.activeRun ? `<button class="btn big gold start" data-a="continue">繼續冒險</button><button class="link" data-a="abandonSaved">放棄進行中的冒險</button>`
+        : `<button class="btn big green start ${locked ? 'disabled' : ''}" data-a="start">出發冒險</button>`}
       <p class="hint">單指轉向・隊伍會一直前進並自動攻擊</p>`;
   }
 
@@ -236,6 +244,7 @@ export class App {
         <span>${info.icon}</span><em>${info.name}</em></button>`;
     }).join('');
     return `
+      ${!S.save.flags.tutMap ? '<div class="tut-bubble">👇 點發光的節點出發！每層選一條路，第 9 層是 Boss</div>' : ''}
       <div class="map-top">
         <div class="map-title"><b>${run.ch.name}・${run.ch.subtitle}</b><span>Lv.${run.level}・🪙 ${fmtNum(run.gold)}</span></div>
         ${this.teamHtml(run)}
@@ -246,6 +255,62 @@ export class App {
 
   // ================= 裝備 =================
   equipHtml() {
+    const seg = `<div class="seg"><button class="${this.equipTab === 'gear' ? 'on' : ''}" data-a="equipTab" data-arg="gear">🎒 隊長裝備${this.mergeableCount() ? '<i class="dot"></i>' : ''}</button><button class="${this.equipTab === 'partners' ? 'on' : ''}" data-a="equipTab" data-arg="partners">🐾 夥伴${S.partnerUpgradable() ? '<i class="dot"></i>' : ''}</button></div>`;
+    return seg + (this.equipTab === 'gear' ? this.gearHtml() : this.partnersHtml());
+  }
+
+  partnersHtml() {
+    const hall = S.bLevel('hall');
+    const cards = ALL_PARTNERS.map((p) => {
+      const def = PARTNERS[p];
+      const d = S.save.partners[p];
+      const locked = p !== 'shiba' && def.unlockHall > hall;
+      const max = d.lv >= MAX_PLV;
+      const need = shardCost(d.lv);
+      const can = !locked && S.canUpgradePartner(p);
+      return `<button class="pcard ${locked ? 'locked' : ''} ${can ? 'can' : ''}" data-a="partner" data-arg="${p}">
+        <span class="p-lv">Lv.${d.lv}</span>
+        <div class="p-ico">${this.partnerIcon(p)}</div>
+        <b>${def.name}</b>
+        <span class="small muted">${def.role}</span>
+        <div class="p-bar"><i style="width:${max ? 100 : Math.min(100, (d.shards / need) * 100)}%"></i><span>${max ? 'MAX' : `${d.shards}/${need}`}</span></div>
+        ${locked ? `<span class="p-lock">🔒 招募所 Lv.${def.unlockHall}</span>` : ''}
+      </button>`;
+    }).join('');
+    return `<p class="hint small">夥伴的永久等級會讓牠在每次冒險中更強；碎片來自冒險、寶箱與夥伴蛋</p><div class="pgrid">${cards}</div>`;
+  }
+
+  partnerModal(p: PartnerId) {
+    const def = PARTNERS[p];
+    const d = S.save.partners[p];
+    const max = d.lv >= MAX_PLV;
+    const locked = p !== 'shiba' && def.unlockHall > S.bLevel('hall');
+    const need = shardCost(d.lv), gold = plvGold(d.lv);
+    const pct = (x: number) => Math.round((plvMul(x) - 1) * 100);
+    this.modal(`
+      <button class="x" data-a="close">✕</button>
+      <div class="p-detail"><div class="p-ico big">${this.partnerIcon(p)}</div>
+        <div><h3>${def.name}</h3><div class="muted">${def.role}・永久 Lv.${d.lv}/${MAX_PLV}</div></div></div>
+      <p>${def.desc}</p>
+      <ul class="statlist"><li>冒險中傷害 +${pct(d.lv)}%${max ? '' : ` → <b>+${pct(d.lv + 1)}%</b>`}</li><li>冒險中生命 +${pct(d.lv)}%${max ? '' : ` → <b>+${pct(d.lv + 1)}%</b>`}</li></ul>
+      ${locked ? `<p class="muted">🔒 需要村莊招募所 Lv.${def.unlockHall} 才能在冒險中招募；碎片可以先存著。</p>` : ''}
+      ${max ? '<button class="btn disabled">已達最高等級</button>' : `<button class="btn ${!locked && S.canUpgradePartner(p) ? 'green' : 'disabled'}" data-a="upPartner" data-arg="${p}">升級：碎片 ${d.shards}/${need}・🪙 ${fmtNum(gold)}</button>`}`, 'partner-modal');
+  }
+
+  eggReveal(got: PartnerId[]) {
+    this.refresh();
+    const m = this.modal(`<div class="chest-open">${iconHtml('egg', '🥚', 'shake')}</div>`, 'chest-wrap');
+    sfx.click();
+    setTimeout(() => {
+      m.remove();
+      sfx.buy(); vibrate(30);
+      this.modal(`<h2 class="win">孵化成功！</h2>
+        <div class="reveal">${got.map((p) => `<div class="reveal-item"><div class="item">${this.partnerIcon(p)}</div><span>${PARTNERS[p].name}<br>碎片 ×${EGG.shardsPerDraw}</span></div>`).join('')}</div>
+        <button class="btn big green" data-a="close">太棒了！</button>`, 'reward', () => this.refresh());
+    }, 800);
+  }
+
+  gearHtml() {
     const st = S.playerStats();
     const slots = SLOTS.map((slot) => {
       const it = S.equippedItem(slot);
@@ -384,6 +449,20 @@ export class App {
           <button class="btn ${sv.daily.adGems >= DAILY_AD_GEMS.max ? 'disabled' : 'green'}" data-a="adGems">📺 +${DAILY_AD_GEMS.perAd}（${sv.daily.adGems}/${DAILY_AD_GEMS.max}）</button>
         </div>
       </div>
+      <h2 class="sec">夥伴蛋</h2>
+      <div class="grid2">
+        <div class="card chest">
+          <div class="chest-ico">${iconHtml('egg', '🥚')}</div><div class="cname">夥伴蛋</div>
+          <div class="muted small">${EGG.draws} 份夥伴碎片</div>
+          <button class="btn ${sv.gems >= EGG.gems ? 'gold' : 'disabled'}" data-a="egg">💎 ${EGG.gems}</button>
+          <button class="link" data-a="eggOdds">機率說明</button>
+        </div>
+        <div class="card chest">
+          <div class="chest-ico"><span class="ico emo">🐣</span></div><div class="cname">每日免費蛋</div>
+          <div class="muted small">看廣告孵一顆</div>
+          <button class="btn ${sv.daily.adEgg ? 'disabled' : 'green'}" data-a="adEgg">${sv.daily.adEgg ? '明天再來' : '📺 免費孵化'}</button>
+        </div>
+      </div>
       <h2 class="sec">寶箱</h2>
       <div class="grid2">${chests}</div>
       <h2 class="sec">鑽石</h2>
@@ -446,10 +525,22 @@ export class App {
   battleHtml() { return `<button class="pause-btn" data-a="pause">❚❚</button>`; }
 
   // ================= 冒險流程 =================
+  /** 讀回中斷的冒險 */
+  resumeRun(): boolean {
+    const r = Run.restore(S.save.activeRun);
+    if (!r) { S.clearRun(); this.refresh(); this.toast('存檔無法讀取，已清除'); return false; }
+    this.closeAll();
+    this.run = r;
+    this.go('map');
+    track('run_resume', { row: r.pos?.row ?? 0 });
+    return true;
+  }
+
   startRun() {
     const ch = S.save.selectedChapter;
     if (ch > S.save.unlockedChapter) return;
     this.closeAll();
+    if (S.save.activeRun && !this.bot) { this.resumeRun(); return; }
     this.run = new Run(ch, S.playerStats(), S.runBonus());
     this.go('map');
     if (this.bot) this.botMap();
@@ -481,6 +572,9 @@ export class App {
     }, run, node.kind, node.row);
     b.bot = this.bot;
     b.timeScale = Math.max(1, Number(params.get('speed')) || 1);
+    b.stopOnRelease = S.save.settings.stopOnRelease;
+    b.tutMove = !S.save.flags.tutMove && !this.bot;
+    b.onTutDone = () => { S.save.flags.tutMove = true; S.persist(); };
     this.battle = b;
     b.start();
   }
@@ -489,7 +583,8 @@ export class App {
     const run = this.run!;
     this.battle?.stop();
     this.battle = null;
-    if (node.kind === 'boss') { this.endRun(true); return; }
+    if (node.kind === 'boss') { run.gainShards(10); this.endRun(true); return; }
+    run.gainShards(node.kind === 'elite' ? 4 : 1);
     let drop: Item | null = null;
     if (node.kind === 'elite') {
       const d = { tpl: S.randomTpl(), rarity: Math.random() < 0.3 + 0.15 * (run.ch.id - 1) ? 2 : 1 };
@@ -503,13 +598,15 @@ export class App {
 
   endRun(win: boolean) {
     const run = this.run!;
+    const inBattle = !!this.battle;
     this.battle?.stop();
     this.battle = null;
     this.closeAll();
-    const rows = run.pos ? run.pos.row + (win ? 1 : 0) : 0;
+    // 在戰鬥中倒下 → 該層不算通過
+    const rows = run.pos ? run.pos.row + (inBattle ? 0 : 1) : 0;
     const reward = S.settleRun({
       win, chapter: run.ch.id, battles: run.battles, rows, gold: run.gold, kills: run.kills,
-      eliteKills: run.eliteKills, bossKills: run.bossKills, evolutions: run.evolutions, recruits: run.recruits, drops: run.items,
+      eliteKills: run.eliteKills, bossKills: run.bossKills, evolutions: run.evolutions, recruits: run.recruits, drops: run.items, shards: run.shards,
     });
     track('run_end', { win, chapter: run.ch.id, rows, level: run.level, team: run.team.map((m) => `${m.pid}${m.star}`), combos: [...run.combos] });
     const showOffer = !win && S.maybeTriggerOffer({ reachedBoss: run.reachedBoss, bossHpPct: run.bossHpPct, rows });
@@ -534,6 +631,7 @@ export class App {
         ${reward.gems ? `<div class="res">${iconHtml('gem', '💎')}<b>+${reward.gems}</b></div>` : ''}
       </div>
       ${items ? `<div class="bag small">${items}</div>` : ''}
+      ${Object.keys(reward.shards).length ? `<div class="shard-row">${Object.entries(reward.shards).map(([p, n]) => `<span>${this.partnerIcon(p as PartnerId)}<b>×${n}</b></span>`).join('')}</div><p class="muted small">夥伴碎片可在「隊伍 → 夥伴」升級</p>` : ''}
       <button class="btn big green" data-a="close">${showOffer ? '繼續' : '回到大廳'}</button>`, 'result', () => {
       this.refresh();
       if (showOffer) this.showOffer(true);
@@ -566,6 +664,7 @@ export class App {
 
   showCards(title: string, sub: string, ctx: 'level' | 'chest' | 'rescue', cards: Card[], allowReroll: boolean) {
     this.cardCtx = ctx;
+    if (ctx === 'level' && !S.save.flags.tutCard && !this.bot) setTimeout(() => { S.save.flags.tutCard = true; S.persist(); }, 0);
     this.cards = cards;
     const run = this.run!;
     if (this.bot) { setTimeout(() => this.actions.pickCard('0', this.root), 30); return; }
@@ -573,6 +672,7 @@ export class App {
       <h2 class="lvup">${title}</h2>
       <p class="muted">${sub}</p>
       <div class="skills">${cards.map((c, i) => this.cardHtml(c, i)).join('')}</div>
+      ${ctx === 'level' && !S.save.flags.tutCard ? '<p class="tut-inline">💡 小提示：前期多招募夥伴，隊伍越長火力越強；把夥伴升到 3 星可解鎖金色「合體技」！</p>' : ''}
       ${allowReroll && run.rerolls > 0 ? `<button class="btn small blue" data-a="reroll">📺 看廣告重抽（剩 ${run.rerolls} 次）</button>` : ''}
       ${ctx !== 'level' ? `<button class="link" data-a="skipCards">略過</button>` : ''}
       ${this.teamHtml(run)}`, 'levelup');
@@ -601,8 +701,9 @@ export class App {
     const run = this.run!;
     const g = run.price(60 + 15 * (run.pos?.row ?? 0));
     run.gold += g;
+    const sp = run.gainShards(3);
     sfx.buy();
-    this.showCards('🎁 寶箱', `獲得 🪙${g}，再選一張卡片`, 'chest', run.rollCards(), false);
+    this.showCards('🎁 寶箱', `獲得 🪙${g}、${PARTNERS[sp].name}碎片 ×3，再選一張卡片`, 'chest', run.rollCards(), false);
   }
 
   showCamp() {
@@ -749,6 +850,8 @@ export class App {
       <h2>設定</h2>
       <button class="btn" data-a="toggleMute">${S.save.settings.muted ? '🔇 音效：關' : '🔊 音效：開'}</button>
       <button class="btn" data-a="toggleVibe">${S.save.settings.vibrate ? '📳 震動：開' : '📴 震動：關'}</button>
+      <button class="btn" data-a="toggleMusic">${S.save.settings.music ? '🎵 音樂：開' : '🎵 音樂：關'}</button>
+      <button class="btn" data-a="toggleStop">${S.save.settings.stopOnRelease ? '✋ 放開手指：隊伍停下' : '➡️ 放開手指：隊伍繼續前進'}</button>
       <h3 class="sec">測試工具</h3>
       <p class="muted small">目前嘉年華第 ${S.currentDay()} 天・美術素材 ${loaded}/${ASSETS.length} 已替換・埋點 ${ev.length} 筆</p>
       <button class="btn blue" data-a="nextDay">⏭ 跳到下一天</button>
@@ -775,7 +878,7 @@ export class App {
       sfx.click(); S.save.selectedChapter = n; S.persist(); this.refresh();
     },
     start: () => { sfx.click(); this.startRun(); },
-    node: (arg) => this.enterNode(Number(arg)),
+    node: (arg) => { if (!S.save.flags.tutMap) { S.save.flags.tutMap = true; S.persist(); } this.enterNode(Number(arg)); },
     mapHelp: () => {
       this.modal(`<button class="x" data-a="close">✕</button><h3>地圖圖例</h3>
         <div class="legend">${Object.values(NODE_INFO).map((n) => `<div><span>${n.icon}</span><b>${n.name}</b><em>${n.desc}</em></div>`).join('')}</div>`, 'legend-modal');
@@ -933,6 +1036,35 @@ export class App {
     toggleMute: (_a, el) => {
       S.save.settings.muted = !S.save.settings.muted; S.persist(); setMuted(S.save.settings.muted);
       el.textContent = S.save.settings.muted ? '🔇 音效：關' : '🔊 音效：開';
+    },
+    toggleMusic: (_a, el) => {
+      S.save.settings.music = !S.save.settings.music; S.persist(); setMusic(S.save.settings.music);
+      el.textContent = S.save.settings.music ? '🎵 音樂：開' : '🎵 音樂：關';
+    },
+    toggleStop: (_a, el) => {
+      S.save.settings.stopOnRelease = !S.save.settings.stopOnRelease; S.persist();
+      if (this.battle) this.battle.stopOnRelease = S.save.settings.stopOnRelease;
+      el.textContent = S.save.settings.stopOnRelease ? '✋ 放開手指：隊伍停下' : '➡️ 放開手指：隊伍繼續前進';
+    },
+    continue: () => { sfx.click(); this.resumeRun(); },
+    abandonSaved: () => {
+      this.modal(`<h3>放棄進行中的冒險？</h3><p>會直接結算，帶回目前的金幣、碎片與掉落。</p>
+        <div class="row"><button class="btn" data-a="close">取消</button><button class="btn red" data-a="abandonSavedOk">放棄</button></div>`, 'pay');
+    },
+    abandonSavedOk: () => { this.closeAll(); if (this.resumeRun()) this.endRun(false); },
+    equipTab: (arg) => { sfx.click(); this.equipTab = arg as 'gear' | 'partners'; this.refresh(); },
+    partner: (arg) => { sfx.click(); this.partnerModal(arg as PartnerId); },
+    upPartner: (arg) => {
+      if (!S.upgradePartner(arg as PartnerId)) { this.toast('碎片或金幣不足'); return; }
+      sfx.levelup(); vibrate(20); this.closeTop(); this.refresh(); this.partnerModal(arg as PartnerId);
+    },
+    egg: () => { const got = S.openEgg(); if (!got) { this.toast('鑽石不足'); return; } this.eggReveal(got); },
+    adEgg: () => { if (S.save.daily.adEgg) return; this.fakeAd(() => { const got = S.openEgg(true); if (got) this.eggReveal(got); }); },
+    eggOdds: () => {
+      this.modal(`<button class="x" data-a="close">✕</button><h3>夥伴蛋 機率</h3>
+        <p>每顆蛋抽 ${EGG.draws} 次，每次獲得 ${EGG.shardsPerDraw} 片碎片</p>
+        <table class="odds">${ALL_PARTNERS.map((p) => `<tr><td>${PARTNERS[p].icon} ${PARTNERS[p].name}</td><td>${(100 / ALL_PARTNERS.length).toFixed(1)}%</td></tr>`).join('')}</table>
+        <p class="muted small">尚未在村莊解鎖的夥伴，碎片會先保留，解鎖後即可使用。</p>`, 'odds-modal');
     },
     toggleVibe: (_a, el) => {
       S.save.settings.vibrate = !S.save.settings.vibrate; S.persist(); setVibrate(S.save.settings.vibrate);

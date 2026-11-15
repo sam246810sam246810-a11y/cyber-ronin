@@ -50,6 +50,7 @@ export const ASSETS: AssetSpec[] = [
   icon('fx_coin', '🪙', 'a shiny gold coin with a paw print', '特效'),
   icon('chest_wood', '📦', 'a wooden treasure chest with a paw-print lock', '商店'),
   icon('chest_gold', '🎁', 'a golden treasure chest glowing with sparkles and gems', '商店'),
+  icon('egg', '🥚', 'a cute speckled partner egg with a paw-print pattern, glowing slightly', '商店'),
   icon('gem', '💎', 'a pink-blue gem diamond currency icon', '商店'),
   icon('gold', '🪙', 'a pile of gold coins currency icon', '商店'),
   { key: 'logo', file: 'logo.png', size: '1024x512', group: 'UI', fallback: '🐾', prompt: 'game logo for a cute animal shooter game, a shiba inu with a slingshot and a big paw print, bold bubbly letters reading "PAW STRIKE", mobile game title art, transparent background' },

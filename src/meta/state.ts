@@ -1,6 +1,6 @@
 import { CHAPTERS } from '../data/chapters';
 import { BUILDINGS, BUILDING_MAP, BuildingId, buildCost, buildSeconds, rushGems, AD_RUSH_SEC } from '../data/village';
-import { PARTNERS, PartnerId, RECRUITABLE } from '../data/partners';
+import { ALL_PARTNERS, EGG, MAX_PLV, PARTNERS, PartnerId, RECRUITABLE, plvGold, shardCost } from '../data/partners';
 import type { RunBonus } from '../game/run';
 import { Item, MERGE_COUNT, RARITIES, SLOTS, Slot, TPL_MAP, itemStats, upgradeCost } from '../data/equipment';
 import { CounterKey, QUESTS, MILESTONES, CARNIVAL_DAYS, CARNIVAL_CLAIM_DAYS, CARNIVAL_PACK, QuestDef } from '../data/quests';
@@ -23,9 +23,12 @@ export interface Save {
   lastLoginDay: number;
   carnival: { claimedTasks: string[]; claimedMilestones: number[]; packDays: number[]; bonusPoints: number };
   shop: { firstBuy: Record<string, boolean>; anyPurchase: boolean; goldPity: number; spentNtd: number };
-  daily: { date: string; freeChest: boolean; adGems: number };
+  daily: { date: string; freeChest: boolean; adGems: number; adEgg: boolean };
   offer: { expiresAt: number; lastShownAt: number; purchased: boolean };
-  settings: { muted: boolean; vibrate: boolean };
+  settings: { muted: boolean; vibrate: boolean; music: boolean; stopOnRelease: boolean };
+  partners: Record<PartnerId, { lv: number; shards: number }>;
+  flags: { tutMove: boolean; tutMap: boolean; tutCard: boolean };
+  activeRun: unknown | null;
   selectedChapter: number;
   village: { levels: Record<BuildingId, number>; building: { id: BuildingId; finishAt: number; total: number; adUsed: boolean } | null };
 }
@@ -44,9 +47,12 @@ function fresh(): Save {
     firstLaunch: Date.now(), dayOffset: 0, lastLoginDay: 0,
     carnival: { claimedTasks: [], claimedMilestones: [], packDays: [], bonusPoints: 0 },
     shop: { firstBuy: {}, anyPurchase: false, goldPity: 0, spentNtd: 0 },
-    daily: { date: '', freeChest: false, adGems: 0 },
+    daily: { date: '', freeChest: false, adGems: 0, adEgg: false },
     offer: { expiresAt: 0, lastShownAt: 0, purchased: false },
-    settings: { muted: false, vibrate: true },
+    settings: { muted: false, vibrate: true, music: true, stopOnRelease: false },
+    partners: Object.fromEntries(ALL_PARTNERS.map((p) => [p, { lv: 1, shards: 0 }])) as Record<PartnerId, { lv: number; shards: number }>,
+    flags: { tutMove: false, tutMap: false, tutCard: false },
+    activeRun: null,
     selectedChapter: 1,
     village: { levels: { training: 0, clinic: 0, hall: 0, granary: 0, tower: 0 }, building: null },
   };
@@ -72,7 +78,7 @@ function load(): Save {
     if (raw) {
       const base = fresh();
       const parsed = JSON.parse(raw) as Save;
-      return { ...base, ...parsed, counters: { ...base.counters, ...parsed.counters }, village: { ...base.village, ...(parsed.village ?? {}), levels: { ...base.village.levels, ...(parsed.village?.levels ?? {}) } } };
+      return { ...base, ...parsed, counters: { ...base.counters, ...parsed.counters }, settings: { ...base.settings, ...parsed.settings }, partners: { ...base.partners, ...(parsed.partners ?? {}) }, flags: { ...base.flags, ...(parsed.flags ?? {}) }, daily: { ...base.daily, ...parsed.daily }, village: { ...base.village, ...(parsed.village ?? {}), levels: { ...base.village.levels, ...(parsed.village?.levels ?? {}) } } };
     }
   } catch { /* 損毀就重建 */ }
   return fresh();
@@ -102,7 +108,7 @@ export function onBoot() {
     save.counters.logins += 1;
     track('login', { day: d });
   }
-  if (save.daily.date !== dateKey()) save.daily = { date: dateKey(), freeChest: false, adGems: 0 };
+  if (save.daily.date !== dateKey()) save.daily = { date: dateKey(), freeChest: false, adGems: 0, adEgg: false };
   persist();
 }
 
@@ -422,6 +428,7 @@ export function runBonus(): RunBonus {
     goldMul: 1 + 0.1 * bLevel('granary'),
     rerolls: bLevel('tower'),
     unlocked: unlockedPartners(),
+    plv: Object.fromEntries(ALL_PARTNERS.map((p) => [p, save.partners[p]?.lv ?? 1])) as Record<PartnerId, number>,
     startPartner: hall >= 4,
     startStar: hall >= 6 ? 3 : hall >= 5 ? 2 : 1,
   };
@@ -430,10 +437,12 @@ export function runBonus(): RunBonus {
 export const villageCount = () => BUILDINGS.reduce((a, b) => a + bLevel(b.id), 0);
 
 // ---------- 冒險結算 ----------
-export interface RunReward { gold: number; gems: number; items: Item[] }
+export interface RunReward { gold: number; gems: number; items: Item[]; shards: Partial<Record<PartnerId, number>> }
 
-export function settleRun(r: { win: boolean; chapter: number; battles: number; rows: number; gold: number; kills: number; eliteKills: number; bossKills: number; evolutions: number; recruits: number; drops: { tpl: string; rarity: number }[] }): RunReward {
-  const reward: RunReward = { gold: Math.round(r.gold), gems: 0, items: [] };
+export function settleRun(r: { win: boolean; chapter: number; battles: number; rows: number; gold: number; kills: number; eliteKills: number; bossKills: number; evolutions: number; recruits: number; drops: { tpl: string; rarity: number }[]; shards: Partial<Record<PartnerId, number>> }): RunReward {
+  const reward: RunReward = { gold: Math.round(r.gold), gems: 0, items: [], shards: r.shards };
+  for (const [p, n] of Object.entries(r.shards)) addShards(p as PartnerId, n ?? 0);
+  save.activeRun = null;
   reward.gold += r.battles * 25 * r.chapter;
   for (const d of r.drops) reward.items.push(addItemTo(save, d.tpl, d.rarity));
   if (r.win) {
@@ -454,3 +463,48 @@ export function settleRun(r: { win: boolean; chapter: number; battles: number; r
   persist();
   return reward;
 }
+
+// ---------- 夥伴碎片 ----------
+export function addShards(p: PartnerId, n: number) {
+  save.partners[p] = save.partners[p] ?? { lv: 1, shards: 0 };
+  save.partners[p].shards += n;
+}
+
+export function canUpgradePartner(p: PartnerId): boolean {
+  const d = save.partners[p];
+  return d.lv < MAX_PLV && d.shards >= shardCost(d.lv) && save.gold >= plvGold(d.lv);
+}
+
+export function upgradePartner(p: PartnerId): boolean {
+  if (!canUpgradePartner(p)) return false;
+  const d = save.partners[p];
+  d.shards -= shardCost(d.lv);
+  save.gold -= plvGold(d.lv);
+  d.lv++;
+  bump('upgrades');
+  track('partner_upgrade', { p, lv: d.lv });
+  persist();
+  return true;
+}
+
+/** 開夥伴蛋，回傳每次抽到的夥伴 */
+export function openEgg(free = false): PartnerId[] | null {
+  if (!free && save.gems < EGG.gems) return null;
+  if (free) { if (save.daily.adEgg) return null; save.daily.adEgg = true; } else save.gems -= EGG.gems;
+  const got: PartnerId[] = [];
+  for (let i = 0; i < EGG.draws; i++) {
+    const p = ALL_PARTNERS[Math.floor(Math.random() * ALL_PARTNERS.length)];
+    addShards(p, EGG.shardsPerDraw);
+    got.push(p);
+  }
+  bump('chests');
+  track('egg_open', { free, got });
+  persist();
+  return got;
+}
+
+export const partnerUpgradable = () => ALL_PARTNERS.some((p) => (p === 'shiba' || PARTNERS[p].unlockHall <= bLevel('hall')) && canUpgradePartner(p));
+
+// ---------- 冒險存檔 ----------
+export function saveRun(snapshot: unknown) { save.activeRun = snapshot; persist(); }
+export function clearRun() { save.activeRun = null; persist(); }

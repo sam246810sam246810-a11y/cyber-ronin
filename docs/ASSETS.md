@@ -67,6 +67,7 @@ cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, br
 |---|---|---|---|
 | 📦 | `chest_wood.png` | 256x256 | a wooden treasure chest with a paw-print lock, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 | 🎁 | `chest_gold.png` | 256x256 | a golden treasure chest glowing with sparkles and gems, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
+| 🥚 | `egg.png` | 256x256 | a cute speckled partner egg with a paw-print pattern, glowing slightly, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 | 💎 | `gem.png` | 256x256 | a pink-blue gem diamond currency icon, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 | 🪙 | `gold.png` | 256x256 | a pile of gold coins currency icon, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 
@@ -99,4 +100,4 @@ cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, br
 | 🔔 | `equip_bell.png` | 256x256 | a pet collar with a golden bell, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 | ⭐ | `equip_star.png` | 256x256 | a pet collar with a glowing star charm, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 
-共 45 張。
+共 46 張。

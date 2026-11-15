@@ -86,6 +86,10 @@ export class Battle {
   fps = 60; private fpsAcc = 0; private fpsN = 0;
   bot = false;
   timeScale = 1;
+  stopOnRelease = false;
+  tutMove = false;
+  tutT = 0;
+  onTutDone: (() => void) | null = null;
 
   constructor(private canvas: HTMLCanvasElement, private input: Input, private hooks: BattleHooks, public run: Run, public kind: NodeKind, public row: number) {
     this.ctx = canvas.getContext('2d')!;
@@ -219,6 +223,15 @@ export class Battle {
     const mv = this.bot ? this.botMove() : this.input.move();
     const mag = Math.hypot(mv.x, mv.y);
     const steering = mag > 0.2;
+    if (this.tutMove && this.input.active) {
+      this.tutT += dt;
+      if (this.tutT > 1.2) { this.tutMove = false; this.onTutDone?.(); }
+    }
+    if (!steering && this.stopOnRelease && !this.bot) {
+      for (const m of this.run.team) { m.flash -= dt; m.invuln -= dt; }
+      this.layout();
+      return;
+    }
     if (steering) {
       const want = Math.atan2(mv.y, mv.x);
       let d = want - h.ang;
@@ -288,7 +301,7 @@ export class Battle {
       const def = PARTNERS[m.pid];
       m.cdT -= dt * run.aspdMul;
       if (m.cdT > 0) continue;
-      const dmg = run.atk * def.dmg * starDmg(m.star);
+      const dmg = run.atk * def.dmg * starDmg(m.star) * run.plvMul(m.pid);
       if (def.weapon === 'heal') {
         const target = this.pos.filter((q) => q.m.hp < q.m.maxHp * 0.98).sort((a, b) => a.m.hp / a.m.maxHp - b.m.hp / b.m.maxHp)[0];
         if (target) {
@@ -991,6 +1004,22 @@ export class Battle {
     this.drawHud(g);
     this.drawOverlay(g);
     this.drawJoystick(g);
+    if (this.tutMove && this.state === 'play') this.drawTutorial(g);
+  }
+
+  drawTutorial(g: CanvasRenderingContext2D) {
+    const y = 760;
+    g.fillStyle = 'rgba(20,30,45,0.78)';
+    roundRect(g, 40, y - 70, VW - 80, 150, 22); g.fill();
+    const hx = VW / 2 + Math.sin(this.time * 2.5) * 90;
+    g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 4; g.setLineDash([8, 8]);
+    g.beginPath(); g.moveTo(VW / 2 - 100, y - 10); g.lineTo(VW / 2 + 100, y - 10); g.stroke(); g.setLineDash([]);
+    g.font = '44px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('👆', hx, y - 18);
+    g.fillStyle = '#fff'; g.font = '900 22px system-ui,sans-serif';
+    g.fillText('按住任意處拖曳，帶隊伍轉向', VW / 2, y + 36);
+    g.font = '700 15px system-ui,sans-serif'; g.fillStyle = '#ffe066';
+    g.fillText(this.stopOnRelease ? '放開手指隊伍會停下・夥伴自動攻擊' : '放開手指隊伍會繼續前進・夥伴自動攻擊', VW / 2, y + 62);
   }
 
   drawArena(g: CanvasRenderingContext2D) {

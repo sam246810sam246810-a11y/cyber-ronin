@@ -1,12 +1,12 @@
 import { CHAPTERS, ChapterDef, MapNode, buildMap } from '../data/chapters';
-import { MAX_FOLLOWERS, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, starHp } from '../data/partners';
+import { MAX_FOLLOWERS, MAX_STAR, PARTNERS, PartnerId, RECRUITABLE, plvMul, starHp } from '../data/partners';
 import { BUFFS, BuffId, COMBOS, ComboId, Card } from '../data/skills';
 import type { BaseStats } from '../meta/state';
 import { track } from '../core/track';
 
 export interface Member { uid: number; pid: PartnerId; star: number; hp: number; maxHp: number; down: boolean; cdT: number; flash: number; invuln: number }
 
-export interface RunBonus { atkMul: number; hpMul: number; goldMul: number; rerolls: number; unlocked: PartnerId[]; startStar: number; startPartner: boolean }
+export interface RunBonus { atkMul: number; hpMul: number; goldMul: number; rerolls: number; unlocked: PartnerId[]; startStar: number; startPartner: boolean; plv: Record<PartnerId, number> }
 
 /** 一次冒險（跨多場戰鬥）的狀態 */
 export class Run {
@@ -26,6 +26,7 @@ export class Run {
   reachedBoss = false;
   bossHpPct: number | null = null;
   items: { tpl: string; rarity: number }[] = [];
+  shards: Partial<Record<PartnerId, number>> = {};
   private nextUid = 1;
 
   constructor(chapter: number, public base: BaseStats, public bonus: RunBonus) {
@@ -59,12 +60,49 @@ export class Run {
 
   recalc(fill = false) {
     for (const m of this.team) {
-      const mx = Math.round(this.teamHp * PARTNERS[m.pid].hp * starHp(m.star));
+      const mx = Math.round(this.teamHp * PARTNERS[m.pid].hp * starHp(m.star) * this.plvMul(m.pid));
       if (fill) m.hp = mx;
       else if (!m.down && mx > m.maxHp) m.hp += mx - m.maxHp;
       m.maxHp = mx;
       m.hp = Math.min(m.hp, m.maxHp);
     }
+  }
+
+  plvMul(pid: PartnerId) { return plvMul(this.bonus.plv?.[pid] ?? 1); }
+
+  /** 本局獲得的夥伴碎片，冒險結束時入帳 */
+  gainShards(n: number, pid?: PartnerId): PartnerId {
+    const p = pid ?? this.team[Math.floor(Math.random() * this.team.length)].pid;
+    this.shards[p] = (this.shards[p] ?? 0) + n;
+    return p;
+  }
+
+  // ---------- 存檔 ----------
+  snapshot() {
+    return {
+      v: 1, chapter: this.ch.id, map: this.map, posId: this.pos?.id ?? null, visited: this.visited, team: this.team,
+      buffs: this.buffs, combos: [...this.combos], level: this.level, xp: this.xp, gold: this.gold,
+      kills: this.kills, eliteKills: this.eliteKills, bossKills: this.bossKills, battles: this.battles, evolutions: this.evolutions, recruits: this.recruits,
+      rerolls: this.rerolls, reviveUsed: this.reviveUsed, reachedBoss: this.reachedBoss, bossHpPct: this.bossHpPct,
+      items: this.items, shards: this.shards, nextUid: this.nextUid, base: this.base, bonus: this.bonus,
+    };
+  }
+
+  static restore(raw: unknown): Run | null {
+    try {
+      const s = raw as ReturnType<Run['snapshot']>;
+      if (!s || s.v !== 1) return null;
+      const r = Object.create(Run.prototype) as Run;
+      Object.assign(r, {
+        ch: CHAPTERS[s.chapter - 1], map: s.map, visited: s.visited, team: s.team, buffs: s.buffs, combos: new Set(s.combos),
+        level: s.level, xp: s.xp, gold: s.gold, kills: s.kills, eliteKills: s.eliteKills, bossKills: s.bossKills, battles: s.battles,
+        evolutions: s.evolutions, recruits: s.recruits, rerolls: s.rerolls, reviveUsed: s.reviveUsed, reachedBoss: s.reachedBoss,
+        bossHpPct: s.bossHpPct, items: s.items, shards: s.shards ?? {}, nextUid: s.nextUid, base: s.base, bonus: s.bonus,
+      });
+      r.pos = s.posId == null ? null : r.map.flat().find((n) => n.id === s.posId) ?? null;
+      for (const m of r.team) { m.flash = 0; m.invuln = 0; }
+      return r;
+    } catch { return null; }
   }
 
   addMember(pid: PartnerId): Member {

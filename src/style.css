@@ -334,3 +334,32 @@ pre.events { text-align: left; font-size: 10px; white-space: pre-wrap; word-brea
 .bld-body { flex: 1; min-width: 0; }
 .bld-body .next { color: var(--green-d); font-weight: 700; }
 .bld .btn small { display: block; font-size: 10px; opacity: .85; }
+
+/* ---------- v0.3：夥伴養成 / 引導 ---------- */
+.seg { display: flex; background: #fff8; border-radius: 14px; padding: 4px; gap: 4px; margin: 4px 0 8px; }
+.seg button { position: relative; flex: 1; padding: 8px 0; border-radius: 10px; font-weight: 800; font-size: 14px; }
+.seg button.on { background: var(--gold); color: #5a3a00; box-shadow: 0 3px 0 var(--gold-d); }
+.seg .dot { right: 8px; }
+.pgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.pcard { position: relative; background: var(--card); border-radius: 16px; padding: 10px 6px 8px; box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.pcard b { font-size: 13px; }
+.pcard.can { outline: 3px solid var(--green); }
+.pcard.locked .p-ico { filter: grayscale(1); opacity: .5; }
+.p-ico { font-size: 42px; height: 50px; display: flex; align-items: center; }
+.p-ico img.ico { width: 48px; height: 48px; }
+.p-ico.big { font-size: 64px; height: 76px; }
+.p-ico.big img.ico { width: 72px; height: 72px; }
+.p-lv { position: absolute; top: 6px; left: 8px; font-size: 11px; font-weight: 900; background: var(--ink); color: #fff; border-radius: 8px; padding: 1px 6px; }
+.p-bar { position: relative; width: 100%; height: 16px; background: #eadfcb; border-radius: 8px; overflow: hidden; margin-top: 4px; }
+.p-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b48cf2, #8a5ce0); }
+.p-bar span { position: absolute; inset: 0; font-size: 11px; font-weight: 900; line-height: 16px; text-align: center; }
+.p-lock { font-size: 10px; color: var(--red-d); font-weight: 800; }
+.p-detail { display: flex; gap: 14px; align-items: center; text-align: left; }
+.p-detail h3 { margin: 0; }
+.shard-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 8px 0 0; }
+.shard-row span { display: flex; align-items: center; gap: 2px; background: #efe4ff; border-radius: 12px; padding: 2px 8px 2px 4px; font-size: 22px; }
+.shard-row img.ico { width: 26px; height: 26px; }
+.shard-row b { font-size: 13px; color: #6b3fc4; }
+.tut-bubble { position: fixed; z-index: 5; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(90%, 420px); background: var(--ink); color: #fff; font-weight: 800; text-align: center; padding: 12px 16px; border-radius: 16px; box-shadow: 0 6px 0 rgba(0,0,0,.2); animation: tutbob 1.2s ease-in-out infinite; pointer-events: none; }
+@keyframes tutbob { 50% { transform: translate(-50%, -6px); } }
+.tut-inline { background: #fff6d6; border-radius: 12px; padding: 8px 10px; font-size: 13px; font-weight: 700; margin: 4px 0 8px; }

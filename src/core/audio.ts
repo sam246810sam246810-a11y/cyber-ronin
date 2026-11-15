@@ -92,3 +92,78 @@ export function vibrate(ms: number | number[]) {
   if (!vibOn) return;
   try { if (navigator.vibrate) navigator.vibrate(ms); } catch { /* 不支援 */ }
 }
+
+// ================= 背景音樂（程式合成，無音檔）=================
+type Mode = 'menu' | 'battle';
+let musicGain: GainNode | null = null;
+let musicOn = true;
+let mode: Mode | null = null;
+let timer = 0;
+let nextT = 0;
+let step = 0;
+
+// C 大調 I–V–vi–IV；midi 音高
+const CHORDS = [[48, 52, 55], [43, 47, 50], [45, 48, 52], [41, 45, 48]];
+const SONG: Record<Mode, { bpm: number; arp: number[]; hat: boolean; lead: (number | null)[] }> = {
+  menu: { bpm: 92, arp: [0, 1, 2, 1], hat: false, lead: [72, null, 76, null, 79, null, 76, null, 74, null, 71, null, 72, null, null, null] },
+  battle: { bpm: 138, arp: [0, 2, 1, 2], hat: true, lead: [79, 79, null, 76, 77, null, 79, null, 81, null, 79, 77, 76, null, 74, null] },
+};
+const hz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
+
+function mnote(t: number, freq: number, dur: number, type: OscillatorType, vol: number) {
+  if (!ctx || !musicGain) return;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(musicGain);
+  o.start(t); o.stop(t + dur + 0.02);
+}
+
+function mhat(t: number) {
+  if (!ctx || !musicGain) return;
+  const len = Math.floor(ctx.sampleRate * 0.04);
+  const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = ctx.createBufferSource(); src.buffer = buf;
+  const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6000;
+  const g = ctx.createGain(); g.gain.value = 0.05;
+  src.connect(f); f.connect(g); g.connect(musicGain);
+  src.start(t);
+}
+
+function schedule() {
+  if (!ctx || !mode || document.hidden) return;
+  const song = SONG[mode];
+  const sixteenth = 60 / song.bpm / 4;
+  while (nextT < ctx.currentTime + 0.15) {
+    const bar = Math.floor(step / 16) % 4;
+    const s16 = step % 16;
+    const chord = CHORDS[bar];
+    if (s16 % 4 === 0) mnote(nextT, hz(chord[0] - 12), sixteenth * 3.5, 'triangle', 0.22);
+    if (s16 % 2 === 0) mnote(nextT, hz(chord[song.arp[(s16 / 2) % 4]] + 12), sixteenth * 1.6, 'square', 0.035);
+    const ln = song.lead[s16];
+    if (ln && bar % 2 === 1) mnote(nextT, hz(ln), sixteenth * 1.8, 'triangle', 0.06);
+    if (song.hat && s16 % 4 === 2) mhat(nextT);
+    nextT += sixteenth;
+    step++;
+  }
+}
+
+export function playMusic(m: Mode) {
+  if (!ctx) return;
+  if (!musicGain) { musicGain = ctx.createGain(); musicGain.gain.value = musicOn ? 0.5 : 0; musicGain.connect(ctx.destination); }
+  if (mode === m) return;
+  mode = m;
+  step = 0;
+  nextT = ctx.currentTime + 0.05;
+  if (!timer) timer = window.setInterval(schedule, 40);
+}
+
+export function setMusic(on: boolean) {
+  musicOn = on;
+  if (musicGain && ctx) musicGain.gain.setTargetAtTime(on ? 0.5 : 0, ctx.currentTime, 0.1);
+}

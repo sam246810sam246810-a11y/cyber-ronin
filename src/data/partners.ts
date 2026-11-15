@@ -34,3 +34,15 @@ export const MAX_STAR = 5;
 // 升星成長
 export const starDmg = (lv: number) => 1 + 0.35 * (lv - 1);
 export const starHp = (lv: number) => 1 + 0.25 * (lv - 1);
+
+// ---- 夥伴永久等級（碎片養成）----
+export const MAX_PLV = 10;
+/** 從 lv 升到 lv+1 需要的碎片 */
+export const shardCost = (lv: number) => [0, 10, 20, 35, 55, 80, 110, 150, 200, 260][lv] ?? 9999;
+export const plvGold = (lv: number) => 250 * lv * lv;
+/** 永久等級對傷害與生命的倍率 */
+export const plvMul = (lv: number) => 1 + 0.1 * (lv - 1);
+export const ALL_PARTNERS: PartnerId[] = ['shiba', ...RECRUITABLE];
+
+// 夥伴蛋：每顆抽 3 次，每次 5 片隨機夥伴碎片（7 種各 1/7）
+export const EGG = { gems: 200, draws: 3, shardsPerDraw: 5 };
