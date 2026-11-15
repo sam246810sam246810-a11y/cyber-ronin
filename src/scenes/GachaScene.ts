@@ -142,7 +142,7 @@ export class GachaScene extends Phaser.Scene {
       const hx = W / 2 + 30;
       const glow = this.add.ellipse(hx, base - h * 0.4, 340, h * 0.85, 0xffc83d, 0.12).setBlendMode(Phaser.BlendModes.ADD);
       this.tweens.add({ targets: glow, alpha: 0.26, yoyo: true, repeat: -1, duration: 1400 });
-      live(up, hx, base, h * 0.92);
+      live(up, hx, base - 38, h * 0.86); // 腳底留在「本期機率提升」上方
       // 名牌：金框＋上方一行「本期機率提升」
       const pw = 260;
       this.add.rectangle(hx, base + 18, pw, 54, 0x07060d, 0.88).setStrokeStyle(2, 0xffd84d, 0.95);
