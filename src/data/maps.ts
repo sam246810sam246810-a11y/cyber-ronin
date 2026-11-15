@@ -10,5 +10,6 @@ import forest from '../../assets/maps/forest.json';
 import b1 from '../../assets/maps/b1.json';
 import b2 from '../../assets/maps/b2.json';
 import b3 from '../../assets/maps/b3.json';
+import lair from '../../assets/maps/lair.json';
 
-export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3 };
+export const MAPS: Record<string, object> = { village, home, minka, shop, forge, shrine, forest, b1, b2, b3, lair };

@@ -12,6 +12,8 @@ import { equip, gameState, statsIfSwapped, statsOf, unequip, useItem } from '../
 import { OVERLAY_CSS } from './overlay.css';
 import { MAPS } from '../../data/maps';
 import { collectionReport } from '../../systems/collection';
+import { MANUAL_SLOTS, formatPlayTime, readSave, serialize, writeSave, type SaveFile, type SlotId } from '../../systems/save';
+import type { SaveRequest } from '../../systems/events';
 
 type MenuTab = 'status' | 'equip' | 'bag' | 'map';
 type ShopTab = 'buy' | 'sell';
@@ -41,9 +43,16 @@ function diffLines(now: Stats, next: Stats): string {
   return rows ? `<ul class="kf-stats">${rows}</ul>` : '<div class="kf-mute">能力不變</div>';
 }
 
+/** 整個遊戲共用一個疊加層 */
+let shared: GameOverlay | null = null;
+export function getOverlay(): GameOverlay { return (shared ??= new GameOverlay()); }
+
 export class GameOverlay {
   private root: HTMLDivElement;
-  private mode: 'menu' | 'shop' = 'menu';
+  private mode: 'menu' | 'shop' | 'save' | 'load' = 'menu';
+  private saveReq?: SaveRequest;
+  private onLoad: (f: SaveFile) => void = () => {};
+  private confirmSlot: SlotId | null = null;
   private menuTab: MenuTab = 'status';
   private shopTab: ShopTab = 'buy';
   private shopId = 'rin';
@@ -70,9 +79,11 @@ export class GameOverlay {
 
   openMenu(onClose: () => void): void { this.mode = 'menu'; this.open(onClose); }
   openShop(shopId: string, onClose: () => void): void { this.mode = 'shop'; this.shopId = shopId; this.shopTab = 'buy'; this.open(onClose); }
+  openSave(req: SaveRequest, onClose: () => void): void { this.mode = 'save'; this.saveReq = req; this.open(onClose); }
+  openLoad(onLoad: (f: SaveFile) => void, onClose: () => void): void { this.mode = 'load'; this.onLoad = onLoad; this.open(onClose); }
 
   private open(onClose: () => void): void {
-    this.onClose = onClose; this.sel = null; this.msg = ''; this.confirmDrop = false;
+    this.onClose = onClose; this.sel = null; this.msg = ''; this.confirmDrop = false; this.confirmSlot = null;
     this.root.hidden = false;
     this.render();
   }
@@ -84,7 +95,32 @@ export class GameOverlay {
   }
 
   // ---------- 畫面 ----------
+  private slotView(): string {
+    const saving = this.mode === 'save';
+    const slots: SlotId[] = saving ? MANUAL_SLOTS : ['auto', ...MANUAL_SLOTS];
+    const cards = slots.map((slot) => {
+      const f = readSave(slot);
+      const name = slot === 'auto' ? '自動存檔' : `存檔 ${Number(slot) + 1}`;
+      const info = f ? `<div>燈・${classes[f.state.classId].name}　Lv.${f.state.level}　${esc(f.areaName)}</div>
+        <div class="kf-tag">遊玩 ${formatPlayTime(f.state.playTime ?? 0)}・${new Date(f.savedAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>` : '<div class="kf-mute">（空）</div>';
+      const confirming = this.confirmSlot === slot;
+      const btn = saving
+        ? `<button class="kf-btn" data-saveslot="${slot}">${f ? (confirming ? '確定覆蓋？' : '覆蓋存檔') : '存在這裡'}</button>`
+        : `<button class="kf-btn" data-loadslot="${slot}" ${f ? '' : 'disabled'}>讀取</button>`;
+      return `<div class="kf-card"><h3>${name}</h3>${info}<div class="kf-btns">${btn}</div></div>`;
+    }).join('');
+    const tip = saving ? '在地藏前可以存檔。換地圖時也會自動存檔。' : '選一個存檔繼續。';
+    return `<div class="kf-col" style="grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;align-content:start">
+      <div class="kf-tag" style="grid-column:1 / -1">${tip}</div>${cards}<div class="kf-msg" style="grid-column:1 / -1">${esc(this.msg)}</div></div>`;
+  }
+
   private render(): void {
+    if (this.mode === 'save' || this.mode === 'load') {
+      const title = this.mode === 'save' ? '地藏・存檔' : '讀取存檔';
+      this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}"><div class="kf-head"><span class="kf-title">${title}</span><span class="kf-spacer"></span>
+        <button class="kf-close" data-act="close" aria-label="關閉">✕</button></div><div class="kf-body">${this.slotView()}</div></div>`;
+      return;
+    }
     const s = gameState;
     const tabs = this.mode === 'menu'
       ? ([['status', '狀態'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
@@ -242,9 +278,23 @@ export class GameOverlay {
 
   // ---------- 操作 ----------
   private onClick(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
     if (!el) { if (e.target === this.root) this.close(); return; }
     const d = el.dataset, s = gameState;
+    if (d.saveslot != null && this.saveReq) {
+      const slot = (d.saveslot === 'auto' ? 'auto' : Number(d.saveslot)) as SlotId;
+      if (readSave(slot) && this.confirmSlot !== slot) { this.confirmSlot = slot; this.render(); return; }
+      const ok = writeSave(slot, serialize(s, this.saveReq.map, this.saveReq.spawn, this.saveReq.areaName));
+      this.confirmSlot = null;
+      this.msg = ok ? `已存到存檔 ${Number(slot) + 1}` : '存檔失敗：這個瀏覽器不允許儲存資料（例如無痕模式）';
+      this.render(); return;
+    }
+    if (d.loadslot != null) {
+      const f = readSave((d.loadslot === 'auto' ? 'auto' : Number(d.loadslot)) as SlotId);
+      if (f) { this.root.hidden = true; this.onLoad(f); }
+      return;
+    }
+    if (d.act !== 'close') this.confirmSlot = null;
     if (d.act !== 'drop') this.confirmDrop = false;
     if (d.tab) { this.menuTab = d.tab as MenuTab; this.sel = null; this.msg = ''; }
     else if (d.stab) { this.shopTab = d.stab as ShopTab; this.sel = null; this.msg = ''; }

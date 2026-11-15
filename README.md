@@ -13,10 +13,18 @@ npm run build:artifact # 另外產生可發佈成 Claude Artifact 的 dist-artif
 npm run assets         # 重新產生佔位素材（tileset、主角、狐火村地圖）
 ```
 
-## 目前進度：M4 探險與古井地城（含 M2 戰鬥、M3 成長與裝備、序章）
+## 目前進度：第一章可以玩到結局（M2 戰鬥、M3 成長、M4 探險、M6 Boss 與存檔）
 
 開新遊戲先選職業與難度，接著：
-燈的家 → 狐火村 → 神社找宮司爺爺 → 迷霧竹林 → 古井 → 回神社報告（序章完）→ 從古井下到地城 B1 → B2 → B3 → 土蜘蛛的門前。
+燈的家 → 狐火村 → 神社找宮司爺爺 → 迷霧竹林 → 古井 → 回神社報告（序章完）→ 古井地城 B1 → B2 → B3 → 土蜘蛛的巢穴 → 第一章完。
+
+**Boss 與存檔（M6）**
+- 土蜘蛛三階段：揮擊與直線吐絲 → 召喚骨蜘蛛與毒池 → 狂暴（快 30%）、衝撞、蛛網封路；每招都有預兆
+- 點亮場地四角的石燈籠：燒斷蛛網、土蜘蛛硬直 3 秒，硬直中傷害 ×1.5
+- 畫面上方的 Boss 血條標出換階段的位置
+- 對話選項會影響羈絆值／怒火值（第四章的結局用）；打倒土蜘蛛後選「淨化」或「斬除」
+- 存檔：地藏石像（狐火村、B1、B3）補滿 HP／MP 並可存到 3 個欄位；每次換地圖自動存檔；標題畫面可以「繼續遊戲」或「讀取存檔」
+- 存檔在瀏覽器的 localStorage；無痕模式或封鎖網站資料時會存不了，畫面會提示
 
 **探險（M4）**
 - 古井地城三層，地城很暗，火把與主角身上有光
@@ -46,7 +54,7 @@ npm run assets         # 重新產生佔位素材（tileset、主角、狐火村
 
 **探索與劇情**
 - 10 張地圖、6 位 NPC（對話依劇情進度改變）、14 個寶箱、4 個隱藏地點
-- 尚未做：土蜘蛛 Boss 戰與存檔（M6）、打造（M7）——重新整理頁面會從頭開始
+- 尚未做：支線任務與任務日誌（M5）、鍛冶屋打造與數值平衡（M7）
 
 ## 結構
 
@@ -55,9 +63,9 @@ src/
   main.ts          Phaser 設定
   config.ts        解析度、速度、場景名稱
   scenes/          Boot、Title、World、UI
-  entities/        Player、Enemy（AI）
+  entities/        Player、Enemy（AI）、Boss（土蜘蛛）
   combat/          CombatSystem（攻擊、技能、閃避、受傷）、特效
-  systems/         純邏輯（combat、progression、equipment、inventory、collection、movement、dialogue、gameState、interaction），有單元測試
+  systems/         純邏輯（combat、progression、equipment、inventory、collection、save、boss、movement、dialogue、gameState、interaction），有單元測試
   data/            職業、技能、怪物、裝備、商店、對話、NPC、地圖清單
   ui/              VirtualJoystick、TouchButton、DialogueBox、camera 工具
   ui/dom/          選單與商店（HTML 疊加層）

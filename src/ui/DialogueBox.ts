@@ -16,6 +16,7 @@ export class DialogueBox {
   private shown = 0;
   private full = '';
   private openedAt = 0;
+  private choiceBox?: Phaser.GameObjects.Container;
 
   constructor(private readonly scene: Phaser.Scene) {
     const x = 12, w = GAME_WIDTH - 24, h = 74, y = GAME_HEIGHT - h - 10;
@@ -47,6 +48,33 @@ export class DialogueBox {
   close(): void {
     this.req = undefined;
     this.root.setVisible(false);
+    this.choiceBox?.destroy(); this.choiceBox = undefined;
+  }
+
+  /** 最後一句顯示完後出現選項，點選項才會結束對話 */
+  private showChoices(): void {
+    if (this.choiceBox || !this.req?.choices?.length) return;
+    const opts = this.req.choices, w = 210, h = 22, gap = 6;
+    const x = GAME_WIDTH - 24 - w, y0 = GAME_HEIGHT - 84 - 8 - opts.length * (h + gap);
+    const items: Phaser.GameObjects.GameObject[] = [];
+    opts.forEach((label, i) => {
+      const y = y0 + i * (h + gap);
+      const bg = this.scene.add.rectangle(x, y, w, h, 0x2a2640, 0.95).setOrigin(0).setStrokeStyle(1, 0xe8823a, 0.9).setInteractive({ useHandCursor: true });
+      const t = this.scene.add.text(x + 12, y + h / 2, `▶ ${label}`, { fontFamily: FONT_FAMILY, fontSize: '11px', color: '#f2e6c9' }).setOrigin(0, 0.5).setResolution(RENDER_SCALE);
+      bg.on('pointerover', () => bg.setFillStyle(0xc23b2f, 0.95));
+      bg.on('pointerout', () => bg.setFillStyle(0x2a2640, 0.95));
+      bg.on('pointerdown', () => this.finish(i));
+      items.push(bg, t);
+    });
+    this.choiceBox = this.scene.add.container(0, 0, items).setDepth(1001);
+  }
+
+  private finish(choice?: number): void {
+    const done = this.req!.onDone;
+    this.req = undefined;
+    this.root.setVisible(false);
+    this.choiceBox?.destroy(); this.choiceBox = undefined;
+    done(choice);
   }
 
   private showLine(): void {
@@ -62,12 +90,10 @@ export class DialogueBox {
   private tap(): void {
     if (!this.req || this.scene.time.now - this.openedAt < 200) return;
     if (this.shown < this.full.length) { this.shown = this.full.length; return; }
+    if (this.req.choices?.length && this.index === this.req.lines.length - 1) return; // 要點選項
     this.index++;
     if (this.index < this.req.lines.length) { this.showLine(); return; }
-    const done = this.req.onDone;
-    this.req = undefined;
-    this.root.setVisible(false);
-    done();
+    this.finish();
   }
 
   update(dt: number): void {
@@ -75,6 +101,8 @@ export class DialogueBox {
     if (this.shown < this.full.length) this.shown = Math.min(this.full.length, this.shown + (dt / 1000) * CPS);
     const n = Math.floor(this.shown);
     if (this.body.text.length !== n) this.body.setText(this.full.slice(0, n));
-    this.next.setVisible(n >= this.full.length);
+    const last = this.index === this.req.lines.length - 1;
+    this.next.setVisible(n >= this.full.length && !(last && this.req.choices?.length));
+    if (n >= this.full.length && last) this.showChoices();
   }
 }

@@ -80,5 +80,20 @@
     "frame": 10,
     "elite": true,
     "burnChance": 0.5
+  },
+  "tsuchigumo": {
+    "name": "土蜘蛛",
+    "hp": 600,
+    "atk": 24,
+    "def": 6,
+    "speed": 30,
+    "exp": 200,
+    "money": [
+      0,
+      0
+    ],
+    "frame": 0,
+    "elite": true,
+    "poisonChance": 0.3
   }
 }

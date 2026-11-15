@@ -8,6 +8,7 @@ import playerUrl from '../../assets/sprites/player.png';
 import npcsUrl from '../../assets/sprites/npcs.png';
 import enemiesUrl from '../../assets/sprites/enemies.png';
 import fxUrl from '../../assets/sprites/fx.png';
+import bossUrl from '../../assets/sprites/boss.png';
 
 export class BootScene extends Phaser.Scene {
   constructor() { super(SCENES.boot); }
@@ -26,6 +27,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('npcs', npcsUrl, frame);
     this.load.spritesheet('enemies', enemiesUrl, frame);
     this.load.spritesheet('fx', fxUrl, frame);
+    this.load.spritesheet('boss', bossUrl, { frameWidth: 32, frameHeight: 32 });
     for (const [key, data] of Object.entries(MAPS)) this.load.tilemapTiledJSON(key, data);
   }
 

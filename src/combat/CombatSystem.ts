@@ -331,23 +331,29 @@ export class CombatSystem {
   }
 
   /** 骨蜘蛛吐毒絲。 */
-  enemyShoot(e: Enemy, dir: Vec2): void {
+  enemyShoot(e: Enemy, dir: Vec2, speed = 105): void {
     const c = e.center;
     const sprite = this.scene.add.sprite(c.x, c.y, 'fx', 4).setDepth(130000);
     this.scene.tweens.add({ targets: sprite, angle: 360, duration: 500, repeat: -1 });
     const info = e.info as { poisonChance?: number };
-    this.shots.push({ sprite, dir, speed: 105, atk: e.info.atk, poison: info.poisonChance ?? 0, dieAt: this.now + 2200 });
+    this.shots.push({ sprite, dir, speed, atk: e.info.atk, poison: info.poisonChance ?? 0, dieAt: this.now + 2200 });
   }
 
   /** 提燈鬼的範圍重擊。 */
-  enemyAoe(e: Enemy, a: { x: number; y: number; r: number }): void {
+  enemyAoe(e: Enemy, a: { x: number; y: number; r: number; mult?: number }): void {
     ring(this.scene, a.x, a.y, a.r, 0xff6a3a, 300);
     this.scene.cameras.main.shake(150, 0.008);
     const pc = this.player.center;
     if (Math.hypot(pc.x - a.x, pc.y - a.y) > a.r + 4) return;
     if (this.now < this.barrierUntil) { floatText(this.scene, this.player.x, this.player.y - 10, '擋下', '#9fd8ff', 9); return; }
     const info = e.info as { burnChance?: number };
-    this.damagePlayer(e.info.atk, a, { burn: info.burnChance }, 1.6);
+    this.damagePlayer(e.info.atk, a, { burn: info.burnChance }, a.mult ?? 1.6);
+  }
+
+  /** 站在毒池裡：小傷害＋中毒 */
+  poolHit(atk: number, at: Vec2): void {
+    if (this.now < this.barrierUntil) return;
+    this.damagePlayer(atk, at, { poison: 1 }, 0.5);
   }
 
   private die(): void {

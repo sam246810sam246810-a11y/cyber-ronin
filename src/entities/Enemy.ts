@@ -29,7 +29,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   readonly guard?: string;
   private dir: Vec2 = { x: 0, y: 0 };
   private hitstunUntil = 0;
-  private dotAccum = 0;
+  protected dotAccum = 0;
   private readonly bar: Phaser.GameObjects.Graphics;
   private barUntil = 0;
   private readonly seed = Math.random() * 1000;
@@ -191,7 +191,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
     return !this.alive;
   }
 
-  private damage(amount: number, crit: boolean, color: string): void {
+  protected damage(amount: number, crit: boolean, color: string): void {
     this.hp -= amount;
     this.barUntil = this.scene.time.now + 2500;
     floatText(this.scene, this.x, this.y - 8, crit ? `${amount}!` : String(amount), color, crit ? 11 : 9);

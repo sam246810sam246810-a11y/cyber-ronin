@@ -77,3 +77,14 @@ describe('pickAimTarget', () => {
   it('背後很近的還是會選到', () => expect(pickAimTarget(me, right, [{ x: -10, y: 0 }, { x: 80, y: 0 }], 100)).toBe(0));
   it('超出範圍回傳 -1', () => expect(pickAimTarget(me, right, [{ x: 200, y: 0 }], 100)).toBe(-1));
 });
+
+import { bossPhase } from '../src/systems/boss';
+describe('Boss 階段', () => {
+  it('60% 與 30% 換階段', () => {
+    expect(bossPhase(600, 600)).toBe(1);
+    expect(bossPhase(361, 600)).toBe(1);
+    expect(bossPhase(360, 600)).toBe(2);
+    expect(bossPhase(180, 600)).toBe(3);
+    expect(bossPhase(1, 600)).toBe(3);
+  });
+});

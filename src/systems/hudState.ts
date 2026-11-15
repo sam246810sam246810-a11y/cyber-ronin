@@ -10,5 +10,6 @@ export const hudState = {
   /** 弓術師蓄力進度 0..1 */
   charge: 0,
   /** 小地圖：地形（換地圖時 version +1）、主角位置與標記（格子座標） */
+  boss: { visible: false, name: '', hp: 0, max: 1 },
   minimap: { version: 0, w: 1, h: 1, walls: new Uint8Array(1), player: { x: 0, y: 0 }, markers: [] as MapMarker[] },
 };

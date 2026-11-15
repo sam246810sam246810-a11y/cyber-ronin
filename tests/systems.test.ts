@@ -20,7 +20,8 @@ describe('pickVariant', () => {
     expect(pickVariant(undefined, new Set())).toBeUndefined();
   });
   it('每段對話資料在任何主線進度都有可用的台詞', () => {
-    const stages = [[], ['talked_priest'], ['talked_priest', 'found_well'], ['talked_priest', 'found_well', 'prologue_done']];
+    const stages = [[], ['talked_priest'], ['talked_priest', 'found_well'], ['talked_priest', 'found_well', 'prologue_done'],
+      ['talked_priest', 'found_well', 'prologue_done', 'reached_boss_door'], ['talked_priest', 'found_well', 'prologue_done', 'boss_defeated', 'chapter1_done']];
     for (const [id, variants] of Object.entries(dialogues)) {
       for (const s of stages) expect(pickVariant(variants as DialogueVariant[], new Set(s)), `${id} @ ${s}`).toBeDefined();
     }

@@ -22,6 +22,11 @@ export interface GameState extends Bag {
   openedChests: Set<string>;
   /** 自動存檔點：最後一次進入的地圖與出生點，死亡時回到這裡（PRD 4.7） */
   checkpoint: { map: string; spawn: string };
+  /** 結局分數（PRD 2.6） */
+  bond: number;
+  anger: number;
+  /** 遊玩時間（秒） */
+  playTime: number;
 }
 
 export function classStats(id: ClassId) { return classes[id]; }
@@ -41,6 +46,7 @@ export function newGameState(classId: ClassId = 'swordsman', difficulty: Difficu
     capacity: BAG_START,
     flags: new Set(), openedChests: new Set(),
     checkpoint: { map: 'home', spawn: 'door' },
+    bond: 0, anger: 0, playTime: 0,
   };
   const st = statsOf(s); s.hp = st.maxHp; s.mp = st.maxMp;
   return s;
@@ -150,9 +156,11 @@ export function currentObjective(flags: ReadonlySet<string>): string {
   if (!flags.has('visited:b2')) return '古井地城 B1：找到往下的路';
   if (!flags.has('visited:b3')) return '古井地城 B2：找到往下的路';
   if (!flags.has('reached_boss_door')) return '古井地城 B3：找到土蜘蛛的巢穴';
-  return '土蜘蛛就在門後（Boss 戰下一版開放）';
+  if (!flags.has('boss_defeated')) return '打倒土蜘蛛，救出孩子們';
+  return '第一章完成！感謝遊玩（第二章製作中）';
 }
 
 /** 全域唯一的進度。 */
 export let gameState = newGameState();
 export function resetGameState(classId?: ClassId, difficulty?: Difficulty): void { gameState = newGameState(classId, difficulty); }
+export function setGameState(s: GameState): void { gameState = s; }

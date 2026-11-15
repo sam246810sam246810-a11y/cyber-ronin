@@ -14,8 +14,11 @@ export const EV = {
   banner: 'banner',
   /** World → UI：打開商店（資料是商店 id） */
   shop: 'shop',
+  /** World → UI：在地藏前存檔 */
+  save: 'save',
 } as const;
 
-export interface DialogueRequest { lines: Line[]; onDone: () => void }
+export interface DialogueRequest { lines: Line[]; choices?: string[]; onDone: (choice?: number) => void }
 export interface HudInfo { canInteract: boolean; label: string }
 export interface BannerInfo { title: string; sub: string; duration?: number }
+export interface SaveRequest { map: string; spawn: string; areaName: string }

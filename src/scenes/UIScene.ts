@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE, SCENES } from '../config';
 import { inputState, type Action } from '../systems/inputState';
-import { EV, type BannerInfo, type DialogueRequest, type HudInfo } from '../systems/events';
+import { EV, type BannerInfo, type DialogueRequest, type HudInfo, type SaveRequest } from '../systems/events';
 import { currentObjective, gameState, classStats } from '../systems/gameState';
 import { hudState } from '../systems/hudState';
 import { STATUS_NAME, type StatusKind } from '../systems/combat';
@@ -9,7 +9,8 @@ import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { TouchButton } from '../ui/TouchButton';
 import { DialogueBox } from '../ui/DialogueBox';
 import { useLogicalCamera } from '../ui/camera';
-import { GameOverlay } from '../ui/dom/GameOverlay';
+import { getOverlay, type GameOverlay } from '../ui/dom/GameOverlay';
+import { PHASE_MARKS } from '../systems/boss';
 import { expToNext, LEVEL_CAP } from '../systems/progression';
 
 const TXT = (size: number, color = '#f2e6c9'): Phaser.Types.GameObjects.Text.TextStyle => ({ fontFamily: FONT_FAMILY, fontSize: `${size}px`, color });
@@ -32,6 +33,8 @@ export class UIScene extends Phaser.Scene {
   private mmDyn!: Phaser.GameObjects.Graphics;
   private mmVersion = -1;
   private mmBox = { x: 0, y: 0, s: 1, w: 0, h: 0 };
+  private bossG!: Phaser.GameObjects.Graphics;
+  private bossName!: Phaser.GameObjects.Text;
   private menuBtn!: TouchButton;
   private label!: Phaser.GameObjects.Text;
 
@@ -51,11 +54,13 @@ export class UIScene extends Phaser.Scene {
       item: new TouchButton(this, { x: 462, y: 172, r: 13, label: '藥', color: 0x2a4a2a, onDown: push('item') }),
     };
     this.dialogue = new DialogueBox(this);
-    this.overlay = new GameOverlay();
+    this.overlay = getOverlay();
     this.menuBtn = new TouchButton(this, { x: 458, y: 20, r: 14, label: '選單', fontSize: 8, onDown: () => this.openOverlay(() => this.overlay.openMenu(() => this.closeOverlay())) });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.overlay.close());
     this.mmStatic = this.add.graphics().setDepth(850);
     this.mmDyn = this.add.graphics().setDepth(851);
+    this.bossG = this.add.graphics().setDepth(860);
+    this.bossName = this.add.text(GAME_WIDTH / 2, 30, '', { fontFamily: FONT_FAMILY, fontSize: '9px', color: '#ff9a9a', fontStyle: 'bold' }).setOrigin(0.5, 0).setResolution(RENDER_SCALE).setDepth(861);
 
     // 左上：職業、HP、MP
     this.add.rectangle(8, 6, 128, 40, 0x14121c, 0.75).setOrigin(0).setStrokeStyle(1, 0xf2e6c9, 0.3);
@@ -80,12 +85,13 @@ export class UIScene extends Phaser.Scene {
 
     const ev = this.game.events;
     const handlers: [string, (...a: never[]) => void][] = [
-      [EV.dialogue, (r: DialogueRequest) => { this.showButtons(false); this.dialogue.open({ ...r, onDone: () => { this.showButtons(true); r.onDone(); this.refreshStatus(); } }); }],
+      [EV.dialogue, (r: DialogueRequest) => { this.showButtons(false); this.dialogue.open({ ...r, onDone: (c?: number) => { this.showButtons(true); r.onDone(c); this.refreshStatus(); } }); }],
       [EV.hud, (h: HudInfo | null) => { if (h) this.buttons.attack.setLabel(h.label, h.canInteract); this.refreshStatus(); }],
       [EV.toast, (msg: string) => this.toast(msg)],
       [EV.area, (name: string) => { if (this.dialogue.isOpen) { this.dialogue.close(); this.showButtons(true); } this.showAreaName(name); }],
       [EV.banner, (b: BannerInfo) => this.banner(b)],
       [EV.shop, (id: string) => this.openOverlay(() => this.overlay.openShop(id, () => this.closeOverlay()))],
+      [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay()))],
     ];
     handlers.forEach(([e, h]) => ev.on(e, h, this));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => handlers.forEach(([e, h]) => ev.off(e, h, this)));
@@ -125,7 +131,7 @@ export class UIScene extends Phaser.Scene {
     const g = this.bars; g.clear();
     const w = 80, x = 14;
     this.label.setText(`燈・${classStats(gameState.classId).name}　Lv.${gameState.level}`);
-    const hp = Math.max(0, gameState.hp) / hudState.maxHp, mp = gameState.mp / hudState.maxMp;
+    const hp = Phaser.Math.Clamp(gameState.hp / hudState.maxHp, 0, 1), mp = Phaser.Math.Clamp(gameState.mp / hudState.maxMp, 0, 1);
     g.fillStyle(0x000000, 0.6).fillRect(x, 22, w, 6).fillRect(x, 33, w, 4);
     g.fillStyle(hp > 0.3 ? 0xd04848 : 0xff2a2a, 1).fillRect(x, 22, w * hp, 6);
     g.fillStyle(0x4a8fe0, 1).fillRect(x, 33, w * mp, 4);
@@ -183,8 +189,22 @@ export class UIScene extends Phaser.Scene {
     d.fillStyle(0x4fd8ff, blink).fillCircle(x + mm.player.x * s, y + mm.player.y * s, Math.max(1.5, s * 0.9));
   }
 
+  /** Boss 血條：畫面上方，標出換階段的位置（PRD 11.2） */
+  private drawBossBar(): void {
+    const b = hudState.boss, g = this.bossG; g.clear();
+    this.bossName.setVisible(b.visible);
+    if (!b.visible) return;
+    const w = 200, x = GAME_WIDTH / 2 - w / 2, y = 42, k = Math.max(0, b.hp / b.max);
+    this.bossName.setText(b.name);
+    g.fillStyle(0x000000, 0.7).fillRect(x - 1, y - 1, w + 2, 7);
+    g.fillStyle(0xc23b2f, 1).fillRect(x, y, w * k, 5);
+    g.fillStyle(0xffffff, 0.25).fillRect(x, y, w * k, 1);
+    for (const m of PHASE_MARKS) g.fillStyle(0xf2e6c9, 0.9).fillRect(x + w * m, y - 2, 1, 9);
+  }
+
   update(_t: number, dt: number): void {
     this.drawMinimap(_t);
+    this.drawBossBar();
     this.dialogue.update(dt);
     inputState.move = this.dialogue.isOpen ? { x: 0, y: 0 } : this.joystick.vector;
     this.drawBars();

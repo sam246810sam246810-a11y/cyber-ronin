@@ -57,6 +57,7 @@ const TILES = [
   { name: 'push_block' }, { name: 'gate' }, { name: 'cracked' }, { name: 'stone_lantern_off' },
   { name: 'stone_lantern_on' }, { name: 'iron_chest' }, { name: 'iron_chest_open' }, { name: 'gold_chest' },
   { name: 'gold_chest_open' }, { name: 'boss_door' }, { name: 'bones' },
+  { name: 'jizo' }, { name: 'cocoon' }, { name: 'web_wall' },
 ];
 const COLS = 8;
 const ts = new Canvas(COLS * T, Math.ceil(TILES.length / COLS) * T);
@@ -300,6 +301,23 @@ const draw = {
     for (let i = 0; i < 16; i += 2) { ts.px(ox + 2 + (i % 12), oy + i, 0xdddddd); ts.px(ox + 13 - (i % 10), oy + i + 1, 0xdddddd); }
     ts.rect(ox + 5, oy + 7, 6, 3, 0xc23b2f);
   },
+  jizo(ox, oy) {
+    const S = 0x9a9a92, L = 0xb8b8ae, D = 0x6a6a64, R = 0xc23b2f;
+    ts.rect(ox + 3, oy + 13, 10, 3, D); ts.rect(ox + 4, oy + 6, 8, 8, S); ts.rect(ox + 5, oy + 1, 6, 6, L);
+    ts.px(ox + 6, oy + 4, D); ts.px(ox + 9, oy + 4, D); ts.rect(ox + 7, oy + 5, 2, 1, D);
+    ts.rect(ox + 4, oy + 7, 8, 4, R); ts.rect(ox + 5, oy + 10, 6, 1, 0x8f2a22); ts.rect(ox + 6, oy + 11, 4, 2, L);
+  },
+  cocoon(ox, oy) {
+    const W = 0xe8e4d8, G = 0xb8b4a8;
+    ts.rect(ox + 7, oy, 2, 3, G); ts.rect(ox + 4, oy + 3, 8, 12, W); ts.rect(ox + 5, oy + 2, 6, 1, W); ts.rect(ox + 5, oy + 15, 6, 1, W);
+    for (let y = 4; y < 15; y += 3) ts.rect(ox + 4, oy + y, 8, 1, G);
+    ts.rect(ox + 6, oy + 5, 4, 3, 0xf2d2b0); ts.px(ox + 7, oy + 6, 0x1a1a1a); ts.px(ox + 9, oy + 6, 0x1a1a1a); ts.rect(ox + 6, oy + 4, 4, 1, 0x2a1e1e);
+  },
+  web_wall(ox, oy) {
+    const W = 0xe8e4f0, G = 0xa8a4b8;
+    for (let i = 0; i < 16; i++) { ts.px(ox + i, oy + i, W); ts.px(ox + 15 - i, oy + i, W); ts.px(ox + i, oy + 8, G); ts.px(ox + 8, oy + i, G); }
+    for (const r of [3, 6]) for (let a = 0; a < 16; a++) { const t = (a / 16) * Math.PI * 2; ts.px(ox + 8 + Math.round(Math.cos(t) * r), oy + 8 + Math.round(Math.sin(t) * r), W); }
+  },
   bones(ox, oy) {
     dfloor(ox, oy);
     ts.rect(ox + 3, oy + 9, 7, 1, 0xe8e4d8); ts.rect(ox + 2, oy + 8, 2, 3, 0xe8e4d8); ts.rect(ox + 9, oy + 8, 2, 3, 0xe8e4d8);
@@ -427,6 +445,32 @@ for (let f = 0; f < 2; f++) {
   kitsunebi(f * T, 0, f); karakasa(f * T, T, f); nogitsune(f * T, 2 * T, f); dummy(f * T, 3 * T);
   bonespider(f * T, 4 * T, f); chochin(f * T, 5 * T, f);
 }
+
+// ---------- 土蜘蛛（32×32，4 格：待機 0、待機 1、舉腳 2、發光 3）----------
+const BS = 32;
+const boss = new Canvas(4 * BS, BS);
+function drawBoss(ox, f) {
+  const B = f === 3 ? 0x5a1a1a : 0x2a2230, D = 0x1a1420, L = f === 3 ? 0xff5a3a : 0x4a3e58, W = 0xe8e4d8, R = 0xff3a3a;
+  const bob = f === 1 ? 1 : 0;
+  // 腳：左右各 4 隻
+  for (let i = 0; i < 4; i++) {
+    const y = 11 + i * 4 + bob, lift = f === 2 && i === 0 ? -6 : 0;
+    for (const side of [-1, 1]) {
+      const x0 = side < 0 ? 9 : 22;
+      boss.rect(ox + (side < 0 ? x0 - 6 : x0), oy0(y + lift), 7, 2, L);
+      boss.rect(ox + (side < 0 ? x0 - 8 : x0 + 6), oy0(y + 2 + lift), 2, 5, L);
+    }
+  }
+  // 身體
+  boss.rect(ox + 9, 14 + bob, 14, 12, B); boss.rect(ox + 10, 13 + bob, 12, 1, B); boss.rect(ox + 11, 26 + bob, 10, 2, B);
+  boss.rect(ox + 13, 17 + bob, 6, 2, W); boss.rect(ox + 15, 19 + bob, 2, 5, W); boss.rect(ox + 12, 22 + bob, 8, 1, W); // 背上的紋
+  // 頭
+  boss.rect(ox + 11, 6 + bob, 10, 8, D); boss.rect(ox + 12, 5 + bob, 8, 1, D);
+  for (const [x, y] of [[12, 8], [14, 7], [17, 7], [19, 8], [13, 10], [18, 10]]) boss.px(ox + x, y + bob, R);
+  boss.rect(ox + 13, 13 + bob, 2, 3, W); boss.rect(ox + 17, 13 + bob, 2, 3, W); // 毒牙
+}
+const oy0 = (y) => y;
+for (let f = 0; f < 4; f++) drawBoss(f * BS, f);
 
 // ---------- 特效／投射物：arrow 0、talisman 1、fire 2、coin 3 ----------
 const fx = new Canvas(5 * T, T);
@@ -565,6 +609,7 @@ const maps = {};
   npcAt(m, 'ume', 13, 21);
   npcAt(m, 'taro', 25, 17);
   sign(m, 'sign_village', 22, 18, 'sign_village');
+  obj(m, 'jizo', 'village_jizo', tilePoint(23, 12)); spawn(m, 'jizo', 23, 13);
   chest(m, 'village_chest', 36, 3, { money: 30, gearTier: 1 });
 
   maps.village = toTiled(m, { displayName: '狐火村' });
@@ -707,6 +752,7 @@ function bones(m, list) { for (const [x, y] of list) m.set('ground', x, y, gid.b
   stairs(m, 25, 14, false, 'b2', 'up', 'down'); spawn(m, 'down', 25, 13);
   block(m, 'b1_block', 24, 5, 'b1', 'right'); plate(m, 'b1_plate', 27, 5, 'b1');
   sign(m, 'b1_sign', 23, 2, 'sign_b1');
+  obj(m, 'jizo', 'b1_jizo', tilePoint(4, 2)); spawn(m, 'jizo', 4, 3);
   chest(m, 'b1_chest', 8, 9, { item: '回復丸', count: 2 });
   chest(m, 'b1_secret_chest', 9, 14, { item: '銅鑰匙', count: 1, money: 60 });
   chest(m, 'b1_iron_chest', 19, 2, { key: '銅鑰匙', gearTier: 1, minRarity: 2 });
@@ -759,6 +805,7 @@ function bones(m, list) { for (const [x, y] of list) m.set('ground', x, y, gid.b
   sign(m, 'b3_sign', 12, 9, 'sign_b3');
   m.set('obst', 17, 1, 0); obj(m, 'bossdoor', 'b3_boss_door', tilePoint(17, 1), { dialogue: 'boss_door' });
   chest(m, 'b3_chest', 14, 3, { item: '大回復丸', count: 1, money: 100 });
+  obj(m, 'jizo', 'b3_jizo', tilePoint(20, 3)); spawn(m, 'jizo', 20, 4);
   chest(m, 'b3_secret_chest', 26, 13, { gearTier: 2, minRarity: 1 });
   enemy(m, 'bonespider', 12, 17); enemy(m, 'bonespider', 22, 10); enemy(m, 'kitsunebi', 17, 17); enemy(m, 'nogitsune', 17, 13);
   m.torch(3, 13); m.torch(14, 8); m.torch(20, 8); m.torch(15, 1); m.torch(19, 1);
@@ -766,11 +813,26 @@ function bones(m, list) { for (const [x, y] of list) m.set('ground', x, y, gid.b
   maps.b3 = toTiled(m, { displayName: '古井地城 B3', dark: true });
 }
 
+// 土蜘蛛的巢穴（Boss 戰）
+{
+  const m = dungeon(24, 16);
+  m.carve(2, 2, 20, 12);
+  spawn(m, 'entry', 12, 12);
+  obj(m, 'boss', 'tsuchigumo', tilePoint(12, 5), { kind: 'tsuchigumo' });
+  for (const [x, y] of [[3, 3], [20, 3], [3, 12], [20, 12]]) obj(m, 'bosslantern', `lair_lantern_${x}_${y}`, tilePoint(x, y));
+  obj(m, 'cocoon', 'cocoon_ken', tilePoint(10, 2)); obj(m, 'cocoon', 'cocoon_hana', tilePoint(14, 2));
+  m.torch(6, 1); m.torch(17, 1); m.torch(1, 8); m.torch(22, 8);
+  webs(m, [[2, 2], [21, 2], [2, 13], [21, 13], [8, 7], [16, 9], [11, 10], [5, 6], [18, 5]]);
+  bones(m, [[6, 11], [17, 12], [9, 4]]);
+  maps.lair = toTiled(m, { displayName: '土蜘蛛的巢穴', dark: true, boss: true });
+}
+
 mkdirSync('assets/tiles', { recursive: true }); mkdirSync('assets/sprites', { recursive: true }); mkdirSync('assets/maps', { recursive: true });
 ts.save('assets/tiles/tiles.png');
 pl.save('assets/sprites/player.png');
 npc.save('assets/sprites/npcs.png');
 en.save('assets/sprites/enemies.png');
+boss.save('assets/sprites/boss.png');
 fx.save('assets/sprites/fx.png');
 for (const [k, v] of Object.entries(maps)) writeFileSync(`assets/maps/${k}.json`, JSON.stringify(v));
 writeFileSync('src/data/npcs.json', JSON.stringify(Object.fromEntries(NPCS.map(([id], i) => [id, { frame: i * 2 }])), null, 2) + '\n');
