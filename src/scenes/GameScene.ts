@@ -1650,7 +1650,8 @@ export class GameScene extends Phaser.Scene {
     if (e.def.kind === 'elite' || e.def.kind === 'boss') vibrate(e.def.kind === 'boss' ? 150 : 40);
     this.sparks.setParticleTint(e.def.color);
     const kind = e.def.kind;
-    this.seenEnemies.add(e.boss ? `boss-${e.boss.variant}` : kind);
+    // 圖鑑：Boss 用圖片名稱、一般敵人用這一關的外觀
+    this.seenEnemies.add(e.boss ? e.boss.tex : (this.stage.skins[kind]?.tex ?? kind));
     this.sparks.explode(kind === 'boss' ? 40 : kind === 'elite' ? 18 : 5, e.x, e.y);
     this.playFx('death', e.x, e.y, e.radius * (kind === 'boss' ? 3.5 : 3), 0, kind === 'boss' || kind === 'elite' ? 0xffffff : e.def.color, 26, 8);
     Audio.play('sfx-kill', 0.22, 45, 500);
@@ -3015,6 +3016,7 @@ export class GameScene extends Phaser.Scene {
     save.chips = (save.chips ?? 0) + chips;
     save.modules = [...(save.modules ?? []), ...this.moduleDrops];
     save.relicsTotal = (save.relicsTotal ?? 0) + this.relics.length;
+    for (const r of this.relics) if (!save.seenRelics.includes(r)) save.seenRelics.push(r);
     save.maxCombo = Math.max(save.maxCombo ?? 0, this.maxCombo);
     applyRunToDaily(save, {
       kills: this.kills,

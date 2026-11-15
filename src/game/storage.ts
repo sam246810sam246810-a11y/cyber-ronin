@@ -61,6 +61,8 @@ export interface SaveData extends UnlockStats {
   stagesCleared: StageId[];
   stageBest: Partial<Record<StageId, { time: number; kills: number }>>;
   lastStage: StageId;
+  /** 圖鑑：拿過的遺物 */
+  seenRelics: string[];
 }
 
 const EMPTY: SaveData = {
@@ -113,6 +115,7 @@ const EMPTY: SaveData = {
   stagesCleared: [],
   stageBest: {},
   lastStage: 'slums',
+  seenRelics: [],
 };
 
 export function loadSave(): SaveData {

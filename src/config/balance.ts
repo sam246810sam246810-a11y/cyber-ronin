@@ -439,7 +439,7 @@ export const CHARACTERS: Record<CharId, CharDef> = {
   kagura: {
     id: 'kagura',
     name: '陰陽師・神樂',
-    role: 'SSR 式神召喚型',
+    role: '式神召喚型',
     trait: '攻擊 +15%、移動 +5%、大招能量 +25%、式神加成 ×1.5、生命 110',
     weapon: 'talisman',
     maxHp: 110,
