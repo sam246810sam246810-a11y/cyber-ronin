@@ -23,14 +23,20 @@ cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, br
 
 | 佔位 | 檔名 | 尺寸 | 提示詞 |
 |---|---|---|---|
-| 🐶 | `hero.png` | 256x256 | a brave little shiba inu puppy hero wearing a tiny red scarf and holding a star-shaped slingshot, determined happy face, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🐶 | `hero.png` | 256x256 | a brave little shiba inu puppy caravan leader wearing a tiny red scarf and a small golden crown, holding a star wand, determined happy face, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🐱 | `partner_cat.png` | 256x256 | a cute orange tabby kitten holding a small fireball, playful, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🐰 | `partner_rabbit.png` | 256x256 | a cute white bunny holding a carrot crossbow, energetic, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🐻 | `partner_bear.png` | 256x256 | a big fluffy brown bear cub with a wooden shield, gentle and sturdy, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🦊 | `partner_fox.png` | 256x256 | a cute red fox with a lightning-shaped tail tip, sparks around it, clever, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🐧 | `partner_penguin.png` | 256x256 | a cute penguin chick wearing a knitted scarf holding a snowball, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🐹 | `partner_hamster.png` | 256x256 | a cute hamster nurse with a tiny red-cross cap holding a heart-shaped sunflower seed, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🍄 | `enemy_mushroom.png` | 256x256 | a grumpy red mushroom creature with tiny legs, angry eyebrows, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🐝 | `enemy_bee.png` | 256x256 | a mischievous chubby bee with a small stinger, flying, cheeky grin, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🦔 | `enemy_hedgehog.png` | 256x256 | an angry round hedgehog curled ready to roll, spiky, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🐌 | `enemy_snail.png` | 256x256 | a big sleepy snail with a purple swirl shell, slow and tanky, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🦀 | `enemy_crab.png` | 256x256 | a small orange crab raising its claws, sideways stance, angry, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🐸 | `enemy_frog.png` | 256x256 | a green frog crouching to jump, puffed cheeks, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
-| 🐧 | `enemy_penguin.png` | 256x256 | a chubby penguin sliding on its belly, mischievous, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
+| 🦭 | `enemy_seal.png` | 256x256 | a chubby grey seal sliding on its belly, mischievous, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🦉 | `enemy_owl.png` | 256x256 | a little owl wizard with a tiny wizard hat, casting magic, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🍄 | `enemy_kingshroom.png` | 384x384 | a large mushroom king with a golden crown and a royal cape, elite mini-boss, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
 | 🐝 | `enemy_beequeen.png` | 384x384 | a bee queen with a tiara and royal wings, elite mini-boss, cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, bright pastel colors, top-down 3/4 view, centered, single character, transparent background, no text |
@@ -70,6 +76,16 @@ cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, br
 |---|---|---|---|
 | 🐾 | `logo.png` | 1024x512 | game logo for a cute animal shooter game, a shiba inu with a slingshot and a big paw print, bold bubbly letters reading "PAW STRIKE", mobile game title art, transparent background |
 
+## 村莊建築
+
+| 佔位 | 檔名 | 尺寸 | 提示詞 |
+|---|---|---|---|
+| 🏟️ | `bld_training.png` | 256x256 | a cute training ground building with wooden dummies and a flag, isometric village building, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
+| 🏥 | `bld_clinic.png` | 256x256 | a cute small animal clinic cottage with a heart sign, isometric village building, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
+| 🏡 | `bld_hall.png` | 256x256 | a cute recruitment hall house with a big paw-print sign, isometric village building, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
+| 🌾 | `bld_granary.png` | 256x256 | a cute barn granary with sacks of gold coins, isometric village building, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
+| 🗼 | `bld_tower.png` | 256x256 | a cute wooden watchtower with a telescope on top, isometric village building, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
+
 ## 裝備
 
 | 佔位 | 檔名 | 尺寸 | 提示詞 |
@@ -83,4 +99,4 @@ cute chibi mobile game art, soft cel shading, thick clean dark-brown outline, br
 | 🔔 | `equip_bell.png` | 256x256 | a pet collar with a golden bell, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 | ⭐ | `equip_star.png` | 256x256 | a pet collar with a glowing star charm, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text |
 
-共 34 張。
+共 45 張。

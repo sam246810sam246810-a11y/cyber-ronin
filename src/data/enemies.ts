@@ -26,7 +26,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   snail: { id: 'snail', name: '慢吞蝸牛', icon: '🐌', color: '#b38bd6', r: 24, hp: 650, speed: 38, contact: 70, bullet: 50, ai: 'tank', xp: 20, gold: 10, rank: 'normal' },
   crab: { id: 'crab', name: '橫行螃蟹', icon: '🦀', color: '#ef6f45', r: 21, hp: 340, speed: 90, contact: 60, bullet: 60, ai: 'crab', xp: 16, gold: 8, rank: 'normal' },
   frog: { id: 'frog', name: '跳跳青蛙', icon: '🐸', color: '#5cc46b', r: 20, hp: 320, speed: 0, contact: 60, bullet: 55, ai: 'frog', xp: 16, gold: 8, rank: 'normal' },
-  penguin: { id: 'penguin', name: '滑行企鵝', icon: '🐧', color: '#5b7c99', r: 21, hp: 380, speed: 0, contact: 85, bullet: 0, ai: 'dasher', xp: 18, gold: 9, rank: 'normal' },
+  seal: { id: 'seal', name: '滑行海豹', icon: '🦭', color: '#7d8fa3', r: 21, hp: 380, speed: 0, contact: 85, bullet: 0, ai: 'dasher', xp: 18, gold: 9, rank: 'normal' },
   owl: { id: 'owl', name: '貓頭鷹法師', icon: '🦉', color: '#a9835b', r: 19, hp: 300, speed: 55, contact: 45, bullet: 70, ai: 'shooter', flying: true, xp: 18, gold: 9, rank: 'normal' },
 
   kingshroom: { id: 'kingshroom', name: '蘑菇國王', icon: '🍄', color: '#c0392b', r: 40, hp: 2800, speed: 45, contact: 90, bullet: 55, ai: 'kingshroom', xp: 120, gold: 60, rank: 'elite' },

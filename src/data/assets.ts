@@ -19,14 +19,20 @@ const icon = (key: string, fallback: string, desc: string, group: string): Asset
   ({ key, file: `${key}.png`, size: '256x256', group, fallback, prompt: `${desc}, game item icon, cute casual mobile game style, glossy, thick outline, centered, transparent background, no text` });
 
 export const ASSETS: AssetSpec[] = [
-  ch('hero', '🐶', 'a brave little shiba inu puppy hero wearing a tiny red scarf and holding a star-shaped slingshot, determined happy face'),
+  ch('hero', '🐶', 'a brave little shiba inu puppy caravan leader wearing a tiny red scarf and a small golden crown, holding a star wand, determined happy face'),
+  ch('partner_cat', '🐱', 'a cute orange tabby kitten holding a small fireball, playful'),
+  ch('partner_rabbit', '🐰', 'a cute white bunny holding a carrot crossbow, energetic'),
+  ch('partner_bear', '🐻', 'a big fluffy brown bear cub with a wooden shield, gentle and sturdy'),
+  ch('partner_fox', '🦊', 'a cute red fox with a lightning-shaped tail tip, sparks around it, clever'),
+  ch('partner_penguin', '🐧', 'a cute penguin chick wearing a knitted scarf holding a snowball'),
+  ch('partner_hamster', '🐹', 'a cute hamster nurse with a tiny red-cross cap holding a heart-shaped sunflower seed'),
   ch('enemy_mushroom', '🍄', 'a grumpy red mushroom creature with tiny legs, angry eyebrows'),
   ch('enemy_bee', '🐝', 'a mischievous chubby bee with a small stinger, flying, cheeky grin'),
   ch('enemy_hedgehog', '🦔', 'an angry round hedgehog curled ready to roll, spiky'),
   ch('enemy_snail', '🐌', 'a big sleepy snail with a purple swirl shell, slow and tanky'),
   ch('enemy_crab', '🦀', 'a small orange crab raising its claws, sideways stance, angry'),
   ch('enemy_frog', '🐸', 'a green frog crouching to jump, puffed cheeks'),
-  ch('enemy_penguin', '🐧', 'a chubby penguin sliding on its belly, mischievous'),
+  ch('enemy_seal', '🦭', 'a chubby grey seal sliding on its belly, mischievous'),
   ch('enemy_owl', '🦉', 'a little owl wizard with a tiny wizard hat, casting magic'),
   ch('enemy_kingshroom', '🍄', 'a large mushroom king with a golden crown and a royal cape, elite mini-boss', '384x384'),
   ch('enemy_beequeen', '🐝', 'a bee queen with a tiara and royal wings, elite mini-boss', '384x384'),
@@ -48,6 +54,13 @@ export const ASSETS: AssetSpec[] = [
   icon('gold', '🪙', 'a pile of gold coins currency icon', '商店'),
   { key: 'logo', file: 'logo.png', size: '1024x512', group: 'UI', fallback: '🐾', prompt: 'game logo for a cute animal shooter game, a shiba inu with a slingshot and a big paw print, bold bubbly letters reading "PAW STRIKE", mobile game title art, transparent background' },
 
+  ...[
+    ['training', '🏟️', 'a cute training ground building with wooden dummies and a flag'],
+    ['clinic', '🏥', 'a cute small animal clinic cottage with a heart sign'],
+    ['hall', '🏡', 'a cute recruitment hall house with a big paw-print sign'],
+    ['granary', '🌾', 'a cute barn granary with sacks of gold coins'],
+    ['tower', '🗼', 'a cute wooden watchtower with a telescope on top'],
+  ].map(([k, f, d]) => icon(`bld_${k}`, f, `${d}, isometric village building`, '村莊建築')),
   ...[
     ['slingshot', '🌰', 'an acorn slingshot weapon'],
     ['wand', '🪄', 'a magic wand topped with a little golden bell'],

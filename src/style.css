@@ -243,3 +243,94 @@ h2.lose { color: var(--muted); }
 pre.events { text-align: left; font-size: 10px; white-space: pre-wrap; word-break: break-all; max-height: 60vh; overflow: auto; background: #f3ead8; padding: 8px; border-radius: 8px; user-select: text; }
 
 .pause-btn { position: absolute; top: calc(10px + env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border-radius: 50%; background: rgba(0,0,0,.35); color: #fff; font-weight: 900; pointer-events: auto; z-index: 3; }
+
+/* ---------- 車隊 / 夥伴 ---------- */
+.caravan-pic { display: flex; gap: 4px; align-items: flex-end; font-size: 48px; max-width: 100%; }
+.caravan-pic span { animation: bob 1s ease-in-out infinite; display: inline-flex; }
+.caravan-pic span:first-child { font-size: 66px; }
+.caravan-pic img.ico { width: 60px; height: 60px; }
+.roster { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-bottom: 8px; }
+.roster > div { display: flex; gap: 6px; }
+.ros { position: relative; width: 40px; height: 40px; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; box-shadow: var(--shadow); }
+.ros img.ico { width: 32px; height: 32px; }
+.ros.locked { filter: grayscale(1); opacity: .55; }
+.ros i { position: absolute; right: -4px; bottom: -4px; font-size: 13px; font-style: normal; }
+
+.team { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin: 8px 0; }
+.mem { position: relative; background: #fff; border-radius: 10px; padding: 3px 2px 4px; display: flex; flex-direction: column; align-items: center; box-shadow: var(--shadow); min-width: 0; }
+.mem-ico { font-size: 26px; height: 30px; display: flex; align-items: center; }
+.mem-ico img.ico { width: 28px; height: 28px; }
+.mem-star { font-size: 8px; color: var(--gold-d); letter-spacing: -1px; height: 10px; }
+.mem-hp { width: 90%; height: 5px; border-radius: 3px; background: #eadfcb; overflow: hidden; }
+.mem-hp i { display: block; height: 100%; background: var(--green); }
+.mem-name { font-size: 10px; font-weight: 800; white-space: nowrap; }
+.mem.down { filter: grayscale(1); opacity: .6; }
+.mem.empty { color: #ccc; justify-content: center; font-size: 18px; background: #fff7; box-shadow: none; border: 2px dashed #ddd; }
+.mem.pick { outline: 3px solid var(--gold); cursor: pointer; animation: bob 1s infinite; }
+.team-pick .team { margin-top: 0; }
+.team-small { display: flex; gap: 6px; justify-content: center; font-size: 28px; }
+.team-small span { position: relative; }
+.team-small span.down { filter: grayscale(1); opacity: .5; }
+.team-small sub { position: absolute; bottom: -8px; left: 50%; transform: translateX(-50%); font-size: 8px; color: var(--gold-d); white-space: nowrap; }
+.team-small img.ico { width: 34px; height: 34px; }
+
+.skill .sk-ico img.ico { width: 46px; height: 46px; }
+.skill .evo-tag { background: var(--blue); }
+.skill.k-recruit { border-color: #9be29b; box-shadow: 0 4px 0 #6cbf6c; }
+.skill.k-recruit .evo-tag { background: var(--green); }
+.skill.k-star .evo-tag { background: #a861e8; }
+.skill.evo .evo-tag { background: var(--red); }
+.levelup .team { margin-top: 12px; }
+
+/* ---------- 地圖 ---------- */
+.page-map { padding: 0 0 24px; background: linear-gradient(#e6f5d9, #cdeab8); }
+.map-top { position: sticky; top: 0; z-index: 3; background: #fffaf0ee; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; box-shadow: 0 4px 10px rgba(0,0,0,.08); }
+.map-title { display: flex; justify-content: space-between; align-items: baseline; }
+.map-title span { font-size: 13px; font-weight: 800; color: var(--muted); }
+.row.tight { gap: 8px; justify-content: flex-end; }
+.row.tight .btn { flex: none; }
+.map { position: relative; margin: 10px 24px; }
+.map-lines { position: absolute; inset: 0; overflow: visible; }
+.map-lines line { stroke: #9fb98a; stroke-width: 4; stroke-dasharray: 2 8; stroke-linecap: round; }
+.map-lines line.walked { stroke: var(--gold-d); stroke-dasharray: none; }
+.node { position: absolute; transform: translate(-50%, -50%); width: 58px; height: 58px; border-radius: 50%; background: #fff; border: 3px solid #cfd8c4; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: var(--shadow); pointer-events: none; }
+.node span { font-size: 24px; line-height: 1; }
+.node em { font-style: normal; font-size: 10px; font-weight: 900; }
+.node.k-elite { border-color: #f0a35e; }
+.node.k-boss { width: 76px; height: 76px; border-color: var(--red); background: #ffe9e9; }
+.node.k-boss span { font-size: 34px; }
+.node.done { opacity: .45; background: #eee; }
+.node.cur { opacity: 1; outline: 4px solid var(--gold); }
+.node.can { pointer-events: auto; cursor: pointer; border-color: var(--gold); animation: pulse 1s ease-in-out infinite; box-shadow: 0 0 0 6px #ffc23d55, var(--shadow); }
+@keyframes pulse { 50% { transform: translate(-50%, -50%) scale(1.08); } }
+.start { animation: startpulse 1.6s ease-in-out infinite; }
+@keyframes startpulse { 50% { transform: scale(1.03); } }
+.legend { display: grid; gap: 8px; text-align: left; }
+.legend div { display: grid; grid-template-columns: 36px 52px 1fr; align-items: center; gap: 4px; }
+.legend span { font-size: 24px; }
+.legend em { font-style: normal; color: var(--muted); font-size: 13px; }
+.shop-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+.shop-item { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 14px; padding: 8px 10px; text-align: left; }
+.si-ico { font-size: 30px; }
+.si-body { flex: 1; }
+
+/* ---------- 村莊 ---------- */
+.village-head { text-align: center; }
+.village-head h2 { margin: 4px 0 0; color: #fff; -webkit-text-stroke: 1.5px var(--ink); paint-order: stroke fill; font-size: 28px; }
+.building-now { align-items: stretch; text-align: left; margin: 10px 0; gap: 8px; }
+.building-now.idle { flex-direction: row; align-items: center; gap: 10px; font-weight: 800; }
+.bn-head { display: flex; gap: 10px; align-items: center; }
+.bn-ico { font-size: 34px; animation: shake .5s infinite; display: inline-block; }
+.building-now.idle .bn-ico { animation: none; }
+.build-bar { height: 14px; border-radius: 7px; background: #eadfcb; overflow: hidden; }
+.build-bar i { display: block; height: 100%; background: linear-gradient(90deg, #7ad66f, #4cc75a); transition: width 1s linear; }
+.building-now .row .btn { font-size: 13px; }
+.blds { display: flex; flex-direction: column; gap: 10px; }
+.bld { flex-direction: row; text-align: left; gap: 12px; align-items: center; }
+.bld.busy { outline: 3px solid var(--gold); }
+.bld-ico { position: relative; width: 64px; height: 64px; flex-shrink: 0; border-radius: 16px; background: #f3ead8; font-size: 40px; display: flex; align-items: center; justify-content: center; }
+.bld-ico img.ico { width: 60px; height: 60px; }
+.bld-lv { position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 900; background: var(--ink); color: #fff; border-radius: 8px; padding: 1px 6px; }
+.bld-body { flex: 1; min-width: 0; }
+.bld-body .next { color: var(--green-d); font-weight: 700; }
+.bld .btn small { display: block; font-size: 10px; opacity: .85; }

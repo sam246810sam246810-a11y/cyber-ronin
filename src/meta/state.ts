@@ -1,4 +1,7 @@
 import { CHAPTERS } from '../data/chapters';
+import { BUILDINGS, BUILDING_MAP, BuildingId, buildCost, buildSeconds, rushGems, AD_RUSH_SEC } from '../data/village';
+import { PARTNERS, PartnerId, RECRUITABLE } from '../data/partners';
+import type { RunBonus } from '../game/run';
 import { Item, MERGE_COUNT, RARITIES, SLOTS, Slot, TPL_MAP, itemStats, upgradeCost } from '../data/equipment';
 import { CounterKey, QUESTS, MILESTONES, CARNIVAL_DAYS, CARNIVAL_CLAIM_DAYS, CARNIVAL_PACK, QuestDef } from '../data/quests';
 import { BREAKTHROUGH_OFFER, CHESTS, ChestDef, FIRST_PURCHASE_GIFT, GEM_PACKS, DAILY_AD_GEMS } from '../data/shop';
@@ -24,6 +27,7 @@ export interface Save {
   offer: { expiresAt: number; lastShownAt: number; purchased: boolean };
   settings: { muted: boolean; vibrate: boolean };
   selectedChapter: number;
+  village: { levels: Record<BuildingId, number>; building: { id: BuildingId; finishAt: number; total: number; adUsed: boolean } | null };
 }
 
 const KEY = 'pawstrike_save_v1';
@@ -31,7 +35,7 @@ const DAY = 86400000;
 
 function fresh(): Save {
   const counters = {} as Record<CounterKey, number>;
-  (['kills', 'rooms', 'runs', 'upgrades', 'merges', 'chests', 'eliteKills', 'bossKills', 'chapterClears', 'evolutions', 'logins'] as CounterKey[])
+  (['kills', 'rooms', 'runs', 'upgrades', 'merges', 'chests', 'eliteKills', 'bossKills', 'chapterClears', 'evolutions', 'logins', 'builds', 'recruits'] as CounterKey[])
     .forEach((k) => (counters[k] = 0));
   const s: Save = {
     v: 1, gold: 800, gems: 60, items: [], nextUid: 1,
@@ -44,6 +48,7 @@ function fresh(): Save {
     offer: { expiresAt: 0, lastShownAt: 0, purchased: false },
     settings: { muted: false, vibrate: true },
     selectedChapter: 1,
+    village: { levels: { training: 0, clinic: 0, hall: 0, granary: 0, tower: 0 }, building: null },
   };
   // 新手裝備
   const w = addItemTo(s, 'slingshot', 0);
@@ -67,7 +72,7 @@ function load(): Save {
     if (raw) {
       const base = fresh();
       const parsed = JSON.parse(raw) as Save;
-      return { ...base, ...parsed, counters: { ...base.counters, ...parsed.counters } };
+      return { ...base, ...parsed, counters: { ...base.counters, ...parsed.counters }, village: { ...base.village, ...(parsed.village ?? {}), levels: { ...base.village.levels, ...(parsed.village?.levels ?? {}) } } };
     }
   } catch { /* 損毀就重建 */ }
   return fresh();
@@ -273,10 +278,10 @@ export function watchAdForGems(): boolean {
 // ---------- 突破禮包 ----------
 export function offerActive() { return !save.offer.purchased && save.offer.expiresAt > now(); }
 
-export function maybeTriggerOffer(ctx: { reachedBoss: boolean; bossHpPct: number | null; roomsCleared: number }): boolean {
+export function maybeTriggerOffer(ctx: { reachedBoss: boolean; bossHpPct: number | null; rows: number }): boolean {
   if (save.offer.purchased) return false;
   if (offerActive()) return true; // 已在倒數中，再提醒一次
-  const close = (ctx.reachedBoss && (ctx.bossHpPct ?? 1) <= 0.5) || ctx.roomsCleared >= 10;
+  const close = (ctx.reachedBoss && (ctx.bossHpPct ?? 1) <= 0.5) || ctx.rows >= 6;
   if (!close) return false;
   if (now() - save.offer.lastShownAt < BREAKTHROUGH_OFFER.cooldownMs) return false;
   save.offer.expiresAt = now() + BREAKTHROUGH_OFFER.durationMs;
@@ -343,17 +348,97 @@ export function buyCarnivalPack(): boolean {
   return true;
 }
 
+// ---------- 村莊 ----------
+export const bLevel = (id: BuildingId) => save.village.levels[id] ?? 0;
+
+/** 若建造已完成就結算；回傳是否有變化 */
+export function tickVillage(): boolean {
+  const b = save.village.building;
+  if (b && now() >= b.finishAt) {
+    save.village.levels[b.id] = bLevel(b.id) + 1;
+    save.village.building = null;
+    bump('builds');
+    track('build_done', { id: b.id, lv: bLevel(b.id) });
+    persist();
+    return true;
+  }
+  return false;
+}
+
+export function startBuild(id: BuildingId): string | null {
+  tickVillage();
+  const def = BUILDING_MAP[id];
+  const lv = bLevel(id);
+  if (lv >= def.maxLv) return '已達最高等級';
+  if (save.village.building) return '建築師正在忙碌中';
+  const cost = buildCost(def, lv);
+  if (save.gold < cost) return '金幣不足';
+  save.gold -= cost;
+  const sec = buildSeconds(lv);
+  save.village.building = { id, finishAt: now() + sec * 1000, total: sec, adUsed: false };
+  track('build_start', { id, toLv: lv + 1, cost, sec });
+  persist();
+  return null;
+}
+
+export function buildRemainSec(): number {
+  const b = save.village.building;
+  return b ? Math.max(0, Math.ceil((b.finishAt - now()) / 1000)) : 0;
+}
+
+export function rushBuild(): boolean {
+  const b = save.village.building;
+  if (!b) return false;
+  const gems = rushGems(buildRemainSec());
+  if (save.gems < gems) return false;
+  save.gems -= gems;
+  b.finishAt = now();
+  track('build_rush', { id: b.id, gems });
+  tickVillage();
+  return true;
+}
+
+export function adRushBuild(): boolean {
+  const b = save.village.building;
+  if (!b || b.adUsed) return false;
+  b.adUsed = true;
+  b.finishAt -= AD_RUSH_SEC * 1000;
+  track('ad_reward', { kind: 'build_rush' });
+  tickVillage();
+  persist();
+  return true;
+}
+
+export function unlockedPartners(): PartnerId[] {
+  const hall = bLevel('hall');
+  return RECRUITABLE.filter((p) => PARTNERS[p].unlockHall <= hall);
+}
+
+export function runBonus(): RunBonus {
+  const hall = bLevel('hall');
+  return {
+    atkMul: 1 + 0.06 * bLevel('training'),
+    hpMul: 1 + 0.07 * bLevel('clinic'),
+    goldMul: 1 + 0.1 * bLevel('granary'),
+    rerolls: bLevel('tower'),
+    unlocked: unlockedPartners(),
+    startPartner: hall >= 4,
+    startStar: hall >= 6 ? 3 : hall >= 5 ? 2 : 1,
+  };
+}
+
+export const villageCount = () => BUILDINGS.reduce((a, b) => a + bLevel(b.id), 0);
+
 // ---------- 冒險結算 ----------
 export interface RunReward { gold: number; gems: number; items: Item[] }
 
-export function settleRun(r: { win: boolean; chapter: number; roomsCleared: number; gold: number; kills: number; eliteKills: number; bossKills: number; evolutions: number }): RunReward {
-  const reward: RunReward = { gold: r.gold, gems: 0, items: [] };
-  reward.gold += r.roomsCleared * 20 * r.chapter;
-  const drops = Math.floor(r.roomsCleared / 5) + (r.win ? 1 : 0);
-  for (let i = 0; i < drops; i++) {
-    const roll = Math.random();
-    const rarity = r.win && i === drops - 1 ? Math.min(2, r.chapter) : roll < 0.75 ? 0 : 1;
-    reward.items.push(addItemTo(save, randomTpl(), rarity));
+export function settleRun(r: { win: boolean; chapter: number; battles: number; rows: number; gold: number; kills: number; eliteKills: number; bossKills: number; evolutions: number; recruits: number; drops: { tpl: string; rarity: number }[] }): RunReward {
+  const reward: RunReward = { gold: Math.round(r.gold), gems: 0, items: [] };
+  reward.gold += r.battles * 25 * r.chapter;
+  for (const d of r.drops) reward.items.push(addItemTo(save, d.tpl, d.rarity));
+  if (r.win) {
+    reward.items.push(addItemTo(save, randomTpl(), Math.min(2, r.chapter)));
+    reward.items.push(addItemTo(save, randomTpl(), Math.random() < 0.5 ? 1 : 0));
   }
   if (r.win && !save.cleared[r.chapter]) {
     reward.gems += CHAPTERS[r.chapter - 1].firstClearGems;
@@ -362,9 +447,9 @@ export function settleRun(r: { win: boolean; chapter: number; roomsCleared: numb
   }
   save.gold += reward.gold;
   save.gems += reward.gems;
-  save.best[r.chapter] = Math.max(save.best[r.chapter] ?? 0, r.roomsCleared);
-  bump('runs'); bump('kills', r.kills); bump('rooms', r.roomsCleared);
-  bump('eliteKills', r.eliteKills); bump('bossKills', r.bossKills); bump('evolutions', r.evolutions);
+  save.best[r.chapter] = Math.max(save.best[r.chapter] ?? 0, r.rows);
+  bump('runs'); bump('kills', r.kills); bump('rooms', r.battles);
+  bump('eliteKills', r.eliteKills); bump('bossKills', r.bossKills); bump('evolutions', r.evolutions); bump('recruits', r.recruits);
   if (r.win) bump('chapterClears');
   persist();
   return reward;
