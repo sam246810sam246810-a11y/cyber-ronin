@@ -11,6 +11,7 @@ import { hudState } from '../systems/hudState';
 import type { Action } from '../systems/inputState';
 import type { Vec2 } from '../systems/movement';
 import { floatText, ring, slashArc } from './fx';
+import { sound } from '../audio/sound';
 
 type SkillId = keyof typeof skills;
 
@@ -137,6 +138,7 @@ export class CombatSystem {
     this.comboStep = step; this.lastSwing = this.now;
     this.attackReady = this.now + (step === 2 ? 420 : 260);
     this.slowUntil = this.now + 200;
+    sound.sfx('swing');
     const p = this.player.center, a = this.player.aim, ang = Math.atan2(a.y, a.x);
     const reach = step === 2 ? 20 : 17;
     slashArc(this.scene, p.x, p.y - 2, ang, reach, step === 1 ? 2.4 : 2.0, step === 2 ? 0xffd84a : 0xf8f0e0, step === 2 ? 4 : 3);
@@ -146,6 +148,7 @@ export class CombatSystem {
   private shootArrow(heldMs: number): void {
     if (this.busy || this.now < this.attackReady) return;
     const charged = heldMs >= 600;
+    sound.sfx('arrow');
     this.autoAim(AIM_RANGE.ranged);
     this.attackReady = this.now + 320;
     this.slowUntil = this.now + 120;
@@ -155,6 +158,7 @@ export class CombatSystem {
   private throwTalisman(fireTalisman: boolean): void {
     this.autoAim(AIM_RANGE.ranged);
     this.attackReady = this.now + 380;
+    sound.sfx('talisman');
     this.slowUntil = this.now + 150;
     this.fire(fireTalisman ? 2 : 1, this.player.aim, 170, fireTalisman ? skills.fire.mult : 1.1, 130, { opts: fireTalisman ? { burn: true } : {}, spin: true });
   }
@@ -166,6 +170,7 @@ export class CombatSystem {
     if (this.busy || this.now < this.skillReady[i]) return;
     if (gameState.mp < s.mp) { this.cb.toast('MP 不足'); return; }
     gameState.mp -= s.mp;
+    sound.sfx(id === 'barrier' ? 'lantern' : id === 'spin' || id === 'thrust' ? 'swing' : id === 'fire' ? 'talisman' : 'arrow');
     this.skillReady[i] = this.now + s.cd * 1000;
     if (id !== 'spin' && id !== 'barrier') this.autoAim(id === 'thrust' ? AIM_RANGE.melee + 40 : AIM_RANGE.ranged);
     const p = this.player.center, a = this.player.aim;
@@ -209,6 +214,7 @@ export class CombatSystem {
     this.dodgeUntil = this.now + DODGE.duration;
     this.invulnUntil = Math.max(this.invulnUntil, this.now + DODGE.iframes);
     this.dodgeReady = this.now + DODGE.cooldown;
+    sound.sfx('dodge');
     this.dashDir = { ...this.player.aim }; this.dashSpeed = DODGE.speed;
     this.player.setAlpha(0.55);
     this.scene.tweens.add({ targets: this.player, angle: 360 * Math.sign(this.dashDir.x || 1), duration: DODGE.duration, onComplete: () => this.player.setAngle(0).setAlpha(1) });
@@ -223,6 +229,7 @@ export class CombatSystem {
     const msg = applyItem(name, v);
     gameState.hp = v.hp; gameState.mp = v.mp;
     this.lockUntil = this.now + 500; // 使用道具 0.5 秒（PRD 7.6）
+    sound.sfx('heal');
     ring(this.scene, this.player.x, this.player.y, 12, 0x7fe08a, 400);
     this.cb.toast(msg);
     this.cb.onHudChange();
@@ -235,6 +242,7 @@ export class CombatSystem {
 
   private hitEnemy(e: Enemy, mult: number, from: Vec2, opts: HitOptions): void {
     const d = calcDamage(this.playerAtk(), mult, e.info.def, Math.random, this.st.crit / 100);
+    sound.sfx(d.crit ? 'crit' : 'hit');
     if (e.hit(d.amount, d.crit, from, opts)) this.onKill(e);
   }
 
@@ -251,12 +259,14 @@ export class CombatSystem {
 
   private breakIt(b: Breakable): void {
     b.alive = false;
+    sound.sfx('break');
     ring(this.scene, b.x, b.y, 14, 0xd8d0c0, 350);
     this.scene.cameras.main.shake(120, 0.006);
     b.onBreak();
   }
 
   private onKill(e: Enemy): void {
+    sound.sfx('kill');
     const [lo, hi] = e.info.money;
     const money = Phaser.Math.Between(lo, hi);
     gameState.money += money;
@@ -284,6 +294,7 @@ export class CombatSystem {
   }
 
   private onLevelUp(): void {
+    sound.sfx('levelup');
     this.syncStats();
     const p = this.player;
     ring(this.scene, p.x, p.y, 20, 0xffd84a, 500);
@@ -326,6 +337,7 @@ export class CombatSystem {
   private damagePlayer(atk: number, from: Vec2, chance: { burn?: number; poison?: number } = {}, mult = 1): boolean {
     if (this.dead || this.isInvulnerable) return false;
     const d = calcDamage(atk, mult, this.st.def);
+    sound.sfx('hurt');
     gameState.hp = Math.max(0, gameState.hp - d.amount);
     floatText(this.scene, this.player.x, this.player.y - 10, String(d.amount), '#ff6a6a', 10);
     this.invulnUntil = this.now + HURT_IFRAMES;
@@ -343,6 +355,7 @@ export class CombatSystem {
   /** 骨蜘蛛吐毒絲。 */
   enemyShoot(e: Enemy, dir: Vec2, speed = 105): void {
     const c = e.center;
+    sound.sfx('web');
     const sprite = this.scene.add.sprite(c.x, c.y, 'fx', 4).setDepth(130000);
     this.scene.tweens.add({ targets: sprite, angle: 360, duration: 500, repeat: -1 });
     const info = e.info as { poisonChance?: number };
@@ -351,6 +364,7 @@ export class CombatSystem {
 
   /** 提燈鬼的範圍重擊。 */
   enemyAoe(e: Enemy, a: { x: number; y: number; r: number; mult?: number }): void {
+    sound.sfx('slam');
     ring(this.scene, a.x, a.y, a.r, 0xff6a3a, 300);
     this.scene.cameras.main.shake(150, 0.008);
     const pc = this.player.center;
@@ -368,6 +382,7 @@ export class CombatSystem {
 
   private die(): void {
     this.dead = true;
+    sound.sfx('death');
     this.player.setVelocity(0, 0).setTint(0x6a6a8a);
     this.scene.tweens.add({ targets: this.player, angle: 90, duration: 300 });
     this.cb.onDeath();

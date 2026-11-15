@@ -13,10 +13,17 @@ npm run build:artifact # 另外產生可發佈成 Claude Artifact 的 dist-artif
 npm run assets         # 重新產生佔位素材（tileset、主角、狐火村地圖）
 ```
 
-## 目前進度：第一章可以玩到結局（M2 戰鬥、M3 成長、M4 探險、M5 任務、M6 Boss 與存檔）
+## 目前進度：第一章 MVP 完成（M1–M7）
 
 開新遊戲先選職業與難度，接著：
 燈的家 → 狐火村 → 神社找宮司爺爺 → 迷霧竹林 → 古井 → 回神社報告（序章完）→ 古井地城 B1 → B2 → B3 → 土蜘蛛的巢穴 → 第一章完。
+
+**鍛冶屋、聲音與平衡（M7）**
+- 完成鐵心的支線後開放鍛冶屋：打造（6 張配方，用怪物素材）、強化（最多 +5，每級基礎能力 +8%，消耗玉鋼）、合成（3 件同稀有度 → 1 件高一級）
+- 音樂與音效全部以 Web Audio 即時合成：4 首原創背景音樂（狐火村、迷霧竹林、古井地城、土蜘蛛），20 多種音效
+- 選單「設定」分頁：音樂、音效音量、觸控按鈕透明度、調降難度（設定存在這台裝置）
+- 數值平衡：不刻意練功的話，打 Boss 時約 Lv6，打完約 Lv7（符合 PRD 5.1 的 Lv7–9）
+- 素材來源見 [CREDITS.md](CREDITS.md)
 
 **任務（M5）**
 - 支線任務 3 個：太郎的獨角仙、阿梅的護身符、鐵心的玉鋼（頭上有「！」的 NPC 有任務，「？」表示可以交付）
@@ -61,7 +68,7 @@ npm run assets         # 重新產生佔位素材（tileset、主角、狐火村
 
 **探索與劇情**
 - 10 張地圖、6 位 NPC（對話依劇情進度改變）、14 個寶箱、4 個隱藏地點
-- 尚未做：鍛冶屋打造與強化、音效、數值平衡（M7）
+- 之後：第二章（河童沼澤、轉職）、正式美術素材
 
 ## 結構
 
@@ -72,8 +79,9 @@ src/
   scenes/          Boot、Title、World、UI
   entities/        Player、Enemy（AI）、Boss（土蜘蛛）
   combat/          CombatSystem（攻擊、技能、閃避、受傷）、特效
-  systems/         純邏輯（combat、progression、equipment、inventory、collection、save、quests、boss、movement、dialogue、gameState、interaction），有單元測試
-  data/            職業、技能、怪物、裝備、商店、任務、對話、NPC、地圖清單
+  audio/           音樂曲譜與 Web Audio 合成器
+  systems/         純邏輯（combat、progression、equipment、inventory、collection、save、quests、forge、settings、boss、movement、dialogue、gameState、interaction），有單元測試
+  data/            職業、技能、怪物、裝備、配方、商店、任務、對話、NPC、地圖清單
   ui/              VirtualJoystick、TouchButton、DialogueBox、camera 工具
   ui/dom/          選單與商店（HTML 疊加層）
 assets/            佔位素材（由 scripts/gen-placeholder-assets.mjs 產生）

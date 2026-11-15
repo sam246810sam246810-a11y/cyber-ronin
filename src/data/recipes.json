@@ -1,0 +1,8 @@
+{
+  "class_weapon": { "name": "狐火武器（依職業）", "out": { "swordsman": "fox_sword", "archer": "moon_bow", "onmyoji": "fox_fan" }, "rarity": 1, "money": 300, "mats": { "玉鋼": 3, "狐火的殘焰": 3 } },
+  "chainmail":    { "name": "鎖帷子", "out": "chainmail",   "rarity": 1, "money": 200, "mats": { "玉鋼": 2, "蜘蛛絲": 3 } },
+  "fox_mask":     { "name": "狐面",   "out": "fox_mask",    "rarity": 1, "money": 150, "mats": { "野狐的毛": 3, "狐火的殘焰": 2 } },
+  "tabi":         { "name": "足袋",   "out": "tabi",        "rarity": 1, "money": 80,  "mats": { "唐傘的破布": 3 } },
+  "iron_gloves":  { "name": "鐵手甲", "out": "iron_gloves", "rarity": 1, "money": 80,  "mats": { "玉鋼": 1, "野狐的毛": 2 } },
+  "foxfire_orb":  { "name": "狐火珠", "out": "foxfire_orb", "rarity": 1, "money": 250, "mats": { "狐火的殘焰": 5, "玉鋼": 1 } }
+}

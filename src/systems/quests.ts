@@ -4,13 +4,13 @@ import type { Line } from './dialogue';
 import { canAddGear, canAddItem } from './inventory';
 import { BAG_MAX } from './inventory';
 import type { BaseId } from './equipment';
-import type { GameState } from './gameState';
+import { gainExp, type GameState } from './gameState';
 
 export type QuestType = 'side' | 'hunt' | 'collect' | 'bounty';
 export interface QuestDef {
   type: QuestType; name: string; giver: string; requires?: string[]; desc: string;
   target: { kill?: string; item?: string; pickup?: string; count: number };
-  reward: { money?: number; items?: Record<string, number>; gear?: { base: string; rarity: number }; flags?: string[]; capacity?: number };
+  reward: { money?: number; exp?: number; items?: Record<string, number>; gear?: { base: string; rarity: number }; flags?: string[]; capacity?: number };
   offer?: Line[]; remind?: Line[]; done?: Line[];
 }
 export const QUESTS = quests as unknown as Record<string, QuestDef>;
@@ -42,7 +42,7 @@ export function dailyBounties(date: string, flags: ReadonlySet<string>): Record<
   picked.forEach((b, i) => {
     out[`daily:${date}:${i}`] = {
       type: 'bounty', name: `懸賞：${b.name} ×${b.count}`, giver: 'board', desc: `今天的懸賞。打倒 ${b.count} 隻${b.name}。`,
-      target: { kill: b.kill, count: b.count }, reward: { money: b.money, items: { 回復丸: 1 } },
+      target: { kill: b.kill, count: b.count }, reward: { money: b.money, exp: 30, items: { 回復丸: 1 } },
     };
   });
   return out;
@@ -126,6 +126,7 @@ export function turnIn(s: GameState, id: string): string | null {
   if (q.target.item) { s.items[q.target.item] -= q.target.count; if (s.items[q.target.item] <= 0) delete s.items[q.target.item]; }
   const parts: string[] = [];
   if (r.money) { s.money += r.money; parts.push(`${r.money} 文`); }
+  if (r.exp) { const lv = gainExp(s, r.exp); parts.push(`${r.exp} 經驗${lv ? `（升到 Lv.${s.level}）` : ''}`); }
   for (const [n, c] of extraItems) { s.items[n] = (s.items[n] ?? 0) + c; parts.push(`${n} ×${c}`); }
   if (r.gear) { s.gear.push({ uid: s.nextUid++, base: r.gear.base as BaseId, rarity: r.gear.rarity, affixes: [] }); parts.push('裝備'); }
   if (r.capacity) { s.capacity = Math.min(BAG_MAX, s.capacity + r.capacity); parts.push(`背包 +${r.capacity} 格`); }
@@ -137,6 +138,7 @@ export function turnIn(s: GameState, id: string): string | null {
 export function rewardText(q: QuestDef): string {
   const r = q.reward, parts: string[] = [];
   if (r.money) parts.push(`${r.money} 文`);
+  if (r.exp) parts.push(`${r.exp} 經驗`);
   for (const [n, c] of Object.entries(r.items ?? {})) parts.push(`${n} ×${c}`);
   if (r.gear) parts.push('裝備');
   if (r.capacity) parts.push(`背包 +${r.capacity} 格`);

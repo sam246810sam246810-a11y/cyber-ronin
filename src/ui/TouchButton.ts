@@ -74,6 +74,9 @@ export class TouchButton {
     this.text.setAlpha(a); this.sub.setAlpha(a);
   }
 
+  /** 設定裡的按鈕透明度 */
+  setOpacity(a: number): void { [this.circle, this.text, this.sub, this.cd].forEach((g) => g.setAlpha(a)); }
+
   setVisible(v: boolean): void {
     [this.circle, this.text, this.sub, this.cd].forEach((g) => g.setVisible(v));
     if (!v && this.pointerId !== null) { this.pointerId = null; this.o.onUp?.(); }

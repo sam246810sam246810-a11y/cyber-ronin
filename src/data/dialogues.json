@@ -178,6 +178,18 @@
   ],
   "tesshin": [
     {
+      "if": [
+        "forge_unlocked"
+      ],
+      "open": "forge",
+      "lines": [
+        [
+          "鐵心",
+          "要打什麼？材料帶來了嗎？"
+        ]
+      ]
+    },
+    {
       "lines": [
         [
           "鐵心",

@@ -23,4 +23,5 @@ const game = new Phaser.Game({
 // 方便除錯與自動化測試
 (window as unknown as { __game: Phaser.Game }).__game = game;
 import { gameState } from './systems/gameState';
-(window as unknown as { __debug: object }).__debug = { get state() { return gameState; } };
+import { sound } from './audio/sound';
+(window as unknown as { __debug: object }).__debug = { get state() { return gameState; }, sound };

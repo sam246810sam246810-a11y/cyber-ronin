@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { FONT_FAMILY, GAME_HEIGHT, GAME_WIDTH, RENDER_SCALE } from '../config';
 import type { DialogueRequest } from '../systems/events';
+import { sound } from '../audio/sound';
 
 const CPS = 40; // 每秒顯示的字數
 
@@ -63,7 +64,7 @@ export class DialogueBox {
       const t = this.scene.add.text(x + 12, y + h / 2, `▶ ${label}`, { fontFamily: FONT_FAMILY, fontSize: '11px', color: '#f2e6c9' }).setOrigin(0, 0.5).setResolution(RENDER_SCALE);
       bg.on('pointerover', () => bg.setFillStyle(0xc23b2f, 0.95));
       bg.on('pointerout', () => bg.setFillStyle(0x2a2640, 0.95));
-      bg.on('pointerdown', () => this.finish(i));
+      bg.on('pointerdown', () => { sound.sfx('select'); this.finish(i); });
       items.push(bg, t);
     });
     this.choiceBox = this.scene.add.container(0, 0, items).setDepth(1001);
@@ -100,7 +101,7 @@ export class DialogueBox {
     if (!this.req) return;
     if (this.shown < this.full.length) this.shown = Math.min(this.full.length, this.shown + (dt / 1000) * CPS);
     const n = Math.floor(this.shown);
-    if (this.body.text.length !== n) this.body.setText(this.full.slice(0, n));
+    if (this.body.text.length !== n) { this.body.setText(this.full.slice(0, n)); if (n % 2 === 0) sound.sfx('blip'); }
     const last = this.index === this.req.lines.length - 1;
     this.next.setVisible(n >= this.full.length && !(last && this.req.choices?.length));
     if (n >= this.full.length && last) this.showChoices();

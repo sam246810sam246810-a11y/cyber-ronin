@@ -5,7 +5,7 @@
     "atk": 6,
     "def": 2,
     "speed": 36,
-    "exp": 5,
+    "exp": 12,
     "money": [
       2,
       5
@@ -25,7 +25,7 @@
     "atk": 8,
     "def": 3,
     "speed": 110,
-    "exp": 7,
+    "exp": 16,
     "money": [
       3,
       7
@@ -44,7 +44,7 @@
     "atk": 7,
     "def": 2,
     "speed": 60,
-    "exp": 6,
+    "exp": 15,
     "money": [
       3,
       6
@@ -76,7 +76,7 @@
     "atk": 9,
     "def": 3,
     "speed": 34,
-    "exp": 9,
+    "exp": 24,
     "money": [
       3,
       8
@@ -100,7 +100,7 @@
     "atk": 12,
     "def": 4,
     "speed": 32,
-    "exp": 40,
+    "exp": 90,
     "money": [
       20,
       35
@@ -122,7 +122,7 @@
   "tsuchigumo": {
     "name": "土蜘蛛",
     "hp": 600,
-    "atk": 24,
+    "atk": 20,
     "def": 6,
     "speed": 30,
     "exp": 200,

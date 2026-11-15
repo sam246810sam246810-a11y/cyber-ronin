@@ -5,6 +5,7 @@ import { useLogicalCamera } from '../ui/camera';
 import { getOverlay } from '../ui/dom/GameOverlay';
 import { deserialize, latestSave, type SaveFile } from '../systems/save';
 import { setGameState } from '../systems/gameState';
+import { sound } from '../audio/sound';
 
 export class TitleScene extends Phaser.Scene {
   constructor() { super(SCENES.title); }
@@ -12,6 +13,8 @@ export class TitleScene extends Phaser.Scene {
   create(): void {
     const cx = GAME_WIDTH / 2;
     useLogicalCamera(this).setBackgroundColor('#14121c');
+    sound.music('village');
+    this.input.on('pointerdown', () => sound.unlock());
 
     for (let i = 0; i < 14; i++) {
       const fire = this.add.circle(Phaser.Math.Between(0, GAME_WIDTH), Phaser.Math.Between(0, GAME_HEIGHT), Phaser.Math.Between(1, 3), 0x7fd8ff, 0.7);

@@ -18,6 +18,8 @@ export const EV = {
   save: 'save',
   /** World → UI：打開告示板 */
   board: 'board',
+  /** World → UI：打開鍛冶屋 */
+  forge: 'forge',
 } as const;
 
 export interface DialogueRequest { lines: Line[]; choices?: string[]; onDone: (choice?: number) => void }

@@ -3,7 +3,7 @@ import shops from '../../data/shop.json';
 import classes from '../../data/classes.json';
 import { DIFFICULTY, ITEMS } from '../../systems/combat';
 import {
-  BASES, RARITIES, SELL_RATE, SLOT_NAME, SLOTS, canUse, equipValue, formatStat, sellPrice,
+  BASES, RARITIES, SELL_RATE, SLOT_NAME, SLOTS, canUse, equipName, equipValue, formatStat, sellPrice,
   type BaseId, type Equip, type Slot, type StatKey,
 } from '../../systems/equipment';
 import { BAG_EXPAND, BAG_MAX, canAddGear, canAddItem, equippedUids, slotsUsed } from '../../systems/inventory';
@@ -16,8 +16,11 @@ import { MANUAL_SLOTS, formatPlayTime, readSave, serialize, writeSave, type Save
 import type { SaveRequest } from '../../systems/events';
 import { accept, dailyBounties, dateKey, isReady, offersFrom, progressOf, questDef, rewardText, turnIn, type QuestDef } from '../../systems/quests';
 import { currentObjective } from '../../systems/gameState';
+import { getSettings, updateSettings, type Settings } from '../../systems/settings';
+import { sound } from '../../audio/sound';
+import { MAX_PLUS, RECIPES, SYNTH_COST, craft, enhance, enhanceCost, missingFor, recipeOutput, synthesize } from '../../systems/forge';
 
-type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest';
+type MenuTab = 'status' | 'equip' | 'bag' | 'map' | 'quest' | 'settings';
 type ShopTab = 'buy' | 'sell';
 type Selection = { kind: 'gear'; uid: number } | { kind: 'item'; name: string } | { kind: 'buyItem'; name: string } | { kind: 'buyGear'; base: BaseId } | null;
 
@@ -36,7 +39,8 @@ const ITEM_DESC: Record<string, string> = {
 const STAT_ROWS: [keyof Stats, string][] = [['maxHp', 'HP'], ['maxMp', 'MP'], ['atk', '攻擊'], ['def', '防禦'], ['spd', '速度'], ['crit', '爆擊率'], ['mpRegen', 'MP 回復']];
 
 function gearStatLines(e: Equip): string {
-  const base = BASES[e.base].stats as Record<StatKey, number>;
+  const k = 1 + 0.08 * (e.plus ?? 0);
+  const base = Object.fromEntries(Object.entries(BASES[e.base].stats).map(([s, v]) => [s, Math.round(v * k * 10) / 10])) as Record<StatKey, number>;
   const lines = Object.entries(base).map(([k, v]) => `<li>${formatStat(k as StatKey, v)}</li>`);
   for (const a of e.affixes) lines.push(`<li style="color:${RARITIES[Math.max(1, e.rarity)].color}">${formatStat(a.stat, a.value)}</li>`);
   return `<ul class="kf-stats">${lines.join('')}</ul>`;
@@ -57,7 +61,10 @@ export function getOverlay(): GameOverlay { return (shared ??= new GameOverlay()
 
 export class GameOverlay {
   private root: HTMLDivElement;
-  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' = 'menu';
+  private mode: 'menu' | 'shop' | 'save' | 'load' | 'board' | 'forge' = 'menu';
+  private forgeTab: 'craft' | 'enhance' | 'synth' = 'craft';
+  private recipe = '';
+  private synthSel: number[] = [];
   private saveReq?: SaveRequest;
   private onLoad: (f: SaveFile) => void = () => {};
   private confirmSlot: SlotId | null = null;
@@ -88,6 +95,7 @@ export class GameOverlay {
   openMenu(onClose: () => void): void { this.mode = 'menu'; this.open(onClose); }
   openShop(shopId: string, onClose: () => void): void { this.mode = 'shop'; this.shopId = shopId; this.shopTab = 'buy'; this.open(onClose); }
   openBoard(onClose: () => void): void { this.mode = 'board'; this.open(onClose); }
+  openForge(onClose: () => void): void { this.mode = 'forge'; this.forgeTab = 'craft'; this.recipe = ''; this.synthSel = []; this.open(onClose); }
   openSave(req: SaveRequest, onClose: () => void): void { this.mode = 'save'; this.saveReq = req; this.open(onClose); }
   openLoad(onLoad: (f: SaveFile) => void, onClose: () => void): void { this.mode = 'load'; this.onLoad = onLoad; this.open(onClose); }
 
@@ -146,6 +154,20 @@ export class GameOverlay {
       <div class="kf-col" style="display:flex;flex-direction:column;gap:8px"><div class="kf-sec">今日懸賞（${today}，每天換新）</div>${daily.join('') || '<div class="kf-empty">還沒有懸賞。</div>'}<div class="kf-msg">${esc(this.msg)}</div></div>`;
   }
 
+  private settingsView(): string {
+    const st = getSettings(), s = gameState;
+    const row = (key: keyof Settings, label: string, values: [number, string][]) => `<div class="kf-sec">${label}</div><div class="kf-btns">${values.map(([v, t]) =>
+      `<button class="kf-tab" data-setting="${key}" data-value="${v}" aria-selected="${Math.abs(st[key] - v) < 0.01}">${t}</button>`).join('')}</div>`;
+    const vol: [number, string][] = [[0, '關'], [0.25, '小'], [0.5, '中'], [0.75, '大'], [1, '最大']];
+    const order = ['easy', 'normal', 'hard'] as const, cur = order.indexOf(s.difficulty);
+    const diffs = order.map((d, i) => `<button class="kf-tab" data-diff="${d}" aria-selected="${d === s.difficulty}" ${i > cur ? 'disabled style="opacity:.35"' : ''}>${DIFFICULTY[d].name}</button>`).join('');
+    return `<div class="kf-col">${row('music', '音樂', vol)}${row('sfx', '音效', vol)}
+        ${row('buttonAlpha', '觸控按鈕透明度', [[0.4, '很透明'], [0.7, '半透明'], [1, '不透明']])}
+        <div class="kf-tag" style="margin-top:8px">聲音要在第一次點畫面後才會開始（瀏覽器的規定）。</div></div>
+      <div class="kf-col"><div class="kf-sec">難度</div><div class="kf-btns">${diffs}</div>
+        <div class="kf-tag">遊戲中只能調降，不能調高。下次進入地圖時生效。</div><div class="kf-msg">${esc(this.msg)}</div></div>`;
+  }
+
   private questView(): string {
     const s = gameState;
     const active = Object.keys(s.quests).filter((id) => s.quests[id].status === 'active' && questDef(id, s.flags));
@@ -155,7 +177,66 @@ export class GameOverlay {
       <div class="kf-col"><div class="kf-sec">已完成（${done.length}）</div>${done.map((id) => `<div class="kf-row"><span class="n">${esc(questDef(id, s.flags)!.name)}</span><span class="kf-up">✔</span></div>`).join('') || '<div class="kf-empty">還沒有完成的任務。</div>'}</div>`;
   }
 
+  private forgeView(): string {
+    const s = gameState;
+    if (this.forgeTab === 'craft') {
+      const list = Object.entries(RECIPES).map(([id, r]) => {
+        const can = missingFor(s, r).length === 0;
+        return `<div class="kf-row" data-recipe="${id}" aria-selected="${this.recipe === id}"><span class="n">${esc(BASES[recipeOutput(r, s.classId)].name)}</span><span class="${can ? 'kf-up' : 'kf-mute'}">${can ? '可以打造' : '材料不足'}</span></div>`;
+      }).join('');
+      let det = '<div class="kf-empty">選一張配方。素材從怪物身上掉落。</div>';
+      const r = RECIPES[this.recipe];
+      if (r) {
+        const fake: Equip = { uid: -1, base: recipeOutput(r, s.classId), rarity: r.rarity, affixes: [] };
+        const mats = Object.entries(r.mats).map(([n, c]) => `<li class="${(s.items[n] ?? 0) >= c ? 'kf-up' : 'kf-down'}">${esc(n)} ${s.items[n] ?? 0}/${c}</li>`).join('');
+        const now = statsOf(s), slot = BASES[fake.base].slot;
+        s.gear.push(fake); const next = statsIfSwapped(s, slot, -1); s.gear.pop();
+        det = `<div class="kf-card">${this.gearTitle(fake)}${gearStatLines(fake)}<div class="kf-sec">換上後</div>${diffLines(now, next)}
+          <div class="kf-sec">材料</div><ul class="kf-stats">${mats}<li class="${s.money >= r.money ? 'kf-up' : 'kf-down'}">${r.money} 文</li></ul>
+          <div class="kf-btns"><button class="kf-btn" data-act="craft" ${missingFor(s, r).length ? 'disabled' : ''}>打造</button></div></div>`;
+      }
+      return `<div class="kf-col">${list}</div><div class="kf-col">${det}<div class="kf-msg">${esc(this.msg)}</div></div>`;
+    }
+    if (this.forgeTab === 'enhance') {
+      const worn = equippedUids(s);
+      const list = [...s.gear].sort((a, b) => Number(worn.has(b.uid)) - Number(worn.has(a.uid))).map((g) =>
+        `<div class="kf-row" data-gear="${g.uid}" aria-selected="${this.sel?.kind === 'gear' && this.sel.uid === g.uid}"><span class="k">${SLOT_NAME[BASES[g.base].slot]}</span><span class="n" style="color:${RARITIES[g.rarity].color}">${esc(equipName(g))}</span>${worn.has(g.uid) ? '<span class="kf-tag">裝備中</span>' : ''}</div>`).join('');
+      let det = '<div class="kf-empty">選一件要強化的裝備。每強化一級，基礎能力 +8%。</div>';
+      const g = this.sel?.kind === 'gear' ? s.gear.find((x) => x.uid === (this.sel as { uid: number }).uid) : undefined;
+      if (g) {
+        const plus = g.plus ?? 0;
+        if (plus >= MAX_PLUS) det = `<div class="kf-card">${this.gearTitle(g)}${gearStatLines(g)}<div class="kf-up">已經強化到最高 +${MAX_PLUS}</div></div>`;
+        else {
+          const c = enhanceCost(plus), next: Equip = { ...g, plus: plus + 1 };
+          const ok = (s.items['玉鋼'] ?? 0) >= c.mats['玉鋼'] && s.money >= c.money;
+          det = `<div class="kf-card">${this.gearTitle(g)}<div class="kf-sec">強化後（+${plus + 1}）</div>${gearStatLines(next)}
+            <div class="kf-sec">花費</div><ul class="kf-stats"><li class="${(s.items['玉鋼'] ?? 0) >= c.mats['玉鋼'] ? 'kf-up' : 'kf-down'}">玉鋼 ${s.items['玉鋼'] ?? 0}/${c.mats['玉鋼']}</li><li class="${s.money >= c.money ? 'kf-up' : 'kf-down'}">${c.money} 文</li></ul>
+            <div class="kf-btns"><button class="kf-btn" data-act="enhance" ${ok ? '' : 'disabled'}>強化</button></div></div>`;
+        }
+      }
+      return `<div class="kf-col">${list}</div><div class="kf-col">${det}<div class="kf-msg">${esc(this.msg)}</div></div>`;
+    }
+    const worn = equippedUids(s);
+    const first = this.synthSel.length ? s.gear.find((g) => g.uid === this.synthSel[0])?.rarity : undefined;
+    const list = s.gear.filter((g) => !worn.has(g.uid) && g.rarity < 4).sort((a, b) => a.rarity - b.rarity).map((g) => {
+      const picked = this.synthSel.includes(g.uid), blocked = first != null && g.rarity !== first && !picked;
+      return `<div class="kf-row" data-synth="${g.uid}" aria-selected="${picked}" style="${blocked ? 'opacity:.35' : ''}"><span class="k">${picked ? '✔' : RARITIES[g.rarity].name}</span><span class="n" style="color:${RARITIES[g.rarity].color}">${esc(equipName(g))}</span></div>`;
+    }).join('') || '<div class="kf-empty">背包裡沒有可以合成的裝備（穿在身上的、傳說的不能合成）。</div>';
+    const ok = this.synthSel.length === 3 && s.money >= SYNTH_COST;
+    const next = first != null ? RARITIES[Math.min(4, first + 1)] : null;
+    return `<div class="kf-col"><div class="kf-tag">選 3 件同樣稀有度的裝備</div>${list}</div>
+      <div class="kf-col"><div class="kf-card"><h3>合成</h3><div>已選 ${this.synthSel.length}/3</div>
+        ${next ? `<div>會得到一件隨機的 <span style="color:${next.color}">${next.name}</span> 裝備</div>` : ''}<div class="kf-tag">花費 ${SYNTH_COST} 文。強化等級不會保留。</div>
+        <div class="kf-btns"><button class="kf-btn" data-act="synth" ${ok ? '' : 'disabled'}>合成</button><button class="kf-btn secondary" data-act="synthClear">清除選擇</button></div></div><div class="kf-msg">${esc(this.msg)}</div></div>`;
+  }
+
   private render(): void {
+    if (this.mode === 'forge') {
+      const tabs = ([['craft', '打造'], ['enhance', '強化'], ['synth', '合成']] as const).map(([k, t]) => `<button class="kf-tab" data-ftab="${k}" aria-selected="${this.forgeTab === k}">${t}</button>`).join('');
+      this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="鍛冶屋"><div class="kf-head"><span class="kf-title">鍛冶屋</span>${tabs}<span class="kf-spacer"></span>
+        <span class="kf-mute">玉鋼 ${gameState.items['玉鋼'] ?? 0}</span><span class="kf-money">● ${gameState.money} 文</span><button class="kf-close" data-act="close" aria-label="關閉">✕</button></div><div class="kf-body">${this.forgeView()}</div></div>`;
+      return;
+    }
     if (this.mode === 'board') {
       this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="告示板"><div class="kf-head"><span class="kf-title">告示板</span><span class="kf-spacer"></span>
         <span class="kf-money">● ${gameState.money} 文</span><button class="kf-close" data-act="close" aria-label="關閉">✕</button></div><div class="kf-body">${this.boardView()}</div></div>`;
@@ -169,11 +250,11 @@ export class GameOverlay {
     }
     const s = gameState;
     const tabs = this.mode === 'menu'
-      ? ([['status', '狀態'], ['quest', '任務'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
+      ? ([['status', '狀態'], ['quest', '任務'], ['equip', '裝備'], ['bag', '背包'], ['map', '收集'], ['settings', '設定']] as const).map(([k, t]) => `<button class="kf-tab" data-tab="${k}" aria-selected="${this.menuTab === k}">${t}</button>`).join('')
       : ([['buy', '購買'], ['sell', '賣出']] as const).map(([k, t]) => `<button class="kf-tab" data-stab="${k}" aria-selected="${this.shopTab === k}">${t}</button>`).join('');
     const title = this.mode === 'menu' ? '選單' : '鈴屋';
     const body = this.mode === 'menu'
-      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.bagView())
+      ? (this.menuTab === 'status' ? this.statusView() : this.menuTab === 'equip' ? this.equipView() : this.menuTab === 'map' ? this.mapView() : this.menuTab === 'quest' ? this.questView() : this.menuTab === 'settings' ? this.settingsView() : this.bagView())
       : (this.shopTab === 'buy' ? this.buyView() : this.sellView());
     this.root.innerHTML = `<div class="kf-panel" role="dialog" aria-label="${title}">
       <div class="kf-head"><span class="kf-title">${title}</span>${tabs}<span class="kf-spacer"></span>
@@ -196,7 +277,7 @@ export class GameOverlay {
             <dt>爆擊率</dt><dd>${st.crit}%</dd><dt>MP 回復</dt><dd>${st.mpRegen} / 秒</dd>
           </dl></div></div>
       <div class="kf-col"><div class="kf-sec">裝備中</div>
-        ${SLOTS.map((sl) => { const g = this.worn(sl); return `<div class="kf-row" data-goslot="${sl}"><span class="k">${SLOT_NAME[sl]}</span><span class="n" style="color:${g ? RARITIES[g.rarity].color : '#6b6780'}">${g ? esc(BASES[g.base].name) : '（空）'}</span></div>`; }).join('')}
+        ${SLOTS.map((sl) => { const g = this.worn(sl); return `<div class="kf-row" data-goslot="${sl}"><span class="k">${SLOT_NAME[sl]}</span><span class="n" style="color:${g ? RARITIES[g.rarity].color : '#6b6780'}">${g ? esc(equipName(g)) : '（空）'}</span></div>`; }).join('')}
         <div class="kf-sec">難度</div><div>${DIFFICULTY[s.difficulty].name}</div></div>`;
   }
 
@@ -225,7 +306,7 @@ export class GameOverlay {
     const worn = equippedUids(s);
     const left = SLOTS.map((sl) => {
       const g = this.worn(sl);
-      return `<div class="kf-row" data-slot="${sl}" aria-selected="${this.slot === sl}"><span class="k">${SLOT_NAME[sl]}</span><span class="n" style="color:${g ? RARITIES[g.rarity].color : '#6b6780'}">${g ? esc(BASES[g.base].name) : '（空）'}</span></div>`;
+      return `<div class="kf-row" data-slot="${sl}" aria-selected="${this.slot === sl}"><span class="k">${SLOT_NAME[sl]}</span><span class="n" style="color:${g ? RARITIES[g.rarity].color : '#6b6780'}">${g ? esc(equipName(g)) : '（空）'}</span></div>`;
     }).join('');
     const cur = this.worn(this.slot);
     const now = statsOf(s);
@@ -243,7 +324,7 @@ export class GameOverlay {
   }
 
   private gearTitle(g: Equip): string {
-    return `<h3 style="color:${RARITIES[g.rarity].color}">${esc(BASES[g.base].name)}</h3><div class="kf-tag">${RARITIES[g.rarity].name}・${SLOT_NAME[BASES[g.base].slot]}${BASES[g.base].tier >= 2 ? '・上等' : ''}</div>`;
+    return `<h3 style="color:${RARITIES[g.rarity].color}">${esc(equipName(g))}</h3><div class="kf-tag">${RARITIES[g.rarity].name}・${SLOT_NAME[BASES[g.base].slot]}${BASES[g.base].tier >= 2 ? '・上等' : ''}</div>`;
   }
 
   private bagList(selling: boolean): string {
@@ -254,7 +335,7 @@ export class GameOverlay {
     rows.push('<div class="kf-sec">道具</div>');
     rows.push(items.length ? items.map(([n, c]) => `<div class="kf-row" data-item="${esc(n)}" aria-selected="${this.sel?.kind === 'item' && this.sel.name === n}"><span class="n">${esc(n)}</span><span class="q">×${c}</span>${selling ? `<span class="kf-money">${this.itemSell(n)} 文</span>` : ''}</div>`).join('') : '<div class="kf-empty">沒有道具</div>');
     rows.push('<div class="kf-sec">裝備（沒穿在身上的）</div>');
-    rows.push(gear.length ? gear.map((g) => `<div class="kf-row" data-gear="${g.uid}" aria-selected="${this.sel?.kind === 'gear' && this.sel.uid === g.uid}"><span class="k">${SLOT_NAME[BASES[g.base].slot]}</span><span class="n" style="color:${RARITIES[g.rarity].color}">${esc(BASES[g.base].name)}</span>${selling ? `<span class="kf-money">${sellPrice(equipValue(g))} 文</span>` : ''}</div>`).join('') : '<div class="kf-empty">沒有多的裝備</div>');
+    rows.push(gear.length ? gear.map((g) => `<div class="kf-row" data-gear="${g.uid}" aria-selected="${this.sel?.kind === 'gear' && this.sel.uid === g.uid}"><span class="k">${SLOT_NAME[BASES[g.base].slot]}</span><span class="n" style="color:${RARITIES[g.rarity].color}">${esc(equipName(g))}</span>${selling ? `<span class="kf-money">${sellPrice(equipValue(g))} 文</span>` : ''}</div>`).join('') : '<div class="kf-empty">沒有多的裝備</div>');
     return rows.join('');
   }
 
@@ -324,9 +405,32 @@ export class GameOverlay {
 
   // ---------- 操作 ----------
   private onClick(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-setting],[data-diff],[data-ftab],[data-recipe],[data-synth],[data-accept],[data-turnin],[data-saveslot],[data-loadslot],[data-act],[data-tab],[data-stab],[data-slot],[data-goslot],[data-equip],[data-item],[data-gear],[data-buyitem],[data-buygear]');
     if (!el) { if (e.target === this.root) this.close(); return; }
     const d = el.dataset, s = gameState;
+    if (d.setting) {
+      updateSettings({ [d.setting]: Number(d.value) } as Partial<Settings>);
+      sound.applyVolume(); sound.sfx('select');
+      this.render(); return;
+    }
+    if (d.diff) {
+      const order = ['easy', 'normal', 'hard'];
+      if (order.indexOf(d.diff) <= order.indexOf(s.difficulty)) { s.difficulty = d.diff as typeof s.difficulty; this.msg = `難度改成「${DIFFICULTY[s.difficulty].name}」`; }
+      this.render(); return;
+    }
+    if (d.ftab) { this.forgeTab = d.ftab as 'craft' | 'enhance' | 'synth'; this.sel = null; this.msg = ''; this.synthSel = []; this.render(); return; }
+    if (d.recipe) { this.recipe = d.recipe; this.msg = ''; this.render(); return; }
+    if (d.synth) {
+      const uid = Number(d.synth), g = s.gear.find((x) => x.uid === uid);
+      const first = this.synthSel.length ? s.gear.find((x) => x.uid === this.synthSel[0])?.rarity : undefined;
+      if (this.synthSel.includes(uid)) this.synthSel = this.synthSel.filter((u) => u !== uid);
+      else if (g && this.synthSel.length < 3 && (first == null || g.rarity === first)) this.synthSel.push(uid);
+      this.msg = ''; this.render(); return;
+    }
+    if (d.act === 'craft') { this.msg = craft(s, this.recipe).message; this.render(); return; }
+    if (d.act === 'enhance' && this.sel?.kind === 'gear') { this.msg = enhance(s, this.sel.uid).message; this.render(); return; }
+    if (d.act === 'synth') { this.msg = synthesize(s, this.synthSel).message; this.synthSel = []; this.render(); return; }
+    if (d.act === 'synthClear') { this.synthSel = []; this.render(); return; }
     if (d.accept) { if (accept(s, d.accept)) this.msg = `接受了「${questDef(d.accept, s.flags)?.name}」`; this.render(); return; }
     if (d.turnin) { this.msg = turnIn(s, d.turnin) ?? ''; this.render(); return; }
     if (d.saveslot != null && this.saveReq) {

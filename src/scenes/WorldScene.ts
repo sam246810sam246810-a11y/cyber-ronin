@@ -13,6 +13,8 @@ import { gameState, gearLabel, giveRandomGear, openChest, statsOf, type Reward }
 import { serialize, writeSave } from '../systems/save';
 import { accept, offersFrom, onPickup, pickupVisible, questDef, readyFor, turnIn } from '../systems/quests';
 import { FONT_FAMILY } from '../config';
+import { sound } from '../audio/sound';
+import { trackForMap } from '../audio/music';
 import { collectionReport } from '../systems/collection';
 import { MAPS } from '../data/maps';
 import { findInFront } from '../systems/interaction';
@@ -144,6 +146,7 @@ export class WorldScene extends Phaser.Scene {
     if (!this.scene.isActive(SCENES.ui)) this.scene.launch(SCENES.ui, { areaName });
     else this.game.events.emit(EV.area, areaName);
 
+    sound.music(trackForMap(mapKey));
     // 自動存檔（PRD 10）：每次進入地圖
     writeSave('auto', serialize(gameState, mapKey, spawnName, areaName));
 
@@ -220,10 +223,13 @@ export class WorldScene extends Phaser.Scene {
         b.minionCount = () => this.enemies.filter((e) => e.alive && e !== b).length;
         b.on('shoot', (en: Enemy, dir: { x: number; y: number }, speed?: number) => this.combat.enemyShoot(en, dir, speed));
         b.on('aoe', (en: Enemy, a: { x: number; y: number; r: number; mult?: number }) => this.combat.enemyAoe(en, a));
-        b.on('summon', () => this.summonSpiders());
+        b.on('summon', () => { sound.sfx('roar'); this.summonSpiders(); });
         b.on('pool', (_: Enemy, at: { x: number; y: number }) => this.addPool(at.x, at.y));
         b.on('webs', (_: Enemy, at: { x: number; y: number }) => this.spawnWebs(at.x, at.y));
-        b.on('phase', (_: Enemy, p: number) => this.game.events.emit(EV.toast, p === 2 ? '土蜘蛛召喚了手下！小心地上的毒' : '土蜘蛛發狂了！動作變快了'));
+        b.on('phase', (_: Enemy, p: number) => {
+          sound.sfx('roar');
+          this.game.events.emit(EV.toast, p === 2 ? '土蜘蛛召喚了手下！小心地上的毒' : '土蜘蛛發狂了！動作變快了');
+        });
         b.on('killed', () => this.onBossDefeated());
         this.enemies.push(b);
         break;
@@ -396,6 +402,7 @@ export class WorldScene extends Phaser.Scene {
   private solveGroup(group: string): void {
     if (gameState.flags.has(gateFlag(group))) return;
     gameState.flags.add(gateFlag(group));
+    sound.sfx('gate');
     this.cameras.main.shake(250, 0.005);
     for (const g of this.gates.filter((g) => g.group === group)) this.openGate(g, true);
     this.game.events.emit(EV.toast, '喀啦喀啦……某處的門打開了！');
@@ -415,6 +422,7 @@ export class WorldScene extends Phaser.Scene {
     if (gameState.flags.has(gateFlag(group)) || t.sprite.frame.name === String(FRAME.lantern[1])) { this.game.events.emit(EV.toast, `「${t.props.label}」的燈籠已經亮了`); return; }
     if (order === this.lanternNext[group]) {
       t.sprite.setFrame(FRAME.lantern[1]);
+      sound.sfx('lantern');
       ring(this, t.x, t.y - 4, 8, 0x7fd8ff, 400);
       this.game.events.emit(EV.toast, `點亮了刻著「${t.props.label}」的燈籠`);
       this.lanternNext[group]++;
@@ -423,6 +431,7 @@ export class WorldScene extends Phaser.Scene {
     } else {
       for (const x of this.things.filter((x) => x.kind === 'lantern' && x.props.group === group)) x.sprite.setFrame(FRAME.lantern[0]);
       this.lanternNext[group] = 1;
+      sound.sfx('wrong');
       this.cameras.main.shake(120, 0.003);
       this.game.events.emit(EV.toast, '燈籠全都熄滅了……順序好像不對');
     }
@@ -551,6 +560,7 @@ export class WorldScene extends Phaser.Scene {
 
   private lightBossLantern(br: Breakable, sprite: Phaser.GameObjects.Sprite): void {
     sprite.setFrame(FRAME.lantern[1]);
+    sound.sfx('lantern');
     ring(this, br.x, br.y - 4, 30, 0xff9a4a, 500);
     for (const w of [...this.webs]) this.removeWeb(w);
     if (this.boss?.alive) {
@@ -569,6 +579,8 @@ export class WorldScene extends Phaser.Scene {
     hudState.boss.visible = false;
     this.cameras.main.shake(800, 0.012);
     this.cameras.main.flash(600, 255, 240, 220);
+    sound.sfx('roar');
+    sound.music('village');
     gameState.money += 500;
     gameState.items['銀鑰匙'] = (gameState.items['銀鑰匙'] ?? 0) + 1;
     const g = giveRandomGear(gameState, Math.random, 2, 2);
@@ -669,6 +681,7 @@ export class WorldScene extends Phaser.Scene {
       if (r.opened) {
         const frames = t.props.key ? FRAME.ironChest : t.props.guard ? FRAME.goldChest : FRAME.chest;
         t.sprite.setFrame(frames[1]);
+        sound.sfx('chest');
         ring(this, t.x, t.y, 10, 0xf2c94c, 350);
         this.refreshHud(true);
       }
@@ -679,6 +692,7 @@ export class WorldScene extends Phaser.Scene {
     if (t.kind === 'board') { this.game.events.emit(EV.board); return; }
     if (t.kind === 'pickup') {
       gameState.flags.add(`pickup:${t.id}`);
+      sound.sfx('pickup');
       ring(this, t.x, t.y, 10, 0xfff2b0, 350);
       this.game.events.emit(EV.toast, `撿到了${t.props.label}`);
       for (const m of onPickup(gameState, String(t.props.group))) this.game.events.emit(EV.toast, m);
@@ -690,6 +704,7 @@ export class WorldScene extends Phaser.Scene {
       const st = statsOf(gameState);
       gameState.hp = st.maxHp; gameState.mp = st.maxMp; gameState.statuses = {};
       ring(this, t.x, t.y, 16, 0xffe0b0, 500);
+      sound.sfx('save');
       this.game.events.emit(EV.toast, '地藏保佑，HP 和 MP 全滿了');
       const req: SaveRequest = { map: this.mapKey, spawn: 'jizo', areaName: this.areaName };
       this.game.events.emit(EV.save, req);
@@ -706,6 +721,7 @@ export class WorldScene extends Phaser.Scene {
       for (const f of v.set ?? []) gameState.flags.add(f);
       if (v.set?.length) this.onFlagsChanged(v.set);
       if (open === 'shop') this.game.events.emit(EV.shop, npc || 'rin');
+      if (open === 'forge') this.game.events.emit(EV.forge);
       if (open?.startsWith('warp:')) { const [, map, spawn] = open.split(':'); this.goTo(map, spawn, 'up'); }
       after?.();
     };

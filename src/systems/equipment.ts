@@ -33,7 +33,8 @@ export const RARITIES: Rarity[] = [
 ];
 
 export interface Affix { stat: StatKey; value: number }
-export interface Equip { uid: number; base: BaseId; rarity: number; affixes: Affix[] }
+/** plus：強化等級 0–5（PRD 7.4） */
+export interface Equip { uid: number; base: BaseId; rarity: number; affixes: Affix[]; plus?: number }
 
 /** 詞條池：[最小, 最大]，第 2 階再 ×1.6 */
 const AFFIX_POOL: Record<string, [number, number, boolean]> = {
@@ -73,18 +74,21 @@ export function generateEquip(rng: Rng, uid: number, opts: { tier: number; class
   return { uid, base, rarity, affixes: rollAffixes(rng, RARITIES[rarity].affixes, opts.tier) };
 }
 
-export function equipName(e: Equip): string { return BASES[e.base].name; }
+export function equipName(e: Equip): string { return BASES[e.base].name + (e.plus ? ` +${e.plus}` : ''); }
 export function canUse(e: Equip, classId: string): boolean { const c = BASES[e.base].class; return !c || c === classId; }
 
 /** 這件裝備提供的所有能力（基礎＋詞條） */
 export function equipStats(e: Equip): StatBlock {
-  const out: StatBlock = { ...BASES[e.base].stats };
+  // 強化：每級基礎數值 +8%（四捨五入到小數 1 位）
+  const k = 1 + 0.08 * (e.plus ?? 0);
+  const out: StatBlock = {};
+  for (const [s, v] of Object.entries(BASES[e.base].stats) as [StatKey, number][]) out[s] = Math.round(v * k * 10) / 10;
   for (const a of e.affixes) out[a.stat] = (out[a.stat] ?? 0) + a.value;
   return out;
 }
 
 /** 價格：基礎價 ×（1 + 0.5 × 稀有度） */
-export function equipValue(e: Equip): number { return Math.round(BASES[e.base].price * (1 + 0.5 * e.rarity)); }
+export function equipValue(e: Equip): number { return Math.round(BASES[e.base].price * (1 + 0.5 * e.rarity) * (1 + 0.2 * (e.plus ?? 0))); }
 export const SELL_RATE = 0.4;
 export function sellPrice(buyPrice: number): number { return Math.max(1, Math.floor(buyPrice * SELL_RATE)); }
 

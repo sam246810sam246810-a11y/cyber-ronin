@@ -9,6 +9,8 @@ import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { TouchButton } from '../ui/TouchButton';
 import { DialogueBox } from '../ui/DialogueBox';
 import { useLogicalCamera } from '../ui/camera';
+import { sound } from '../audio/sound';
+import { getSettings } from '../systems/settings';
 import { getOverlay, type GameOverlay } from '../ui/dom/GameOverlay';
 import { PHASE_MARKS } from '../systems/boss';
 import { isReady, progressOf, questDef } from '../systems/quests';
@@ -44,6 +46,7 @@ export class UIScene extends Phaser.Scene {
 
   create(data: { areaName?: string }): void {
     useLogicalCamera(this);
+    this.input.on('pointerdown', () => sound.unlock());
     this.joystick = new VirtualJoystick(this, () => GAME_WIDTH / 2);
     const push = (a: Action) => () => { if (!this.dialogue.isOpen) inputState.actions.push(a); };
     this.buttons = {
@@ -56,6 +59,7 @@ export class UIScene extends Phaser.Scene {
       item: new TouchButton(this, { x: 462, y: 172, r: 13, label: '藥', color: 0x2a4a2a, onDown: push('item') }),
     };
     this.dialogue = new DialogueBox(this);
+    this.time.delayedCall(0, () => this.applyButtonAlpha());
     this.overlay = getOverlay();
     this.menuBtn = new TouchButton(this, { x: 458, y: 20, r: 14, label: '選單', fontSize: 8, onDown: () => this.openOverlay(() => this.overlay.openMenu(() => this.closeOverlay())) });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.overlay.close());
@@ -94,6 +98,7 @@ export class UIScene extends Phaser.Scene {
       [EV.area, (name: string) => { if (this.dialogue.isOpen) { this.dialogue.close(); this.showButtons(true); } this.showAreaName(name); }],
       [EV.banner, (b: BannerInfo) => this.banner(b)],
       [EV.shop, (id: string) => this.openOverlay(() => this.overlay.openShop(id, () => this.closeOverlay()))],
+      [EV.forge, () => this.openOverlay(() => this.overlay.openForge(() => this.closeOverlay()))],
       [EV.board, () => this.openOverlay(() => this.overlay.openBoard(() => this.closeOverlay()))],
       [EV.save, (req: SaveRequest) => this.openOverlay(() => this.overlay.openSave(req, () => this.closeOverlay()))],
     ];
@@ -112,11 +117,18 @@ export class UIScene extends Phaser.Scene {
   private openOverlay(open: () => void): void {
     if (this.overlay.isOpen || this.dialogue.isOpen || inputState.locked) return;
     inputState.locked = true;
+    sound.sfx('select');
     this.showButtons(false);
     open();
   }
 
+  private applyButtonAlpha(): void {
+    const a = getSettings().buttonAlpha, b = this.buttons;
+    [b.attack, b.dodge, b.item, ...b.skills, this.menuBtn].forEach((x) => x.setOpacity(a));
+  }
+
   private closeOverlay(): void {
+    this.applyButtonAlpha();
     inputState.locked = false;
     this.showButtons(true);
     this.refreshStatus();

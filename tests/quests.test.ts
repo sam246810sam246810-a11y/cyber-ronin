@@ -19,7 +19,7 @@ describe('任務', () => {
     expect(onKill(s, 'kitsunebi')).toEqual(['討伐：狐火：完成！回去交付吧']);
     expect(onKill(s, 'kitsunebi')).toEqual([]); // 不會超過
     expect(readyFor(s, 'board')).toEqual(['hunt_kitsunebi']);
-    expect(turnIn(s, 'hunt_kitsunebi')).toBe('完成「討伐：狐火」！獲得 60 文、靈水 ×2');
+    expect(turnIn(s, 'hunt_kitsunebi')).toBe('完成「討伐：狐火」！獲得 60 文、45 經驗（升到 Lv.2）、靈水 ×2');
     expect(s.quests.hunt_kitsunebi.status).toBe('done');
     expect(offersFrom(s, 'board')).not.toContain('hunt_kitsunebi');
   });
