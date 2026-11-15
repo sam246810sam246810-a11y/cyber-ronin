@@ -72,7 +72,7 @@ export function makeButton(
 export function header(scene: Phaser.Scene, title: string, credits: number | null, onBack: () => void) {
   const bg = scene.add.rectangle(W / 2, 40, W, 80, 0x0b0916, 0.92);
   const line = scene.add.rectangle(W / 2, 80, W, 2, COLORS.magenta, 0.5);
-  const back = makeButton(scene, 52, 40, 80, 48, '‹', COLORS.cyan, onBack, 28);
+  const back = makeButton(scene, 52, 40, 80, 48, '<', COLORS.cyan, onBack, 28);
   const t = scene.add.text(W / 2, 40, title, textStyle(24)).setOrigin(0.5);
   const c = scene.add.text(W - 16, 40, credits === null ? '' : `◆ ${credits}`, textStyle(18, '#ffd84d')).setOrigin(1, 0.5);
   return { bg, line, back, title: t, credits: c };

@@ -8,7 +8,13 @@ export const H = Math.round(W * aspect);
 /** 畫布實際解析度倍率（高解析度螢幕用 2 倍） */
 export const Z = (window.devicePixelRatio || 1) >= 1.5 ? 2 : 1;
 
-export const FONT = '"PingFang TC","Noto Sans TC","Microsoft JhengHei","Heiti TC",system-ui,sans-serif';
+export const FONT = '"Cubic 11","PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif';
+
+/** 像素字型以 11px 為一格；尺寸對齊到半格（畫布 2 倍時剛好是整數像素），字才會銳利 */
+export function snapFont(size: number): number {
+  const unit = 11 / Z;
+  return Math.max(11, Math.round(size / unit) * unit);
+}
 
 export const COLORS = {
   bg: 0x07060d,
@@ -22,12 +28,11 @@ export const COLORS = {
   dim: '#8a86a8',
 };
 
-export function textStyle(size: number, color = COLORS.text, bold = true): Phaser.Types.GameObjects.Text.TextStyle {
+export function textStyle(size: number, color = COLORS.text, _bold = true): Phaser.Types.GameObjects.Text.TextStyle {
   return {
     fontFamily: FONT,
-    fontSize: `${size}px`,
+    fontSize: `${snapFont(size)}px`,
     color,
-    fontStyle: bold ? 'bold' : 'normal',
     resolution: Z,
   };
 }

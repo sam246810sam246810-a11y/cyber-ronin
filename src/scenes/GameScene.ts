@@ -29,7 +29,7 @@ import {
   xpToNext,
 } from '../config/balance';
 import { T } from '../i18n/zh-TW';
-import { COLORS, H, W, Z, textStyle } from '../game/layout';
+import { COLORS, H, W, Z, snapFont, textStyle } from '../game/layout';
 import { SpatialGrid } from '../game/SpatialGrid';
 import { TEX } from '../game/textures';
 import { SaveData, loadSave, writeSave } from '../game/storage';
@@ -202,6 +202,14 @@ export class GameScene extends Phaser.Scene {
   faceX = 0;
   faceY = -1;
   moving = false;
+  atkT = 0;
+  atkX = 0;
+  atkY = 0;
+  lastAtk = -9;
+  ghosts: { img: Phaser.GameObjects.Image; life: number }[] = [];
+  beams: { img: Phaser.GameObjects.Image; life: number }[] = [];
+  fxPool: Phaser.GameObjects.Sprite[] = [];
+  lastHitFx = 0;
   invuln = 0;
   hurtFlash = 0;
   playerImg!: Phaser.GameObjects.Image;
@@ -318,9 +326,10 @@ export class GameScene extends Phaser.Scene {
     this.shadowG = this.add.graphics().setDepth(0);
     this.fx = this.add.graphics().setDepth(3);
     this.hpBar = this.add.graphics().setDepth(11);
-    this.fieldImg = this.add.image(0, 0, 'ring').setDepth(4).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
-    this.playerImg = this.add.image(0, 0, `char-${this.char.id}`).setScale(0.62).setDepth(10).setOrigin(0.5, 0.8);
-    this.facingImg = this.add.image(0, 0, 'facing').setScale(1 / TEX).setDepth(10).setAlpha(0.7);
+    const ringKey = this.textures.exists('field-ring') ? 'field-ring' : 'ring';
+    this.fieldImg = this.add.image(0, 0, ringKey).setDepth(4).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
+    this.playerImg = this.add.image(0, 0, `char-${this.char.id}`).setScale(0.8).setDepth(10).setOrigin(0.5, 0.8);
+    this.facingImg = this.add.image(0, 0, 'facing').setScale(0.7 / TEX).setDepth(1).setAlpha(0.45).setTint(0x3df5ff);
     this.sparks = this.add.particles(0, 0, 'spark', {
       lifespan: 380,
       speed: { min: 60, max: 220 },
@@ -371,6 +380,12 @@ export class GameScene extends Phaser.Scene {
     this.faceX = 0;
     this.faceY = -1;
     this.moving = false;
+    this.atkT = 0;
+    this.lastAtk = -9;
+    this.ghosts = [];
+    this.beams = [];
+    this.fxPool = [];
+    this.lastHitFx = 0;
     this.invuln = 0;
     this.hurtFlash = 0;
     this.t = 0;
@@ -870,6 +885,10 @@ export class GameScene extends Phaser.Scene {
     }
     this.showDamage(e.x, e.y - e.radius, dmg);
     if (!quiet) Audio.play('sfx-hit', 0.18, 70, 400);
+    if (this.time.now - this.lastHitFx > 35) {
+      this.lastHitFx = this.time.now;
+      this.playFx('hit', e.x + (Math.random() - 0.5) * e.radius, e.y + (Math.random() - 0.5) * e.radius, 30 + e.radius, Math.random() * 6, 0xffffff, 30, 12);
+    }
     if (e.hp <= 0) this.killEnemy(e, fromIai);
   }
 
@@ -881,6 +900,7 @@ export class GameScene extends Phaser.Scene {
     const kind = e.def.kind;
     this.seenEnemies.add(e.boss ? `boss-${e.boss.variant}` : kind);
     this.sparks.explode(kind === 'boss' ? 40 : kind === 'elite' ? 18 : 5, e.x, e.y);
+    this.playFx('death', e.x, e.y, e.radius * (kind === 'boss' ? 5 : 4.2), 0, kind === 'boss' || kind === 'elite' ? 0xffffff : e.def.color, 26, 8);
     Audio.play('sfx-kill', 0.22, 45, 500);
     if (!fromIai) {
       this.intent += (kind === 'elite' ? INTENT.eliteBonus : kind === 'boss' ? 0 : 1) * this.intentMult;
@@ -919,6 +939,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private infect(e: Enemy, dps: number, duration: number, spread: number) {
+    this.playFx('virus', e.x, e.y, 56, 0, 0xffffff, 20);
     e.virusT = duration;
     e.virusDps = dps;
     e.virusSpread = Math.max(0, spread);
@@ -939,7 +960,10 @@ export class GameScene extends Phaser.Scene {
           if (w.timer <= 0) {
             w.timer = Math.max(0.2, s.cooldown * this.cdMult);
             Audio.play('sfx-slash', 0.32, 90, 300);
-            if (w.id === 'sakura') this.slashCircle(105 * s.area, dmg);
+            if (w.id === 'sakura') {
+              this.playerAttack(this.faceX, this.faceY);
+              this.slashCircle(105 * s.area, dmg);
+            }
             else {
               const R = 105 * s.area;
               let ax = this.faceX;
@@ -950,6 +974,7 @@ export class GameScene extends Phaser.Scene {
                 ax = (tgt.x - this.px) / l;
                 ay = (tgt.y - this.py) / l;
               }
+              this.playerAttack(ax, ay);
               this.slashFan(ax, ay, R, dmg, WEAPONS.katana.color);
               if (s.amount >= 2) this.slashFan(-ax, -ay, R, dmg, WEAPONS.katana.color);
             }
@@ -996,6 +1021,7 @@ export class GameScene extends Phaser.Scene {
             }
             w.timer = Math.max(0.25, s.cooldown * this.cdMult);
             Audio.play('sfx-throw', 0.3, 80, 300);
+            this.playerAttack(targets[0].x - this.px, targets[0].y - this.py);
             for (let i = 0; i < s.amount; i++) {
               const tgt = targets[i % targets.length];
               const a0 = Math.atan2(tgt.y - this.py, tgt.x - this.px);
@@ -1010,13 +1036,15 @@ export class GameScene extends Phaser.Scene {
         case 'raijin': {
           fieldOn = true;
           const r = 64 * s.area;
-          const col = w.id === 'raijin' ? 0x7fa8ff : WEAPONS.field.color;
+          const generated = this.fieldImg.texture.key === 'field-ring';
+          const col = w.id === 'raijin' ? (generated ? 0xd8e4ff : 0x7fa8ff) : generated ? 0xffffff : WEAPONS.field.color;
           this.fieldImg
             .setVisible(true)
             .setPosition(this.px, this.py)
-            .setScale((2 * r) / (128 * TEX))
+            .setDisplaySize(2 * r * (generated ? 1.08 : 1), 2 * r * (generated ? 1.08 : 1))
+            .setRotation(this.t * 0.6)
             .setTint(col)
-            .setAlpha(0.5 + Math.sin(this.t * 6) * 0.12);
+            .setAlpha((generated ? 0.65 : 0.5) + Math.sin(this.t * 6) * 0.12);
           w.timer -= dt;
           if (w.timer <= 0) {
             w.timer = Math.max(0.2, s.cooldown * this.cdMult);
@@ -1151,6 +1179,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     const a = Math.atan2(fy, fx);
+    if (this.playFx('slash', this.px + fx * R * 0.45, this.py + fy * R * 0.45, R * 1.7, a, 0xffffff, 30)) return;
     this.addSlash((g) => {
       g.fillStyle(color, 0.22);
       g.slice(this.px, this.py, R, a - arc / 2, a + arc / 2, false);
@@ -1177,6 +1206,7 @@ export class GameScene extends Phaser.Scene {
     }
     const color = WEAPONS.sakura.color;
     const rot = this.t * 7;
+    if (this.playFx('sakura', this.px, this.py, R * 2.4, rot, 0xffffff, 30)) return;
     this.addSlash((g) => {
       g.fillStyle(color, 0.16);
       g.fillCircle(this.px, this.py, R);
@@ -1211,6 +1241,16 @@ export class GameScene extends Phaser.Scene {
       const perp = Math.abs(ex * dy - ey * dx);
       if (perp <= halfW + e.radius) this.damageEnemy(e, dmg, dx * 120, dy * 120);
     }
+    if (this.textures.exists('laser-beam')) {
+      let b = this.beams.find((q) => q.life <= 0);
+      if (!b) {
+        b = { img: this.add.image(0, 0, 'laser-beam').setOrigin(0, 0.5).setDepth(9).setBlendMode(Phaser.BlendModes.ADD), life: 0 };
+        this.beams.push(b);
+      }
+      b.life = 0.18;
+      b.img.setPosition(x0, y0).setRotation(Math.atan2(dy, dx)).setDisplaySize(len, halfW * 3.2).setVisible(true).setAlpha(1);
+      return;
+    }
     this.addSlash((g) => {
       g.lineStyle(halfW * 2.6, 0x3df5ff, 0.35);
       g.lineBetween(x0, y0, x1, y1);
@@ -1231,6 +1271,7 @@ export class GameScene extends Phaser.Scene {
       this.damageEnemy(e, dmg, 0, 0, false, true);
       // 同時打到附近的敵人
       for (const o of this.grid.query(x, y, 40, tmp)) if (o.active && o !== e && (o.x - x) ** 2 + (o.y - y) ** 2 < 40 * 40) this.damageEnemy(o, dmg * 0.5, 0, 0, false, true);
+      if (this.playFx('lightning', x, y - 70, 170, 0, 0xffffff, 24)) continue;
       this.addSlash((g) => {
         g.lineStyle(3, 0xbfd4ff, 1);
         g.beginPath();
@@ -1282,6 +1323,8 @@ export class GameScene extends Phaser.Scene {
       const x = s.x;
       const y = s.y;
       const r = s.r;
+      this.cameras.main.shake(80, 0.003);
+      if (this.playFx('explode', x, y, r * 2.8, 0, 0xffffff, 22)) continue;
       this.addSlash((g) => {
         g.fillStyle(0xff4d5e, 0.35);
         g.fillCircle(x, y, r);
@@ -1921,12 +1964,74 @@ export class GameScene extends Phaser.Scene {
   showDamage(x: number, y: number, v: number) {
     const d = this.dmgTexts.find((q) => q.life <= 0);
     if (!d) return;
-    d.life = 0.5;
-    d.t.setText(String(v)).setPosition(x + (Math.random() - 0.5) * 10, y).setVisible(true).setAlpha(1);
-    d.t.setColor(v >= 100 ? '#ffc83d' : '#ffffff').setFontSize(v >= 100 ? 19 : 15);
+    const big = v >= 100;
+    d.life = 0.6;
+    d.t.setText(String(v)).setPosition(x + (Math.random() - 0.5) * 14, y).setVisible(true).setAlpha(1).setScale(1.7);
+    d.t.setColor(big ? '#ffe14d' : v >= 30 ? '#ffffff' : '#c9d6ff').setFontSize(snapFont(big ? 22 : 16.5));
+    d.t.setStroke(big ? '#a3002e' : '#07060d', big ? 5 : 4);
+  }
+
+  /** 角色出招：前衝、壓扁拉伸、殘影 */
+  playerAttack(dx: number, dy: number) {
+    if (this.t - this.lastAtk < 0.22) return;
+    this.lastAtk = this.t;
+    const l = Math.hypot(dx, dy) || 1;
+    this.atkX = dx / l;
+    this.atkY = dy / l;
+    this.atkT = 0.26;
+    // 殘影
+    let gh = this.ghosts.find((g) => g.life <= 0);
+    if (!gh) {
+      gh = { img: this.add.image(0, 0, this.playerImg.texture.key).setDepth(9).setBlendMode(Phaser.BlendModes.ADD), life: 0 };
+      this.ghosts.push(gh);
+    }
+    gh.life = 0.22;
+    gh.img
+      .setTexture(this.playerImg.texture.key)
+      .setOrigin(this.playerImg.originX, this.playerImg.originY)
+      .setScale(this.playerImg.scaleX, this.playerImg.scaleY)
+      .setFlipX(this.playerImg.flipX)
+      .setPosition(this.playerImg.x, this.playerImg.y)
+      .setTintFill(0x3df5ff)
+      .setAlpha(0.35)
+      .setVisible(true);
+  }
+
+  /** 播放特效動畫（有生成的影格才播；回傳是否播放） */
+  playFx(name: string, x: number, y: number, size: number, rotation = 0, tint = 0xffffff, rate = 24, depth = 9): boolean {
+    const key = `fx-${name}`;
+    if (!this.anims.exists(key)) return false;
+    let sp = this.fxPool.find((q) => !q.visible);
+    if (!sp) {
+      if (this.fxPool.length >= 90) return false;
+      sp = this.add.sprite(0, 0, `${key}-0`).setBlendMode(Phaser.BlendModes.ADD);
+      sp.on(Phaser.Animations.Events.ANIMATION_COMPLETE, () => sp!.setVisible(false));
+      this.fxPool.push(sp);
+    }
+    sp.setVisible(true).setPosition(x, y).setRotation(rotation).setDepth(depth).setAlpha(1);
+    if (tint === 0xffffff) sp.clearTint();
+    else sp.setTint(tint);
+    sp.play({ key, frameRate: rate });
+    const fw = sp.frame.width || 1;
+    sp.setScale(size / fw);
+    return true;
   }
 
   private updateEffects(dt: number) {
+    if (this.atkT > 0) this.atkT -= dt;
+    for (const b of this.beams) {
+      if (b.life <= 0) continue;
+      b.life -= dt;
+      b.img.setAlpha(Math.max(0, b.life / 0.18));
+      b.img.scaleY *= 0.9;
+      if (b.life <= 0) b.img.setVisible(false);
+    }
+    for (const g of this.ghosts) {
+      if (g.life <= 0) continue;
+      g.life -= dt;
+      g.img.setAlpha(Math.max(0, g.life / 0.22) * 0.35);
+      if (g.life <= 0) g.img.setVisible(false);
+    }
     for (const s of this.slashes) {
       if (s.life <= 0) continue;
       s.life -= dt;
@@ -1936,7 +2041,8 @@ export class GameScene extends Phaser.Scene {
     for (const d of this.dmgTexts) {
       if (d.life <= 0) continue;
       d.life -= dt;
-      d.t.y -= 50 * dt;
+      d.t.y -= (d.life > 0.45 ? 20 : 45) * dt;
+      d.t.setScale(Math.max(1, d.t.scaleX - dt * 9));
       d.t.setAlpha(Math.min(1, d.life * 4));
       if (d.life <= 0) d.t.setVisible(false);
     }
@@ -1964,13 +2070,26 @@ export class GameScene extends Phaser.Scene {
     // 玩家：走路時上下晃動
     const blink = this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0;
     const bob = this.moving ? Math.abs(Math.sin(this.t * 12)) * 3 : Math.sin(this.t * 3) * 0.8;
+    const atk = this.atkT > 0 ? Math.sin((this.atkT / 0.26) * Math.PI) : 0;
+    const atkKey = `char-${this.char.id}-atk`;
+    const useAtk = this.atkT > 0 && this.textures.exists(atkKey);
+    const key = useAtk ? atkKey : `char-${this.char.id}`;
+    if (this.playerImg.texture.key !== key) {
+      this.playerImg.setTexture(key);
+      // 讓腳底對齊：待機圖高 96，原點在 80% 處
+      this.playerImg.setOrigin(0.5, 1 - 19.2 / (this.playerImg.frame.height || 96));
+    }
+    const flip = this.atkT > 0 ? this.atkX < 0 : this.faceX < -0.1;
+    const base = 0.8;
     this.playerImg
-      .setPosition(this.px, this.py + 6 - bob)
+      .setPosition(this.px + this.atkX * atk * 9, this.py + 6 - bob + this.atkY * atk * 6)
+      .setScale(base * (1 + atk * 0.14), base * (1 - atk * 0.1))
+      .setAngle(this.atkT > 0 ? (flip ? -1 : 1) * atk * 8 : 0)
       .setAlpha(blink ? 0.45 : 1)
-      .setFlipX(this.faceX < -0.1);
-    if (this.hurtFlash > 0) this.playerImg.setTintFill(0xff3d81);
+      .setFlipX(flip);
+    if (this.hurtFlash > 0) this.playerImg.setTint(0xff7090);
     else this.playerImg.clearTint();
-    this.facingImg.setPosition(this.px + this.faceX * 26, this.py + this.faceY * 26).setRotation(Math.atan2(this.faceY, this.faceX));
+    this.facingImg.setPosition(this.px + this.faceX * 36, this.py + 8 + this.faceY * 22).setRotation(Math.atan2(this.faceY, this.faceX));
 
     // 敵人
     for (const e of this.activeEnemies) {
@@ -2010,9 +2129,9 @@ export class GameScene extends Phaser.Scene {
     hb.clear();
     const bw = 40;
     hb.fillStyle(0x000000, 0.6);
-    hb.fillRect(this.px - bw / 2 - 1, this.py + 13, bw + 2, 6);
+    hb.fillRect(this.px - bw / 2 - 1, this.py + 17, bw + 2, 6);
     hb.fillStyle(this.hp / this.maxHp < 0.3 ? 0xff3d81 : 0x5dff7a, 1);
-    hb.fillRect(this.px - bw / 2, this.py + 14, bw * (this.hp / this.maxHp), 4);
+    hb.fillRect(this.px - bw / 2, this.py + 18, bw * (this.hp / this.maxHp), 4);
   }
 }
 
