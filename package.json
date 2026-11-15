@@ -1,0 +1,25 @@
+{
+  "name": "kitsunebi",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "《狐火行》2D 和風妖怪探險尋寶 RPG",
+  "scripts": {
+    "dev": "vite --host",
+    "assets": "node scripts/gen-placeholder-assets.mjs",
+    "build": "tsc --noEmit && vite build",
+    "build:artifact": "npm run build && node scripts/build-artifact.mjs",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phaser": "3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "6.4.6",
+    "vite-plugin-singlefile": "2.1.0",
+    "vitest": "3.2.7"
+  }
+}
