@@ -32,13 +32,14 @@ const ULT_DESC: Record<string, string> = {
   zero: '畫面內敵人停住 3 秒並感染病毒，之後承受的傷害 +50%',
   tetsu: '電磁衝擊波擊退並麻痺 2 秒，連續 8 道落雷，自己 3 秒無敵',
   oboro: '2 秒內分身連斬 8 次，每一斬都命中畫面內所有敵人；期間無敵',
+  koma: '巨大靈狼橫掃全畫面並擊退敵人，吸回畫面上所有經驗晶片，Boss 受到最大生命 10% 傷害',
   hayabusa: '鎖定血量最高的 5 個目標射下衛星光柱，Boss 受到最大生命 12% 傷害',
   kagura: '百鬼橫掃全畫面，存活的敵人恐懼逃跑 4 秒，接著狐火大爆發（兩段傷害）',
   misora: '畫面內敵人著迷停住 2.5 秒並受傷，自己回復 40% 生命、3 秒無敵，接著彩虹爆發（兩段傷害）',
 };
 
 /** 專屬武器屬於哪個角色 */
-const SIGNATURE: Partial<Record<WeaponId, string>> = { shadow: '影忍・朧', railgun: '狙擊手・隼', talisman: '陰陽師・神樂', song: '歌姬・美空' };
+const SIGNATURE: Partial<Record<WeaponId, string>> = { shadow: '影忍・朧', railgun: '狙擊手・隼', talisman: '陰陽師・神樂', song: '歌姬・美空', hound: '機巧犬使・狛' };
 
 export class CodexScene extends Phaser.Scene {
   private tab: Tab = 'chars';

@@ -5,6 +5,7 @@ import { makeButton } from './ui';
 import { SaveData, loadSave, writeSave } from './storage';
 import { Audio } from './audio';
 import { CHARACTERS, CharId } from '../config/balance';
+import { anyMaxAffinity } from './affinity';
 
 export interface FrameDef {
   id: string;
@@ -24,6 +25,7 @@ export const FRAMES: FrameDef[] = [
   { id: 'wanted', name: '通緝犯之框', tint: 0xff6a3d, glow: 0xff3d3d, how: '通關通緝等級 3', unlocked: (s) => (s.bestWanted ?? 0) >= 3 },
   { id: 'gold', name: '黃金傳說框', tint: 0xffd84d, glow: 0xffc83d, how: '抽到任一 SSR', unlocked: (s) => (s.ssrCount ?? 0) >= 1 },
   { id: 'spirit', name: '百鬼框', tint: 0x7dff8a, glow: 0x2bd96b, how: '收集 8 種式神', unlocked: (s) => Object.values(s.spirits ?? {}).filter((n) => (n ?? 0) > 0).length >= 8 },
+  { id: 'bond', name: '羈絆框', tint: 0x5dffb0, glow: 0x2bd98a, how: '任一角色好感度達到 Lv5', unlocked: (s) => anyMaxAffinity(s) },
   { id: 'sakura', name: '櫻花祭框', tint: 0xff9ad0, glow: 0xff6ab0, how: '活動限定（敬請期待）', unlocked: () => false, event: true },
 ];
 

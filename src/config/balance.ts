@@ -53,7 +53,14 @@ export type WeaponId =
   | 'railx'
   | 'talismanx'
   | 'song'
-  | 'songx';
+  | 'songx'
+  | 'hound'
+  | 'houndx'
+  // 一般武器的新進化
+  | 'laserx'
+  | 'virusx'
+  | 'orbitalx'
+  | 'hookx';
 
 export interface WeaponStats {
   damage: number;
@@ -353,6 +360,71 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     levels: [],
     evolved: true,
   },
+  hound: {
+    id: 'hound',
+    name: '機犬',
+    desc: '專屬武器：機械狼犬衝向敵人撕咬，並把附近的經驗晶片叼回來。',
+    color: 0x3dff9a,
+    base: S({ damage: 20, cooldown: 1.3, area: 1, amount: 1, speed: 620 }),
+    levels: [
+      { delta: { damage: 6 }, desc: '傷害 +6' },
+      { delta: { area: 0.25 }, desc: '撕咬範圍 +25%' },
+      { delta: { amount: 1 }, desc: '機犬 +1' },
+      { delta: { cooldown: -0.2 }, desc: '冷卻 -0.2 秒' },
+      { delta: { damage: 8, area: 0.15 }, desc: '傷害 +8、範圍 +15%' },
+      { delta: { amount: 1 }, desc: '機犬 +1' },
+      { delta: { damage: 12, cooldown: -0.15 }, desc: '傷害 +12、冷卻 -0.15 秒' },
+    ],
+  },
+  houndx: {
+    id: 'houndx',
+    name: '天狼・翠嵐',
+    desc: '進化武器：三隻巨大靈狼橫衝直撞，每一咬都炸出翠綠衝擊波，並吸回畫面上的經驗。',
+    color: 0x5dffb0,
+    base: S({ damage: 46, cooldown: 0.8, area: 1.7, amount: 3, speed: 760 }),
+    levels: [],
+    evolved: true,
+  },
+  laserx: {
+    id: 'laserx',
+    name: '無明居合',
+    desc: '進化武器：八方同時射出巨大雷射光刃，貫穿整個畫面。',
+    color: 0xe0fbff,
+    base: S({ damage: 52, cooldown: 1.2, area: 1.5, amount: 8 }),
+    projectile: true,
+    levels: [],
+    evolved: true,
+  },
+  virusx: {
+    id: 'virusx',
+    name: '疫神降臨',
+    desc: '進化武器：大量感染並無限擴散，感染中的敵人受到的傷害 +25%。',
+    color: 0x3dff6a,
+    base: S({ damage: 22, cooldown: 1.2, amount: 6, duration: 5, bounce: 4 }),
+    projectile: true,
+    levels: [],
+    evolved: true,
+  },
+  orbitalx: {
+    id: 'orbitalx',
+    name: '天罰衛星',
+    desc: '進化武器：衛星群優先鎖定強敵，連續降下巨大光柱。',
+    color: 0xff3d4f,
+    base: S({ damage: 80, cooldown: 1.4, area: 1.6, amount: 6 }),
+    projectile: true,
+    levels: [],
+    evolved: true,
+  },
+  hookx: {
+    id: 'hookx',
+    name: '九頭鎖龍',
+    desc: '進化武器：九條鎖鏈同時射出，把敵群拉到面前並麻痺 1 秒。',
+    color: 0xd8ccff,
+    base: S({ damage: 40, cooldown: 1.3, area: 1.5, amount: 9, speed: 640 }),
+    projectile: true,
+    levels: [],
+    evolved: true,
+  },
   talismanx: {
     id: 'talismanx',
     name: '百鬼符',
@@ -401,10 +473,15 @@ export const EVOLUTIONS: { weapon: WeaponId; passive: PassiveId; result: WeaponI
   { weapon: 'railgun', passive: 'overclock', result: 'railx' },
   { weapon: 'talisman', passive: 'intent', result: 'talismanx' },
   { weapon: 'song', passive: 'nano', result: 'songx' },
+  { weapon: 'hound', passive: 'magnet', result: 'houndx' },
+  { weapon: 'laser', passive: 'intent', result: 'laserx' },
+  { weapon: 'virus', passive: 'nano', result: 'virusx' },
+  { weapon: 'orbital', passive: 'might', result: 'orbitalx' },
+  { weapon: 'hook', passive: 'armor', result: 'hookx' },
 ];
 
 // ---------- 角色 ----------
-export type CharId = 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura' | 'misora';
+export type CharId = 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura' | 'misora' | 'koma';
 
 export interface CharDef {
   id: CharId;
@@ -432,6 +509,10 @@ export interface CharDef {
   regen?: number;
   /** 受到的傷害減少（比例） */
   dmgReduce?: number;
+  /** 撿取範圍倍率 */
+  pickupMult?: number;
+  /** 經驗倍率 */
+  xpBonus?: number;
 }
 
 export const CHARACTERS: Record<CharId, CharDef> = {
@@ -534,9 +615,24 @@ export const CHARACTERS: Record<CharId, CharDef> = {
     regen: 1,
     dmgReduce: 0.1,
   },
+  koma: {
+    id: 'koma',
+    name: '機巧犬使・狛',
+    role: '召喚輔助型',
+    trait: '撿取範圍 +40%、經驗 +10%、移動 +6%；機犬會叼回經驗晶片',
+    weapon: 'hound',
+    maxHp: 95,
+    speedMult: 1.06,
+    armor: 0,
+    intentMult: 1.1,
+    extraAmount: 0,
+    cost: 0,
+    pickupMult: 1.4,
+    xpBonus: 1.1,
+  },
 };
 
-export const CHAR_ORDER: CharId[] = ['jin', 'zero', 'tetsu', 'oboro', 'hayabusa', 'kagura', 'misora'];
+export const CHAR_ORDER: CharId[] = ['jin', 'zero', 'tetsu', 'oboro', 'hayabusa', 'koma', 'kagura', 'misora'];
 
 // ---------- 局外強化 ----------
 export type UpgradeId = 'might' | 'hp' | 'speed' | 'pickup' | 'growth' | 'reroll' | 'banish' | 'lock';

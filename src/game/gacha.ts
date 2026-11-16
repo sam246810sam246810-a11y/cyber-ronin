@@ -1,4 +1,5 @@
 // 三池扭蛋的共用邏輯：付費、抽卡、角色升星、式神等級與加成。
+import { affinityStats } from './affinity';
 import { CHARACTERS, CharId } from '../config/balance';
 import { CHAR_POOL, CHAR_RARITY, CHAR_TALENTS, UP_RATE, currentUp, DUP_SHARDS, MAX_STAR, POOLS, PoolId, SPIRITS, SPIRIT_SETS, STAR_COST, STARTER, SpiritId, UNLOCK_SHARDS, spiritLevel, starStats } from '../config/gacha';
 import { ModuleItem, StatKey, makeModule } from '../config/meta';
@@ -223,5 +224,5 @@ export function mergeStats(...parts: Partial<Record<StatKey, number>>[]): Partia
 }
 
 export function charStats(s: SaveData, c: CharId) {
-  return starStats(starOf(s, c));
+  return mergeStats(starStats(starOf(s, c)), affinityStats(s, c));
 }

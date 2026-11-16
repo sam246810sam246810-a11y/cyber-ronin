@@ -1,5 +1,5 @@
 // M2.5 第一期：稀有度、遺物、羈絆、精英詞綴、黑市與事件、通緝等級。
-import type { WeaponId } from './balance';
+import type { CharId, WeaponId } from './balance';
 
 // ---------- A1 升級卡稀有度 ----------
 export type Rarity = 0 | 1 | 2 | 3;
@@ -142,6 +142,12 @@ export const WEAPON_TAG: Partial<Record<WeaponId, Tag>> = {
   talismanx: 'hack',
   song: 'volt',
   songx: 'volt',
+  hound: 'blade',
+  houndx: 'blade',
+  laserx: 'blade',
+  virusx: 'hack',
+  orbitalx: 'fire',
+  hookx: 'blade',
 };
 
 // ---------- A4 精英詞綴 ----------
@@ -226,17 +232,18 @@ export interface UltimateDef {
   gauge: string;
   color: number;
   css: string;
-  finisher: 'slash' | 'code' | 'thunder' | 'clone' | 'orbital' | 'hyakki' | 'concert';
+  finisher: 'slash' | 'code' | 'thunder' | 'clone' | 'orbital' | 'hyakki' | 'concert' | 'wolf';
   /** SSR：金色特寫外框 */
   ssr?: boolean;
 }
 
-export const ULTIMATES: Record<'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura' | 'misora', UltimateDef> = {
+export const ULTIMATES: Record<CharId, UltimateDef> = {
   jin: { name: '居合・一閃', gauge: '殺意', color: 0xff3d81, css: '#ff3d81', finisher: 'slash' },
   zero: { name: '系統崩潰', gauge: '駭入', color: 0x2bd96b, css: '#5dff7a', finisher: 'code' },
   tetsu: { name: '雷神降臨', gauge: '電荷', color: 0x6d7cff, css: '#9fbcff', finisher: 'thunder' },
   oboro: { name: '分身亂舞', gauge: '殘影', color: 0x8a5cff, css: '#c48bff', finisher: 'clone' },
   hayabusa: { name: '衛星狙擊', gauge: '鎖定', color: 0xff8a3d, css: '#ffb06a', finisher: 'orbital' },
+  koma: { name: '天狼崩', gauge: '野性', color: 0x2bd98a, css: '#5dffb0', finisher: 'wolf' },
   kagura: { name: '百鬼夜行', gauge: '靈力', color: 0xff4fa0, css: '#ffd84d', finisher: 'hyakki', ssr: true },
   misora: { name: '星光演唱會', gauge: '應援', color: 0xb46bff, css: '#e0b8ff', finisher: 'concert', ssr: true },
 };

@@ -90,6 +90,7 @@ export const ULT_FX: Record<string, string[]> = {
   tetsu: ['ulttetsu'],
   oboro: ['ultoboro'],
   hayabusa: ['ulthayabusa'],
+  koma: ['ultkoma'],
   kagura: ['ultkagura1', 'ultkagura2'],
   misora: ['ultmisora1', 'ultmisora2'],
 };

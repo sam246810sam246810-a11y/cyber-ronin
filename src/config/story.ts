@@ -3,7 +3,7 @@ import type { StageId } from './stages';
 
 export interface StoryLine {
   /** 說話的角色（用頭像），或 'sys' 代表旁白 */
-  who: 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura' | 'misora' | 'sys';
+  who: 'jin' | 'zero' | 'tetsu' | 'oboro' | 'hayabusa' | 'kagura' | 'misora' | 'koma' | 'sys';
   text: string;
 }
 
@@ -74,6 +74,7 @@ export const SPEAKER_NAME: Record<StoryLine['who'], string> = {
   tetsu: '鐵',
   oboro: '朧',
   hayabusa: '隼',
+  koma: '狛',
   kagura: '神樂',
   misora: '美空',
   sys: '',

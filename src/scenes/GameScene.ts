@@ -34,7 +34,8 @@ import { SpatialGrid } from '../game/SpatialGrid';
 import { TEX } from '../game/textures';
 import { SaveData, formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
-import { ULT_FX, buildAnims, queueLazy } from '../game/assets';
+import { ULT_FX, buildAnims, hasMusic, queueLazy } from '../game/assets';
+import { gainAffinity } from '../game/affinity';
 import { vibrate } from '../game/haptics';
 import { applyRunToDaily, equippedStats } from '../game/meta';
 import { charStats, mergeStats, spiritStats, starOf, talentLevel } from '../game/gacha';
@@ -373,6 +374,23 @@ export class GameScene extends Phaser.Scene {
   weeklyBossE: Enemy | null = null;
   weeklyDmg = 0;
   private nextEndlessBoss = 0;
+  /** 隨機事件 */
+  private evt: {
+    kind: 'hunt' | 'escort' | 'hold';
+    t: number;
+    limit: number;
+    progress: number;
+    target?: Enemy;
+    x: number;
+    y: number;
+    tx: number;
+    ty: number;
+    hp: number;
+    spawnT: number;
+    img?: Phaser.GameObjects.Image;
+    g: Phaser.GameObjects.Graphics;
+  } | null = null;
+  private nextRandEvent = 80;
   private origRandom: (() => number) | null = null;
 
   // M2.5：暴擊、幸運、遺物、羈絆、通緝等級
@@ -460,6 +478,8 @@ export class GameScene extends Phaser.Scene {
   slashes: Slash[] = [];
   dmgTexts: DmgText[] = [];
   droneImgs: Phaser.GameObjects.Image[] = [];
+  /** 狛的機犬 */
+  hounds: { img: Phaser.GameObjects.Sprite; x: number; y: number; target: Enemy | null; phase: 'idle' | 'go' | 'back'; t: number }[] = [];
   groundTiles: Phaser.GameObjects.Image[] = [];
   fieldImg!: Phaser.GameObjects.Image;
   grid = new SpatialGrid<Enemy>(64);
@@ -510,6 +530,12 @@ export class GameScene extends Phaser.Scene {
     queueLazy(this, [...texs, ...(ULT_FX[charId] ?? []).map((f) => `fx-${f}`)]);
   }
 
+  /** 該關卡專屬的 Boss 曲（沒有就用共用的） */
+  private bossMusic() {
+    const k = `bgm-boss-${this.stage.id}`;
+    return hasMusic(k) ? k : 'bgm-boss';
+  }
+
   // ---------- 初始化 ----------
   create(data: { char?: CharId; wanted?: number; daily?: boolean; stage?: string; mode?: GameMode }) {
     buildAnims(this);
@@ -532,6 +558,8 @@ export class GameScene extends Phaser.Scene {
     this.familiar = null;
     this.familiarT = 8;
     this.nextEndlessBoss = RUN.duration + ENDLESS.bossEvery;
+    this.evt = null;
+    this.nextRandEvent = 70 + Math.random() * 30;
     this.stage = this.isDaily ? STAGES[0] : this.mode === 'weekly' ? stageById(weeklyBoss().stage) : stageById(data?.stage);
     if (this.isDaily) {
       // 每日挑戰：固定角色、通緝等級與隨機種子
@@ -714,6 +742,7 @@ export class GameScene extends Phaser.Scene {
     this.slashes = [];
     this.dmgTexts = [];
     this.droneImgs = [];
+    this.hounds = [];
     this.groundTiles = [];
     this.spawnAcc = 0;
     this.nextElite = 0;
@@ -788,6 +817,8 @@ export class GameScene extends Phaser.Scene {
     this.regen += m.regen ?? 0;
     this.speed *= 1 + (m.speed ?? 0);
     this.pickupR *= 1 + (m.pickup ?? 0);
+    this.pickupR *= this.char.pickupMult ?? 1;
+    this.xpMult *= this.char.xpBonus ?? 1;
     this.xpMult *= 1 + (m.xp ?? 0);
     this.luck += m.luck ?? 0;
     this.intentMult *= (1 + (m.intent ?? 0)) * (this.talent >= 3 ? 1.15 : 1);
@@ -883,6 +914,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHazards(dt);
     this.updateStageHazard(dt);
     this.updateInteractables(dt);
+    this.updateEvent(dt);
     this.updatePickups(dt);
     this.updateIntent(dt);
     this.compactEnemies();
@@ -921,7 +953,7 @@ export class GameScene extends Phaser.Scene {
         this.weeklyBossE = e;
         this.ui.banner(`每週 Boss：${wb.title}`, '#ff2244', 2.4);
         Audio.play('sfx-bosswarn', 0.6);
-        Audio.playMusic('bgm-boss');
+        Audio.playMusic(this.bossMusic());
       }
       return;
     }
@@ -959,7 +991,7 @@ export class GameScene extends Phaser.Scene {
       const fbTitle = b.final ? this.stage.finalBoss?.title : undefined;
       this.ui.banner(T.bossWarn(fbTitle ?? b.title), '#ff2244', 2.6);
       Audio.play('sfx-bosswarn', 0.6);
-      Audio.playMusic('bgm-boss');
+      Audio.playMusic(this.bossMusic());
       if (b.final) this.finalSpawned = true;
     }
     while (this.nextMerchant < MERCHANT_TIMES.length && this.t >= MERCHANT_TIMES[this.nextMerchant]) {
@@ -1571,7 +1603,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private hurt(amount: number) {
-    if (this.invuln > 0 || this.ended || this.modal) return;
+    if (this.invuln > 0 || this.ended || this.modal || this.devGod) return;
     if (this.hasRelic('mirror') && this.mirrorT <= 0) {
       // 鏡像護盾擋下這一擊
       this.mirrorT = 15;
@@ -1906,6 +1938,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     if (e.def.kind === 'elite' || e.def.kind === 'boss') vibrate(e.def.kind === 'boss' ? 150 : 40);
+    if (e.def.kind === 'boss') Audio.play('sfx-bossdown', 0.8);
     this.sparks.setParticleTint(e.def.color);
     const kind = e.def.kind;
     // 圖鑑：Boss 用圖片名稱、一般敵人用這一關的外觀
@@ -2231,6 +2264,83 @@ export class GameScene extends Phaser.Scene {
           }
           break;
         }
+        case 'hound':
+        case 'houndx': {
+          // 機犬：冷卻好就衝向敵人撕咬，咬完把附近的經驗叼回來
+          this.updateHounds(w.id === 'houndx', s, dmg, dt);
+          break;
+        }
+        case 'laserx': {
+          // 無明居合：八方雷射＋瞄準最近敵人的一道
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            w.timer = Math.max(0.3, s.cooldown * this.cdMult);
+            Audio.play('sfx-laser', 0.36, 80, 300);
+            const tgt = this.nearestEnemies(1, 420)[0];
+            const a0 = tgt ? Math.atan2(tgt.y - this.py, tgt.x - this.px) : this.t;
+            for (let i = 0; i < s.amount; i++) {
+              const a = a0 + (i / s.amount) * Math.PI * 2;
+              this.fireLaser(Math.cos(a), Math.sin(a), 360 * s.area, 10 * s.area, dmg);
+            }
+          }
+          break;
+        }
+        case 'virusx': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            const cands = this.nearestEnemies(s.amount + 10, 420).filter((e) => e.virusT <= 0);
+            if (cands.length === 0) {
+              w.timer = 0.3;
+              break;
+            }
+            w.timer = Math.max(0.4, s.cooldown * this.cdMult);
+            for (let i = 0; i < Math.min(s.amount, cands.length); i++) {
+              const e = cands[i];
+              this.infect(e, s.damage * this.might, s.duration, s.bounce);
+              e.vuln = Math.max(e.vuln, s.duration);
+              this.sparks.setParticleTint(0x3dff6a);
+              this.sparks.explode(6, e.x, e.y);
+            }
+          }
+          break;
+        }
+        case 'orbitalx': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            w.timer = Math.max(0.4, s.cooldown * this.cdMult);
+            // 優先打血量高的敵人
+            const onScreen = this.activeEnemies
+              .filter((e) => e.active && Math.abs(e.x - this.px) < W / 2 && Math.abs(e.y - this.py) < H / 2)
+              .sort((a, b) => b.hp - a.hp);
+            Audio.play('sfx-orbital', 0.3, 200, 200);
+            for (let i = 0; i < s.amount; i++) {
+              const e = onScreen[i % Math.max(1, onScreen.length)];
+              const x = e ? e.x + (i >= onScreen.length ? (Math.random() - 0.5) * 80 : 0) : this.px + (Math.random() - 0.5) * 320;
+              const y = e ? e.y + (i >= onScreen.length ? (Math.random() - 0.5) * 80 : 0) : this.py + (Math.random() - 0.5) * 320;
+              this.time.delayedCall(i * 90, () => this.addStrike(x, y, 64 * s.area * this.fireArea, dmg * this.fireDmg));
+            }
+          }
+          break;
+        }
+        case 'hookx': {
+          w.timer -= dt;
+          if (w.timer <= 0) {
+            const targets = this.nearestEnemies(s.amount + 4, 360).filter((e) => e.def.kind !== 'boss');
+            if (targets.length === 0) {
+              w.timer = 0.3;
+              break;
+            }
+            w.timer = Math.max(0.4, s.cooldown * this.cdMult);
+            Audio.play('sfx-throw', 0.3, 80, 600);
+            const sorted = targets.reverse();
+            for (let i = 0; i < Math.min(s.amount, sorted.length); i++) {
+              const e = sorted[i];
+              this.fireHook(e, s.speed, dmg, 46 * s.area);
+              e.stun = Math.max(e.stun, 1);
+            }
+          }
+          break;
+        }
         case 'talisman':
         case 'talismanx': {
           // 追蹤符咒：會轉向追敵人，命中後櫻花爆炸
@@ -2255,6 +2365,97 @@ export class GameScene extends Phaser.Scene {
     }
     for (let i = droneIdx; i < this.droneImgs.length; i++) this.droneImgs[i].setVisible(false);
     if (!fieldOn) this.fieldImg.setVisible(false);
+  }
+
+  /** 機犬：待在身邊 → 衝向敵人 → 撕咬（範圍傷害、吸回附近經驗）→ 跑回來 */
+  private updateHounds(evolved: boolean, s: WeaponStats, dmg: number, dt: number) {
+    const n = s.amount;
+    const key = this.textures.exists('wpn-hound-run-0') ? 'wpn-hound-run-0' : 'icon-hound';
+    while (this.hounds.length < n) {
+      const img = this.add.sprite(this.px, this.py, key).setDepth(8);
+      if (this.anims.exists('wpn-hound-run')) img.play('wpn-hound-run');
+      this.hounds.push({ img, x: this.px, y: this.py, target: null, phase: 'idle', t: 0.4 + this.hounds.length * 0.35 });
+    }
+    const baseScale = key === 'icon-hound' ? 0.4 : 0.5;
+    const scale = baseScale * (evolved ? 1.5 : 1);
+    this.hounds.forEach((h, i) => {
+      if (i >= n) {
+        h.img.setVisible(false);
+        return;
+      }
+      h.img.setVisible(true).setScale(scale);
+      if (evolved) h.img.setTint(0x9dffd0);
+      else h.img.clearTint();
+      const speed = s.speed * (h.phase === 'back' ? 1.1 : 1);
+      let tx: number;
+      let ty: number;
+      if (h.phase === 'idle') {
+        // 跟在主人身後
+        const a = Math.PI * 0.75 + i * 0.6;
+        tx = this.px + Math.cos(a) * 46 * (this.faceX < 0 ? -1 : 1);
+        ty = this.py + Math.sin(a) * 30;
+        h.t -= dt;
+        if (h.t <= 0) {
+          const tgt = this.nearestEnemies(4, 330)[i % 4];
+          if (tgt) {
+            h.target = tgt;
+            h.phase = 'go';
+            if (i === 0) Audio.play('sfx-bark', 0.3, 300, 200);
+          } else h.t = 0.25;
+        }
+      } else if (h.phase === 'go') {
+        if (!h.target || !h.target.active) {
+          h.phase = 'back';
+          h.target = null;
+          tx = this.px;
+          ty = this.py;
+        } else {
+          tx = h.target.x;
+          ty = h.target.y;
+          if (Math.hypot(tx - h.x, ty - h.y) < h.target.radius + 10) this.houndBite(h.x, h.y, evolved, s, dmg, h);
+        }
+      } else {
+        tx = this.px;
+        ty = this.py;
+        if (Math.hypot(tx - h.x, ty - h.y) < 30) {
+          h.phase = 'idle';
+          h.t = Math.max(0.25, s.cooldown * this.cdMult);
+        }
+      }
+      const dx = tx - h.x;
+      const dy = ty - h.y;
+      const d = Math.hypot(dx, dy);
+      const step = h.phase === 'idle' ? Math.min(d, d * 6 * dt) : Math.min(d, speed * dt);
+      if (d > 0.5) {
+        h.x += (dx / d) * step;
+        h.y += (dy / d) * step;
+        if (Math.abs(dx) > 2) h.img.setFlipX(dx < 0);
+      }
+      h.img.setPosition(h.x, h.y);
+    });
+  }
+
+  private houndBite(x: number, y: number, evolved: boolean, s: WeaponStats, dmg: number, h: { phase: string; target: Enemy | null }) {
+    const r = 46 * s.area;
+    for (const e of this.grid.query(x, y, r + 30, tmp2)) {
+      if (!e.active) continue;
+      if (Math.hypot(e.x - x, e.y - y) < r + e.radius * 0.5) this.damageEnemy(e, dmg, (e.x - x) * 2, (e.y - y) * 2);
+    }
+    this.playFx('hit', x, y, r * 2, 0, evolved ? 0x5dffb0 : 0x3dff9a, 30, 9);
+    if (evolved) {
+      this.sparks.setParticleTint(0x5dffb0);
+      this.sparks.explode(10, x, y);
+    }
+    // 叼回附近的經驗晶片（進化後範圍更大）
+    const pull = (evolved ? 220 : 120) * s.area;
+    for (const p of this.pickups) {
+      if (p.active && p.kind === 'gem' && !p.flying && Math.hypot(p.x - x, p.y - y) < pull) {
+        p.flying = true;
+        p.speed = 200;
+      }
+    }
+    h.phase = 'back';
+    h.target = null;
   }
 
   private droneImg(i: number, crow: boolean) {
@@ -2890,7 +3091,7 @@ export class GameScene extends Phaser.Scene {
         this.inventoryVersion++;
         this.ui.banner(T.evolved(WEAPONS[evo.result].name), '#ff7ad9', 2.6);
         this.cameras.main.flash(250, 255, 122, 217);
-        Audio.play('sfx-levelup', 0.6);
+        Audio.play('sfx-evolve', 0.7);
         return;
       }
     }
@@ -2930,7 +3131,7 @@ export class GameScene extends Phaser.Scene {
       this.iaiCount++;
       this.iaiFreeze = ULT_FREEZE;
       this.ui.playUltimate(this.char.id);
-      Audio.play('sfx-iai', 0.7);
+      Audio.play(this.char.id === 'jin' ? 'sfx-iai' : 'sfx-ult', 0.75);
     }
   }
 
@@ -3007,6 +3208,24 @@ export class GameScene extends Phaser.Scene {
           if (e?.active) this.addStrike(e.x, e.y, 80, 160 * this.might);
         });
       }
+    } else if (fin === 'wolf') {
+      // 天狼崩：巨大靈狼橫掃全畫面、擊退敵人，吸回畫面上所有經驗晶片
+      for (const e of onScreen) {
+        if (e.def.kind === 'boss') {
+          this.damageEnemy(e, e.maxHp * 0.1 * this.iaiBossMult, 0, 0, true, true);
+          continue;
+        }
+        const l = Math.hypot(e.x - this.px, e.y - this.py) || 1;
+        this.damageEnemy(e, 200 * this.might, ((e.x - this.px) / l) * 420, ((e.y - this.py) / l) * 420, true, true);
+      }
+      for (const p of this.pickups) {
+        if (p.active && (p.kind === 'gem' || p.kind === 'credit') && Math.abs(p.x - this.px) < W / 2 + 60 && Math.abs(p.y - this.py) < H / 2 + 60) {
+          p.flying = true;
+          p.speed = 300;
+        }
+      }
+      this.invuln = Math.max(this.invuln, 2);
+      this.cameras.main.shake(320, 0.014);
     } else if (fin === 'concert') {
       // 星光演唱會：畫面內敵人著迷停住 2.5 秒並受傷，自己回復 40% 生命、3 秒無敵；第二段彩虹爆發
       for (const e of onScreen) {
@@ -3407,6 +3626,9 @@ export class GameScene extends Phaser.Scene {
     save.relicsTotal = (save.relicsTotal ?? 0) + this.relics.length;
     for (const r of this.relics) if (!save.seenRelics.includes(r)) save.seenRelics.push(r);
     save.maxCombo = Math.max(save.maxCombo ?? 0, this.maxCombo);
+    // 角色好感度
+    const aff = gainAffinity(save, this.char.id, this.t, victory);
+    unlocked.push(`${this.char.name} 好感度 +${aff.gain}${aff.levelUp ? `（升到 Lv${aff.levelUp}！）` : ''}`);
     applyRunToDaily(save, {
       kills: this.kills,
       time: this.t,
@@ -3454,6 +3676,152 @@ export class GameScene extends Phaser.Scene {
     this.modal = true;
     this.scene.pause();
     if (!this.offerRelics(() => this.closeModal())) this.closeModal();
+  }
+  debugEvent(): boolean {
+    if (this.evt) return false;
+    this.startEvent();
+    return true;
+  }
+
+  // ---------- 隨機事件 ----------
+  private updateEvent(dt: number) {
+    if (this.ended) return;
+    if (!this.evt) {
+      if (this.mode === 'weekly' || this.t < this.nextRandEvent) return;
+      // Boss 戰中或最後 40 秒不開新事件
+      if (this.bosses.some((b) => b.active) || (this.mode !== 'endless' && this.t > RUN.duration - 40)) {
+        this.nextRandEvent = this.t + 10;
+        return;
+      }
+      this.startEvent();
+      return;
+    }
+    const ev = this.evt;
+    ev.t += dt;
+    const left = Math.max(0, Math.ceil(ev.limit - ev.t));
+    ev.g.clear();
+    if (ev.kind === 'hunt') {
+      const e = ev.target!;
+      if (!e.active) {
+        this.finishEvent(true, e.x, e.y);
+        return;
+      }
+      ev.x = e.x;
+      ev.y = e.y;
+      ev.g.lineStyle(3, 0xffd84d, 0.9).strokeCircle(e.x, e.y, e.radius + 14 + Math.sin(this.t * 8) * 3);
+      this.ui.setEventHud(`限時討伐：打倒懸賞目標　${left} 秒`);
+    } else if (ev.kind === 'escort') {
+      const near = Math.hypot(this.px - ev.x, this.py - ev.y) < 160;
+      const dx = ev.tx - ev.x;
+      const dy = ev.ty - ev.y;
+      const d = Math.hypot(dx, dy);
+      if (near && d > 1) {
+        const step = Math.min(d, 46 * dt);
+        ev.x += (dx / d) * step;
+        ev.y += (dy / d) * step;
+      }
+      // 敵人碰到無人機會扣耐久
+      for (const e of this.grid.query(ev.x, ev.y, 40, tmp2)) if (e.active && Math.hypot(e.x - ev.x, e.y - ev.y) < e.radius + 18) ev.hp -= 14 * dt;
+      ev.img?.setPosition(ev.x, ev.y).setAlpha(near ? 1 : 0.6 + Math.sin(this.t * 10) * 0.3);
+      ev.g.lineStyle(2, 0x3df5ff, near ? 0.5 : 0.25).strokeCircle(ev.x, ev.y, 160);
+      ev.g.lineStyle(2, 0x3df5ff, 0.6).lineBetween(ev.x, ev.y, ev.tx, ev.ty);
+      ev.g.fillStyle(0x5dff7a, 0.8).fillCircle(ev.tx, ev.ty, 10);
+      ev.g.fillStyle(0x1a1430, 1).fillRect(ev.x - 24, ev.y - 34, 48, 6);
+      ev.g.fillStyle(0x3df5ff, 1).fillRect(ev.x - 24, ev.y - 34, 48 * Math.max(0, ev.hp / 100), 6);
+      if (ev.hp <= 0) {
+        this.finishEvent(false, ev.x, ev.y);
+        return;
+      }
+      if (d < 6) {
+        this.finishEvent(true, ev.x, ev.y);
+        return;
+      }
+      this.ui.setEventHud(`護送無人機：待在它旁邊讓它前進　剩 ${Math.ceil(d / 46)} 秒路程・${left} 秒`);
+    } else {
+      const inside = Math.hypot(this.px - ev.x, this.py - ev.y) < 120;
+      if (inside) ev.progress += dt;
+      ev.spawnT -= dt;
+      if (ev.spawnT <= 0) {
+        ev.spawnT = 1.6;
+        for (let i = 0; i < 3; i++) {
+          const a = Math.random() * Math.PI * 2;
+          this.spawnEnemy(Math.random() < 0.15 ? 'elite' : 'thug', [ev.x + Math.cos(a) * 340, ev.y + Math.sin(a) * 340]);
+        }
+      }
+      const need = 12;
+      ev.g.fillStyle(0xffc83d, inside ? 0.14 : 0.07).fillCircle(ev.x, ev.y, 120);
+      ev.g.lineStyle(3, 0xffc83d, 0.8).strokeCircle(ev.x, ev.y, 120);
+      ev.g.lineStyle(6, 0xffffff, 0.9).beginPath().arc(ev.x, ev.y, 128, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, ev.progress / need)).strokePath();
+      if (ev.progress >= need) {
+        this.finishEvent(true, ev.x, ev.y);
+        return;
+      }
+      this.ui.setEventHud(`守住據點：待在圈內 ${Math.ceil(need - ev.progress)} 秒　${left} 秒`);
+    }
+    if (ev.t >= ev.limit) this.finishEvent(false, ev.x, ev.y);
+  }
+
+  private startEvent() {
+    const kinds = ['hunt', 'escort', 'hold'] as const;
+    const kind = kinds[Math.floor(Math.random() * kinds.length)];
+    const g = this.add.graphics().setDepth(1);
+    const a = Math.random() * Math.PI * 2;
+    const ev: NonNullable<GameScene['evt']> = { kind, t: 0, limit: 35, progress: 0, x: this.px, y: this.py, tx: this.px, ty: this.py, hp: 100, spawnT: 1, g };
+    if (kind === 'hunt') {
+      const e = this.spawnEnemy('elite');
+      e.maxHp = e.hp = e.maxHp * 2.5;
+      e.title = '懸賞目標';
+      e.img.setTint(0xffd84d);
+      ev.target = e;
+      ev.limit = 30;
+      this.ui.banner('隨機事件：限時討伐！', '#ffd84d', 2.4);
+    } else if (kind === 'escort') {
+      ev.x = this.px + Math.cos(a) * 60;
+      ev.y = this.py + Math.sin(a) * 60;
+      ev.tx = ev.x + Math.cos(a) * 760;
+      ev.ty = ev.y + Math.sin(a) * 760;
+      ev.limit = 45;
+      ev.img = this.add.image(ev.x, ev.y, 'drone').setScale(2.2 / TEX).setTint(0x3df5ff).setDepth(9);
+      this.ui.banner('隨機事件：護送無人機！', '#3df5ff', 2.4);
+    } else {
+      ev.x = this.px + Math.cos(a) * 220;
+      ev.y = this.py + Math.sin(a) * 220;
+      ev.limit = 40;
+      this.ui.banner('隨機事件：守住據點！', '#ffc83d', 2.4);
+    }
+    this.evt = ev;
+    Audio.play('sfx-event', 0.6);
+  }
+
+  private finishEvent(ok: boolean, x: number, y: number) {
+    const ev = this.evt;
+    if (!ev) return;
+    ev.g.destroy();
+    ev.img?.destroy();
+    this.evt = null;
+    this.ui.setEventHud(null);
+    this.nextRandEvent = this.t + 90 + Math.random() * 40;
+    if (ok) {
+      this.dropPickup('chest', x, y);
+      this.credits += 30;
+      this.ui.banner('事件成功！獲得寶箱', '#5dff7a', 2.2);
+      Audio.play('sfx-claim', 0.6);
+    } else {
+      if (ev.kind === 'hunt' && ev.target?.active) ev.target.img.clearTint();
+      this.ui.banner('事件失敗', '#ff8a5d', 1.8);
+    }
+  }
+
+  /** 開發者：無敵 */
+  devGod = false;
+  debugUlt() {
+    this.intent = this.intentThreshold();
+  }
+  debugBoss() {
+    if (this.nextBoss < BOSSES.length) this.t = Math.max(this.t, BOSSES[this.nextBoss].at);
+  }
+  debugKillAll() {
+    for (const e of this.activeEnemies) if (e.active && e.def.kind !== 'boss') this.damageEnemy(e, 1e9, 0, 0, false, true);
   }
   debugGive(id: WeaponId) {
     if (!this.weapons.some((w) => w.id === id)) this.addWeapon(id);

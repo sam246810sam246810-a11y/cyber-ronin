@@ -56,6 +56,7 @@ export class GachaScene extends Phaser.Scene {
     const bottom = CONTENT_BOTTOM;
     const by = bottom - 150;
     const bannerY = (top + by - 120) / 2;
+    this.colBottom = by - 146;
     this.drawBanner(s, bannerY, by - 130 - top);
 
     // 持有券、保底
@@ -116,6 +117,9 @@ export class GachaScene extends Phaser.Scene {
     return img;
   }
 
+  /** 左側角色頭像欄最下面一個的位置上限（不要壓到抽卡券） */
+  private colBottom = 0;
+
   private drawBanner(s: SaveData, cy: number, h: number) {
     if (this.pool === 'equip') {
       this.add.ellipse(W / 2, cy + h * 0.45, 300, 50, COLORS.magenta, 0.15);
@@ -162,17 +166,20 @@ export class GachaScene extends Phaser.Scene {
       let y = cy - h / 2 + 70;
       const head = (label: string, color: string) => {
         this.add.text(sx, y, label, textStyle(13, color)).setOrigin(0.5).setStroke('#07060d', 3);
-        y += 34;
+        y += 28;
       };
       const icon = (c: CharId, ring: number) => {
         const key = this.textures.exists(`avatar-${c}`) ? `avatar-${c}` : `char-${c}`;
-        this.add.circle(sx, y, 23, 0x07060d, 0.85);
+        this.add.circle(sx, y, 21, 0x07060d, 0.85);
         const im = this.add.image(sx, y, key);
-        im.setScale(42 / im.width);
-        this.add.circle(sx, y, 22).setStrokeStyle(2, ring, 0.95);
+        im.setScale(38 / im.width);
+        this.add.circle(sx, y, 20).setStrokeStyle(2, ring, 0.95);
         im.setInteractive({ useHandCursor: true }).on('pointerup', () => this.showCharIntro(c));
-        y += 54;
+        y += step;
       };
+      // 角色變多時自動縮小間距，最後一個頭像不壓到下方的抽卡券
+      const n = others.length + srs.length;
+      const step = Math.min(54, (this.colBottom - (y + 28 + 4 + 28)) / Math.max(1, n - 1));
       head('SSR', '#ffd84d');
       others.forEach((c) => icon(c, 0xffd84d));
       y += 4;
@@ -250,7 +257,7 @@ export class GachaScene extends Phaser.Scene {
         show.add(pillar);
         this.tweens.add({ targets: pillar, alpha: 0, scaleX: 3, duration: 900 });
       }
-      Audio.play(best >= 2 ? 'sfx-levelup' : 'sfx-gem', 0.6);
+      Audio.play(best >= 3 ? 'sfx-gacha-ssr' : best >= 2 ? 'sfx-gacha-sr' : 'sfx-gem', 0.7);
       if (best === 3) {
         this.cameras.main.flash(500, 255, 210, 80);
         vibrate(150);
@@ -292,7 +299,7 @@ export class GachaScene extends Phaser.Scene {
     const layer = this.add.container(0, 0).setDepth(20);
     const bg = this.add.rectangle(W / 2, H / 2, W, H, 0x07060d, 1).setInteractive();
     layer.add(bg);
-    Audio.play('sfx-levelup', 0.8);
+    Audio.play('sfx-gacha-ssr', 0.8);
     vibrate(200);
     this.cameras.main.flash(500, 255, 220, 120);
     // 金色光柱

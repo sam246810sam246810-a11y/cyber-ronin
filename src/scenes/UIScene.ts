@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { isDeveloper } from '../game/cloud';
+import { openDevPanel } from '../game/devPanel';
 import { CharId, PASSIVES, WEAPONS } from '../config/balance';
 import { SPEAKER_NAME, STORY, StoryLine } from '../config/story';
 import { T } from '../i18n/zh-TW';
@@ -34,6 +36,7 @@ export class UIScene extends Phaser.Scene {
   private comboText!: Phaser.GameObjects.Text;
   private synText!: Phaser.GameObjects.Text;
   private lastCombo = 0;
+  private eventText: Phaser.GameObjects.Text | null = null;
   private banners: Banner[] = [];
 
   // 搖桿
@@ -73,6 +76,7 @@ export class UIScene extends Phaser.Scene {
     this.killText = this.add.text(14, 48, '', textStyle(15, COLORS.dim)).setOrigin(0, 0);
     this.timeText = this.add.text(W / 2, 20, '00:00', textStyle(32)).setOrigin(0.5, 0);
     this.timeText.setStroke('#07060d', 5);
+    this.eventText = this.add.text(W / 2, 168, '', textStyle(15, '#ffd84d')).setOrigin(0.5, 0).setStroke('#07060d', 4).setVisible(false);
     this.add.text(W / 2 - 122, 72, ULTIMATES[this.g.char.id]?.gauge ?? T.intent, textStyle(14, ULTIMATES[this.g.char.id]?.css ?? '#ff7ab0')).setOrigin(1, 0.5);
     this.bossText = this.add.text(W / 2, 172, '', textStyle(15, '#ff6b80')).setOrigin(0.5, 1).setVisible(false);
     this.comboText = this.add.text(W - 16, 196, '', textStyle(22, '#ffd84d')).setOrigin(1, 0.5).setVisible(false);
@@ -458,6 +462,13 @@ export class UIScene extends Phaser.Scene {
     this.synText.setText(parts.length ? `羈絆 ${parts.join(' ')}` : '');
   }
 
+  /** 隨機事件的進度提示（null 隱藏） */
+  setEventHud(text: string | null) {
+    if (!this.eventText) return;
+    if (text === null) this.eventText.setVisible(false);
+    else if (this.eventText.text !== text || !this.eventText.visible) this.eventText.setText(text).setVisible(true);
+  }
+
   banner(text: string, color = '#ffffff', duration = 1.8) {
     if (!this.ready) return;
     let slot = this.banners.find((b) => b.life <= 0);
@@ -578,13 +589,14 @@ export class UIScene extends Phaser.Scene {
       else if (u.finisher === 'thunder') this.finisherThunder(layer);
       else if (u.finisher === 'clone') this.ultAnim(layer, 'ultoboro', 12);
       else if (u.finisher === 'orbital') this.ultAnim(layer, 'ulthayabusa');
+      else if (u.finisher === 'wolf') this.ultAnim(layer, 'ultkoma');
       else if (u.finisher === 'concert') this.finisherConcert(layer);
       else this.finisherHyakki(layer);
       this.tweens.add({
         targets: dim,
         fillAlpha: 0,
         duration: 400,
-        delay: u.finisher === 'hyakki' || u.finisher === 'concert' ? 1700 : u.finisher === 'clone' ? 1200 : 700,
+        delay: u.finisher === 'hyakki' || u.finisher === 'concert' ? 1700 : u.finisher === 'clone' || u.finisher === 'wolf' ? 1200 : 700,
         onComplete: () => {
           this.events.off('update', ticker);
           layer.removeAll(true);
@@ -967,6 +979,7 @@ export class UIScene extends Phaser.Scene {
     const restart = makeButton(this, W / 2, y + 84, 300, 60, T.restart, COLORS.violet, () => this.restartRun());
     const menu = makeButton(this, W / 2, y + 162, 300, 60, T.toMenu, COLORS.magenta, () => this.toMenu());
     this.modalLayer.add([resume, restart, menu]);
+    if (isDeveloper()) this.modalLayer.add(makeButton(this, W / 2, y + 236, 300, 52, '開發者面板', COLORS.gold, () => openDevPanel(this, g), 18));
     this.cardKeys = [() => {
       this.closeModalUI();
       g.closeModal();

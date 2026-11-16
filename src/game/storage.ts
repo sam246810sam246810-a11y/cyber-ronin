@@ -110,6 +110,8 @@ export interface SaveData extends UnlockStats {
   /** 信箱：已讀與已領取的郵件 */
   mailRead: string[];
   mailClaimed: string[];
+  /** 角色好感度（累積點數） */
+  affinity: Partial<Record<CharId, number>>;
   /** 掃蕩：每天 3 次 */
   sweepDay: string;
   sweepUsed: number;
@@ -193,6 +195,7 @@ const EMPTY: SaveData = {
   premium: false,
   mailRead: [],
   mailClaimed: [],
+  affinity: {},
   sweepDay: '',
   sweepUsed: 0,
   loginStreak: 0,
@@ -234,6 +237,11 @@ export function writeSave(data: SaveData): void {
     /* 無法存檔時忽略（雲端仍會保存） */
   }
   pushCloud({ json, savedAt });
+}
+
+/** 清空存檔（開發者用） */
+export function resetSave(): void {
+  writeSave(structuredClone(EMPTY));
 }
 
 export function formatTime(sec: number): string {

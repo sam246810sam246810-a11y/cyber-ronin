@@ -1,6 +1,8 @@
 // 大廳與各功能頁共用的外框：頂部資源列、底部分頁列、設定視窗、轉場。
 import Phaser from 'phaser';
-import { cloudState } from './cloud';
+import { cloudState, isDeveloper } from './cloud';
+import { openSaveCodeDialog } from './saveCode';
+import { openDevPanel } from './devPanel';
 import { COLORS, H, W, textStyle } from './layout';
 import { makeButton } from './ui';
 import { SaveData, loadSave, writeSave } from './storage';
@@ -173,9 +175,9 @@ export function openSettings(scene: Phaser.Scene) {
   const layer = scene.add.container(0, 0).setDepth(200);
   const dim = scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.8).setInteractive();
   layer.add(dim);
-  const panel = panelBox(scene, W / 2, H / 2, 420, 640);
+  const panel = panelBox(scene, W / 2, H / 2, 440, 760);
   layer.add(panel);
-  const title = scene.add.text(W / 2, H / 2 - 268, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
+  const title = scene.add.text(W / 2, H / 2 - 330, '設定', textStyle(28, '#3df5ff')).setOrigin(0.5);
   title.setStroke('#07060d', 5);
   layer.add(title);
   const rows: [string, () => boolean, (v: boolean) => void][] = [
@@ -200,7 +202,7 @@ export function openSettings(scene: Phaser.Scene) {
     }],
   ];
   rows.forEach(([name, get, set], i) => {
-    const y = H / 2 - 200 + i * 74;
+    const y = H / 2 - 262 + i * 68;
     layer.add(scene.add.text(W / 2 - 160, y, name, textStyle(22)).setOrigin(0, 0.5));
     const b = makeButton(scene, W / 2 + 110, y, 140, 52, '', COLORS.cyan, () => {
       set(!get());
@@ -210,7 +212,7 @@ export function openSettings(scene: Phaser.Scene) {
     layer.add(b);
   });
   // 特效品質：高 → 中 → 低
-  const qy = H / 2 - 200 + rows.length * 74;
+  const qy = H / 2 - 262 + rows.length * 68;
   layer.add(scene.add.text(W / 2 - 160, qy, '特效品質', textStyle(22)).setOrigin(0, 0.5));
   const qName = { high: '高', mid: '中', low: '低' } as const;
   const qb = makeButton(scene, W / 2 + 110, qy, 140, 52, qName[loadSave().fxQuality ?? 'high'], COLORS.gold, () => {
@@ -223,8 +225,21 @@ export function openSettings(scene: Phaser.Scene) {
   layer.add(qb);
   const cs = cloudState();
   const cText = { ok: '雲端存檔：已開啟（換裝置或更新都不會遺失）', syncing: '雲端存檔：同步中…', error: '雲端存檔：暫時無法連線，先存在本機', off: '雲端存檔：未開啟（只存在這個瀏覽器）' }[cs];
-  layer.add(scene.add.text(W / 2, H / 2 + 214, cText, textStyle(13, cs === 'ok' ? '#5dff7a' : cs === 'error' ? '#ff8a5d' : COLORS.dim, false)).setOrigin(0.5));
-  const close = makeButton(scene, W / 2, H / 2 + 268, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
+  layer.add(scene.add.text(W / 2, H / 2 + 150, cText, textStyle(13, cs === 'ok' ? '#5dff7a' : cs === 'error' ? '#ff8a5d' : COLORS.dim, false)).setOrigin(0.5));
+  // 存檔碼備份
+  const exp = makeButton(scene, W / 2 - 104, H / 2 + 204, 196, 54, '複製存檔碼', COLORS.cyan, () => openSaveCodeDialog('export', () => undefined), 17);
+  const imp = makeButton(scene, W / 2 + 104, H / 2 + 204, 196, 54, '貼上存檔碼', COLORS.cyan, () =>
+    openSaveCodeDialog('import', (ok) => {
+      if (!ok) return;
+      layer.destroy();
+      scene.scene.start('Menu');
+    }), 17);
+  layer.add([exp, imp]);
+  if (isDeveloper()) {
+    const dev = makeButton(scene, W / 2, H / 2 + 268, 300, 52, '開發者面板', COLORS.gold, () => openDevPanel(scene, null), 17);
+    layer.add(dev);
+  }
+  const close = makeButton(scene, W / 2, H / 2 + 332, 220, 56, '關閉', COLORS.magenta, () => layer.destroy(), 20);
   layer.add(close);
   layer.setScale(0.9).setAlpha(0);
   scene.tweens.add({ targets: layer, scale: 1, alpha: 1, duration: 180, ease: 'Back.Out' });
@@ -353,7 +368,7 @@ export function rewardPopup(scene: Phaser.Scene, title: string, items: RewardIte
   dim.on('pointerup', () => {
     if (closing || scene.time.now - openedAt < 500) return;
     closing = true;
-    Audio.play('sfx-gem', 0.5);
+    Audio.play('sfx-claim', 0.6);
     // 物品飛向頂部資源列
     nodes.forEach((n, i) => scene.tweens.add({ targets: n, x: W - 120, y: TOP_H / 2, scale: 0.2, alpha: 0, delay: i * 60, duration: 420, ease: 'Cubic.In' }));
     scene.tweens.add({

@@ -35,6 +35,14 @@ const wild = (n: number): MailReward => ({ icon: 'avatar-kagura', label: `萬能
 /** 新的郵件放最上面 */
 export const MAILS: Mail[] = [
   {
+    id: 'news-koma',
+    title: '更新公告：新角色「狛」與武器進化',
+    from: '營運團隊',
+    date: '2026/11/16',
+    body: '新 SR 角色「機巧犬使・狛」加入角色池！帶著機械狼犬阿吽一起戰鬥，還會把經驗晶片叼回來。\n另外：雷射、病毒、軌道打擊、鉤爪也能進化了；戰鬥中會出現隨機事件；角色有了好感度（在「義體 → 好感度」查看）；設定裡可以備份存檔碼；四個關卡都有了專屬 Boss 音樂。\n送上浪人券，祝你抽到狛！',
+    rewards: [charT(10)],
+  },
+  {
     id: 'dev-pack-1',
     dev: true,
     title: '【開發者】超大測試禮包',

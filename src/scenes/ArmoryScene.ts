@@ -5,6 +5,7 @@ import { CONTENT_BOTTOM, CONTENT_TOP, enter, lobbyBackground, tabBar, topBar } f
 
 import { loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
+import { AFF_LINES, AFF_MAX, AFF_PERKS, affinityLevel, affinityPoints, affinityProgress } from '../game/affinity';
 import { dismantle, equippedStats, upgradeModule } from '../game/meta';
 import { CHARACTERS, CHAR_ORDER, CharId } from '../config/balance';
 import { CHAR_TALENTS } from '../config/gacha';
@@ -12,7 +13,7 @@ import { canLearnTalent, learnTalent, ownsChar, talentLevel } from '../game/gach
 import { MAX_MOD_LEVEL, MODULE_BASES, MOD_RARITY, SLOT_NAME, Slot, StatKey, dismantleValue, fmtStat, mainValue, upgradeCost } from '../config/meta';
 
 type Filter = 'all' | Slot;
-type ArmoryTab = 'mods' | 'talent';
+type ArmoryTab = 'mods' | 'talent' | 'bond';
 
 /** 義體：裝備、強化、分解模組 */
 export class ArmoryScene extends Phaser.Scene {
@@ -45,8 +46,8 @@ export class ArmoryScene extends Phaser.Scene {
     tabBar(this, 'Armory');
 
     // 分頁：義體／角色天賦
-    (['mods', 'talent'] as const).forEach((t, i) => {
-      makeButton(this, W / 2 + (i - 0.5) * 200, CONTENT_TOP + 26, 180, 44, t === 'mods' ? '義體' : '角色天賦', COLORS.cyan, () => {
+    (['mods', 'talent', 'bond'] as const).forEach((t, i) => {
+      makeButton(this, W / 2 + (i - 1) * 166, CONTENT_TOP + 26, 154, 44, t === 'mods' ? '義體' : t === 'talent' ? '角色天賦' : '好感度', COLORS.cyan, () => {
         this.tab = t;
         this.draw();
       }, 17).setActive2(this.tab === t);
@@ -75,6 +76,10 @@ export class ArmoryScene extends Phaser.Scene {
 
     if (this.tab === 'talent') {
       this.drawTalents(id, nameY + 34);
+      return;
+    }
+    if (this.tab === 'bond') {
+      this.drawBond(id, nameY + 34);
       return;
     }
 
@@ -178,6 +183,37 @@ export class ArmoryScene extends Phaser.Scene {
   }
 
   /** 角色天賦：5 個節點依序學習 */
+  /** 好感度：等級、進度條、每級獎勵與解鎖的台詞 */
+  private drawBond(id: CharId, y0: number) {
+    const s = loadSave();
+    const lv = affinityLevel(s, id);
+    const pr = affinityProgress(s, id);
+    const pts = affinityPoints(s, id);
+    this.add.text(W / 2, y0, `好感度 Lv${lv}　（${pts} 點${pr.need ? `，下一級還差 ${pr.need}` : '，已滿級'}）`, textStyle(14, '#5dffb0')).setOrigin(0.5);
+    const bw = 420;
+    this.add.rectangle(W / 2, y0 + 24, bw, 10, 0x1a1430).setStrokeStyle(1, 0x2bd98a, 0.6);
+    this.add.rectangle(W / 2 - bw / 2, y0 + 24, bw * pr.ratio, 10, 0x2bd98a).setOrigin(0, 0.5);
+    this.add.text(W / 2, y0 + 44, '用這個角色出擊就會累積好感（存活越久越多，勝利額外 +15）', textStyle(11, COLORS.dim, false)).setOrigin(0.5);
+    const lines = AFF_LINES[id];
+    const top = y0 + 64;
+    const rowH = Math.min(86, (CONTENT_BOTTOM - top - 6) / AFF_MAX);
+    for (let i = 0; i < AFF_MAX; i++) {
+      const y = top + i * rowH + rowH / 2;
+      const got = i < lv;
+      this.add.rectangle(W / 2, y, 510, rowH - 8, got ? 0x0c1f18 : COLORS.panel, 0.95).setStrokeStyle(1, got ? 0x2bd98a : 0x2e2650);
+      this.add.circle(58, y, 20, got ? 0x2bd98a : 0x110d1f).setStrokeStyle(2, got ? 0xffffff : 0x3a3452);
+      this.add.text(58, y, String(i + 1), textStyle(16, got ? '#07060d' : '#6a6688')).setOrigin(0.5);
+      this.add.text(92, y - rowH / 2 + 12, `Lv${i + 1}　${AFF_PERKS[i]}`, textStyle(14, got ? '#ffffff' : '#6a6688')).setOrigin(0, 0);
+      this.add
+        .text(92, y - rowH / 2 + 34, got ? `「${lines[i]}」` : `好感度 Lv${i + 1} 解鎖台詞`, {
+          ...textStyle(12, got ? '#c9e8dc' : '#55516e', false),
+          wordWrap: { width: 400, useAdvancedWrap: true },
+          lineSpacing: 2,
+        })
+        .setOrigin(0, 0);
+    }
+  }
+
   private drawTalents(id: CharId, y0: number) {
     const s = loadSave();
     const owned = ownsChar(s, id);
