@@ -518,24 +518,30 @@ export class GachaScene extends Phaser.Scene {
     const s = loadSave();
     layer.add(this.add.text(W / 2, CONTENT_TOP + 76, `萬能碎片 ×${s.wildShards}`, textStyle(15, '#ffd84d')).setOrigin(0.5));
     const ids = Object.keys(CHARACTERS) as CharId[];
+    // 角色變多時自動縮小每列高度，整個清單放得進關閉按鈕上方
+    const listTop = CONTENT_TOP + 100;
+    const listBottom = CONTENT_BOTTOM - 116;
+    const rowH = Math.min(116, (listBottom - listTop) / ids.length);
+    const ph = rowH - 12;
     ids.forEach((id, i) => {
-      const y = CONTENT_TOP + 150 + i * 116;
+      const y = listTop + rowH * (i + 0.5);
       const st = starOf(s, id);
-      layer.add(this.add.rectangle(W / 2, y, 510, 108, COLORS.panel, 0.96).setStrokeStyle(2, MOD_RARITY[CHAR_RARITY[id]].color, 0.8));
+      layer.add(this.add.rectangle(W / 2, y, 510, rowH - 6, COLORS.panel, 0.96).setStrokeStyle(2, MOD_RARITY[CHAR_RARITY[id]].color, 0.8));
       const pk = this.textures.exists(`portrait-${id}`) ? `portrait-${id}` : `char-${id}`;
-      const p = this.add.image(72, y, pk);
-      p.setScale(92 / Math.max(p.width, p.height));
+      const p = this.add.image(26 + ph / 2, y, pk);
+      p.setScale(ph / Math.max(p.width, p.height));
       if (!st) p.setTint(0x403a58);
       layer.add(p);
-      layer.add(this.add.text(136, y - 46, `${CHARACTERS[id].name}　${RAR[CHAR_RARITY[id]]}`, textStyle(17, '#ffffff')).setOrigin(0, 0));
-      layer.add(this.add.text(136, y - 22, st ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : '尚未擁有', textStyle(18, st ? '#ffd84d' : COLORS.dim)).setOrigin(0, 0));
+      const tx = 40 + ph;
+      layer.add(this.add.text(tx, y - ph / 2 - 3, `${CHARACTERS[id].name}　${RAR[CHAR_RARITY[id]]}`, textStyle(15, '#ffffff')).setOrigin(0, 0));
+      layer.add(this.add.text(tx, y + 7, st ? '★'.repeat(st) + '☆'.repeat(MAX_STAR - st) : '尚未擁有', textStyle(14, st ? '#ffd84d' : COLORS.dim)).setOrigin(0, 0.5));
       const cost = starUpCost(s, id);
       const own = s.shards[id] ?? 0;
       const need = st ? cost : unlockCost(id);
-      layer.add(this.add.text(270, y - 20, st >= MAX_STAR ? '已滿星' : st ? `下一星：${STAR_PERKS[st]}` : `抽到角色，或集滿碎片解鎖`, { ...textStyle(13, '#c9c6e0', false), wordWrap: { width: 170 } }).setOrigin(0, 0));
-      layer.add(this.add.text(136, y + 30, `碎片 ${own}${need ? ` / ${need}` : ''}`, textStyle(13, COLORS.dim, false)).setOrigin(0, 0.5));
+      layer.add(this.add.text(tx + 128, y, st >= MAX_STAR ? '已滿星' : st ? `下一星：${STAR_PERKS[st]}` : `抽到或集滿碎片解鎖`, { ...textStyle(11, '#c9c6e0', false), wordWrap: { width: W - 134 - (tx + 128), useAdvancedWrap: true } }).setOrigin(0, 0.5));
+      layer.add(this.add.text(tx, y + ph / 2, `碎片 ${own}${need ? ` / ${need}` : ''}`, textStyle(12, COLORS.dim, false)).setOrigin(0, 1));
       if (!st) {
-        const b = makeButton(this, W - 76, y, 112, 56, '解鎖', COLORS.gold, () => {
+        const b = makeButton(this, W - 72, y, 100, Math.min(52, rowH - 22), '解鎖', COLORS.gold, () => {
           const save = loadSave();
           if (!unlockChar(save, id)) return;
           writeSave(save);
@@ -549,7 +555,7 @@ export class GachaScene extends Phaser.Scene {
         layer.add(b);
       }
       if (st && st < MAX_STAR) {
-        const b = makeButton(this, W - 76, y, 112, 56, '升星', COLORS.magenta, () => {
+        const b = makeButton(this, W - 72, y, 100, Math.min(52, rowH - 22), '升星', COLORS.magenta, () => {
           const save = loadSave();
           if (!starUp(save, id)) return;
           writeSave(save);
@@ -563,7 +569,7 @@ export class GachaScene extends Phaser.Scene {
         layer.add(b);
       }
     });
-    layer.add(this.add.text(W / 2, CONTENT_BOTTOM - 96, '碎片不夠時會自動使用萬能碎片', textStyle(13, COLORS.dim, false)).setOrigin(0.5));
+    layer.add(this.add.text(W / 2, CONTENT_BOTTOM - 98, '碎片不夠時會自動使用萬能碎片', textStyle(13, COLORS.dim, false)).setOrigin(0.5));
     layer.add(makeButton(this, W / 2, CONTENT_BOTTOM - 40, 220, 58, '關閉', COLORS.cyan, () => layer.destroy(), 20));
   }
 
