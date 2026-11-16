@@ -250,3 +250,20 @@ export const ULTIMATES: Record<CharId, UltimateDef> = {
 
 /** 大招演出（特寫切入＋收尾特效）總長，遊戲在這段時間停住 */
 export const ULT_FREEZE = 1.0;
+
+// ---------- 武器羈絆：同時帶這兩把武器（含進化後）會觸發額外效果 ----------
+export interface WeaponSynergy {
+  id: string;
+  a: WeaponId;
+  b: WeaponId;
+  name: string;
+  desc: string;
+}
+
+export const WEAPON_SYNERGIES: WeaponSynergy[] = [
+  { id: 'thunder', a: 'laser', b: 'field', name: '雷光', desc: '雷射發射時追加一道落雷' },
+  { id: 'twin', a: 'katana', b: 'drones', name: '雙刃', desc: '高周波刀與無人機傷害 +25%' },
+  { id: 'venom', a: 'shuriken', b: 'virus', name: '毒刃', desc: '手裡劍傷害 +20%、病毒擴散 +2' },
+  { id: 'heaven', a: 'orbital', b: 'hook', name: '天地', desc: '軌道打擊 +2 發' },
+  { id: 'voltdog', a: 'hound', b: 'field', name: '雷犬', desc: '機犬撕咬範圍 +30%、傷害 +15%' },
+];

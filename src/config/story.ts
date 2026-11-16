@@ -66,6 +66,19 @@ export const STORY: Record<StageId, { intro: StoryLine[]; outro: StoryLine[] }> 
       { who: 'jin', text: '這座城的黑夜還沒結束。但今晚——我們贏了。' },
     ],
   },
+  abyss: {
+    intro: [
+      { who: 'sys', text: '天照墜落之後，所有殘留的訊號都指向同一個地方——海底。' },
+      { who: 'koma', text: '阿吽一直對著海面低吼……下面有很大的東西。' },
+      { who: 'zero', text: '深海都市的主機還在運作。有人在用它喚醒「利維坦」。' },
+      { who: 'jin', text: '那就潛下去，把它斬斷。' },
+    ],
+    outro: [
+      { who: 'koma', text: '利維坦不動了！阿吽，我們贏了！' },
+      { who: 'kagura', text: '海裡的靈也安靜下來了……謝謝你們。' },
+      { who: 'jin', text: '從天上到海底，這座城的每一個角落，我都會守住。' },
+    ],
+  },
 };
 
 export const SPEAKER_NAME: Record<StoryLine['who'], string> = {

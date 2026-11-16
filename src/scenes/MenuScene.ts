@@ -14,7 +14,10 @@ import { mailBadge, openMailbox } from '../game/mail';
 import { TAB_H, TOP_H, enter, goTo, lobbyBackground, openSettings, tabBar, topBar } from '../game/chrome';
 import { dailyChallenge, todayKey } from '../config/meta';
 import { STAGES, stageWantedMax } from '../config/stages';
-import { showLoginBonus } from '../game/login';
+import { pendingLoginDay, showLoginBonus } from '../game/login';
+import { AFF_LINES, affinityLevel } from '../game/affinity';
+import { openPass, passClaimable } from '../game/pass';
+import { applySkin } from '../game/skins';
 import { WEEKLY, weekKey, weeklyBoss } from '../config/modes';
 import type { GameMode } from '../config/modes';
 import { runReward } from '../config/balance';
@@ -40,7 +43,8 @@ export class MenuScene extends Phaser.Scene {
     Audio.playLobby(STAGES[this.stageIdx].id);
     this.draw();
     enter(this);
-    this.time.delayedCall(450, () => showLoginBonus(this, () => this.draw()));
+    // 今天還沒領登入獎勵才跳出（沒有要領的就不重畫，避免把剛打開的視窗清掉）
+    if (pendingLoginDay(s) > 0) this.time.delayedCall(450, () => showLoginBonus(this, () => this.draw()));
   }
 
   /** 無盡模式／每週 Boss 的說明與出擊視窗 */
@@ -53,7 +57,17 @@ export class MenuScene extends Phaser.Scene {
     layer.add(this.add.rectangle(W / 2, top + 220, 480, 500, 0x0d0a1c, 0.97).setStrokeStyle(2, mode === 'weekly' ? 0xff2244 : COLORS.gold, 0.8));
     const id = CHAR_ORDER[this.charIdx];
     let lines: string[];
-    if (mode === 'endless') {
+    if (mode === 'tower') {
+      layer.add(this.add.text(W / 2, top + 10, '霓虹塔', textStyle(30, '#7fefff')).setOrigin(0.5).setStroke('#07060d', 6));
+      lines = [
+        `關卡：${STAGES[this.stageIdx].name}（用大廳選的關卡與角色）`,
+        '每 90 秒往上爬一層，敵人每層變強 20%',
+        '每上一層回復 15% 生命；每 5 層出現一隻 Boss',
+        '不會自動結束，倒下時依樓層給晶片',
+        '',
+        (s.towerBest ?? 0) > 0 ? `最高紀錄：第 ${s.towerBest} 層` : '還沒有紀錄',
+      ];
+    } else if (mode === 'endless') {
       const eb = s.endlessBest ?? { time: 0, kills: 0 };
       layer.add(this.add.text(W / 2, top + 10, '無盡模式', textStyle(30, '#ffd84d')).setOrigin(0.5).setStroke('#07060d', 6));
       lines = [
@@ -95,7 +109,7 @@ export class MenuScene extends Phaser.Scene {
     this.tweens.killAll();
     const s = loadSave();
     // 大廳背景跟著選到的關卡換
-    const WEATHER = { slums: 'rain', tower: 'rain', shrine: 'petals', grave: 'dust', orbit: 'stars' } as const;
+    const WEATHER = { slums: 'rain', tower: 'rain', shrine: 'petals', grave: 'dust', orbit: 'stars', abyss: 'bubbles' } as const;
     lobbyBackground(this, 0.15, `ui-lobby-${STAGES[this.stageIdx].id}`, WEATHER[STAGES[this.stageIdx].id]);
     topBar(this, s);
 
@@ -134,8 +148,26 @@ export class MenuScene extends Phaser.Scene {
       (hero as Phaser.GameObjects.Sprite).play(`char-${id}-idle`);
     } else hero = this.add.image(W / 2, heroY - 80, `char-${id}`).setScale(1.6);
     if (!owned) hero.setTint(0x222233);
-    // 點角色：做出攻擊動作
+    if (owned) applySkin(hero, s, id);
+    // 點角色：說一句話（好感度解鎖的台詞）＋做出攻擊動作
+    let bubble: Phaser.GameObjects.Container | null = null;
     hero.setInteractive({ useHandCursor: true }).on('pointerup', () => {
+      if (owned) {
+        bubble?.destroy();
+        const lines = AFF_LINES[id].slice(0, affinityLevel(s, id));
+        const line = lines[Math.floor(Math.random() * lines.length)];
+        const bt = this.add.text(0, 0, line, { ...textStyle(13, '#ffffff', false), wordWrap: { width: 300, useAdvancedWrap: true }, align: 'center', lineSpacing: 2 }).setOrigin(0.5);
+        const bw = bt.width + 28;
+        const bh = bt.height + 20;
+        const g = this.add.graphics();
+        g.fillStyle(0x110d1f, 0.95).fillRoundedRect(-bw / 2, -bh / 2, bw, bh, 12).lineStyle(2, 0x5dffb0, 0.9).strokeRoundedRect(-bw / 2, -bh / 2, bw, bh, 12);
+        g.fillStyle(0x110d1f, 0.95).fillTriangle(-10, bh / 2 - 1, 10, bh / 2 - 1, 0, bh / 2 + 12);
+        const c = this.add.container(W / 2, heroY - 350, [g, bt]).setDepth(40).setScale(0.6).setAlpha(0);
+        bubble = c;
+        this.tweens.add({ targets: c, scale: 1, alpha: 1, duration: 180, ease: 'Back.Out' });
+        this.tweens.add({ targets: c, alpha: 0, delay: 3200, duration: 300, onComplete: () => c.destroy() });
+        Audio.voice(id, 'start', 0.8);
+      }
       if (!(hero instanceof Phaser.GameObjects.Sprite) || hero.anims.currentAnim?.key.startsWith('live-')) {
         // 立繪：前衝一下並揮出刀光
         this.tweens.add({ targets: hero, x: W / 2 + 14, yoyo: true, duration: 90 });
@@ -176,13 +208,16 @@ export class MenuScene extends Phaser.Scene {
     writeSave(s);
     const dc = dailyChallenge(todayKey());
     const sides: { x: number; y: number; icon: string; label: string; dot: number | boolean; act: () => void }[] = [
+      { x: W - 38, y: TOP_H + 438, icon: 'ui-ic-chip', label: '通行證', dot: passClaimable(s).length > 0, act: () => openPass(this, () => undefined) },
+      { x: W - 38, y: TOP_H + 366, icon: 'ui-ic-upgrade', label: '霓虹塔', dot: false, act: () => this.openMode('tower') },
+      { x: 38, y: TOP_H + 438, icon: 'ui-ic-mission', label: '簽到', dot: pendingLoginDay(s) > 0, act: () => showLoginBonus(this, () => this.scene.restart(), true) },
       { x: 38, y: TOP_H + 150, icon: 'ui-ic-daily', label: '每日挑戰', dot: s.dailyChallengeDay !== todayKey(), act: () => goTo(this, 'Missions', { tab: 'challenge' }) },
-      { x: 38, y: TOP_H + 230, icon: 'ui-ic-trophy', label: '成就', dot: claim, act: () => goTo(this, 'Missions', { tab: 'ach' }) },
+      { x: 38, y: TOP_H + 222, icon: 'ui-ic-trophy', label: '成就', dot: claim, act: () => goTo(this, 'Missions', { tab: 'ach' }) },
       { x: W - 38, y: TOP_H + 150, icon: 'ui-ic-settings', label: '設定', dot: false, act: () => openSettings(this) },
-      { x: W - 38, y: TOP_H + 230, icon: 'ui-ic-codex', label: '圖鑑', dot: false, act: () => goTo(this, 'Codex') },
-      { x: 38, y: TOP_H + 310, icon: 'icon-fuma', label: '無盡模式', dot: false, act: () => this.openMode('endless') },
-      { x: 38, y: TOP_H + 390, icon: 'ui-ic-mail', label: '信箱', dot: mailBadge(s), act: () => openMailbox(this, () => this.scene.restart()) },
-      { x: W - 38, y: TOP_H + 310, icon: 'relic-executioner', label: '週 Boss', dot: s.weeklyKey !== weekKey() && s.stagesCleared.length > 0, act: () => this.openMode('weekly') },
+      { x: W - 38, y: TOP_H + 222, icon: 'ui-ic-codex', label: '圖鑑', dot: false, act: () => goTo(this, 'Codex') },
+      { x: 38, y: TOP_H + 294, icon: 'icon-fuma', label: '無盡模式', dot: false, act: () => this.openMode('endless') },
+      { x: 38, y: TOP_H + 366, icon: 'ui-ic-mail', label: '信箱', dot: mailBadge(s), act: () => openMailbox(this, () => this.scene.restart()) },
+      { x: W - 38, y: TOP_H + 294, icon: 'relic-executioner', label: '週 Boss', dot: s.weeklyKey !== weekKey() && s.stagesCleared.length > 0, act: () => this.openMode('weekly') },
     ];
     void dc;
     for (const b of sides) {

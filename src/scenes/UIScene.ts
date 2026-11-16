@@ -20,6 +20,15 @@ interface Banner {
   born: number;
 }
 
+/** 結算評價 */
+function resultGrade(r: RunResult): 'S' | 'A' | 'B' | 'C' {
+  if (r.mode === 'tower') return (r.floor ?? 1) >= 15 ? 'S' : (r.floor ?? 1) >= 10 ? 'A' : (r.floor ?? 1) >= 5 ? 'B' : 'C';
+  if (r.mode === 'endless') return r.time >= 1200 ? 'S' : r.time >= 900 ? 'A' : r.time >= 600 ? 'B' : 'C';
+  if (r.mode === 'weekly') return r.weeklyDmg >= 200000 ? 'S' : r.weeklyDmg >= 100000 ? 'A' : r.weeklyDmg >= 40000 ? 'B' : 'C';
+  if (r.victory) return r.kills >= 1500 || r.wanted > 0 ? 'S' : 'A';
+  return r.time >= 300 ? 'B' : 'C';
+}
+
 export class UIScene extends Phaser.Scene {
   private g!: GameScene;
   private ready = false;
@@ -386,6 +395,15 @@ export class UIScene extends Phaser.Scene {
     }
 
     // COMBO
+    // 連殺里程碑：畫面中央大字
+    for (const m of [50, 100, 200, 500, 1000]) {
+      if (g.combo >= m && this.lastCombo < m) {
+        const t = this.add.text(W / 2, H * 0.36, `${m} 連殺！`, textStyle(m >= 200 ? 46 : 38, m >= 200 ? '#ff6ab0' : '#ffd84d')).setOrigin(0.5).setStroke('#07060d', 8).setScale(2).setAlpha(0);
+        this.tweens.add({ targets: t, scale: 1, alpha: 1, duration: 180, ease: 'Back.Out' });
+        this.tweens.add({ targets: t, alpha: 0, y: t.y - 30, delay: 900, duration: 400, onComplete: () => t.destroy() });
+        Audio.play('sfx-levelup', 0.4, 300);
+      }
+    }
     if (g.combo >= 10) {
       if (g.combo !== this.lastCombo) {
         this.comboText.setScale(1.35);
@@ -1014,9 +1032,18 @@ export class UIScene extends Phaser.Scene {
     if (!this.ready) return;
     this.openModal(0.88);
     const top = Math.max(150, H * 0.2);
-    const title = r.mode === 'weekly' ? '挑戰結束' : r.mode === 'endless' ? '無盡模式結束' : r.victory ? T.victory : T.defeat;
+    // 角色立繪擺在右側（勝利時亮、失敗時暗）
+    const cid = this.g.char.id;
+    const hk = this.textures.exists(`hd-${cid}`) ? `hd-${cid}` : `char-${cid}`;
+    const hero = this.add.image(W + 40, top + 330, hk).setOrigin(1, 1);
+    hero.setScale(380 / hero.texture.getSourceImage().height).setAlpha(0);
+    if (!r.victory && r.mode === 'normal') hero.setTint(0x6a6688);
+    this.modalLayer.add(hero);
+    this.tweens.add({ targets: hero, x: W + 70, alpha: r.victory || r.mode !== 'normal' ? 0.55 : 0.3, duration: 500, ease: 'Cubic.Out' });
+    if (r.victory) this.time.delayedCall(500, () => Audio.voice(cid, 'win'));
+    const title = r.mode === 'weekly' ? '挑戰結束' : r.mode === 'endless' ? '無盡模式結束' : r.mode === 'tower' ? `霓虹塔 第 ${r.floor ?? 1} 層` : r.victory ? T.victory : T.defeat;
     this.title(top, title, r.victory || r.mode !== 'normal' ? '#ffc83d' : '#ff6b80', 44);
-    const subText = r.mode === 'weekly' ? `對 Boss 造成 ${r.weeklyDmg.toLocaleString()} 傷害` : r.mode === 'endless' ? `存活 ${formatTime(r.time)}` : r.victory ? T.victorySub : T.defeatSub;
+    const subText = r.mode === 'tower' ? `最高紀錄 第 ${loadSave().towerBest} 層` : r.mode === 'weekly' ? `對 Boss 造成 ${r.weeklyDmg.toLocaleString()} 傷害` : r.mode === 'endless' ? `存活 ${formatTime(r.time)}` : r.victory ? T.victorySub : T.defeatSub;
     const sub = this.add.text(W / 2, top + 46, subText, textStyle(18, r.mode === 'normal' ? COLORS.dim : '#ffd84d', false)).setOrigin(0.5);
     this.modalLayer.add(sub);
     // 評價星級：撐過 5 分鐘 1 星、通關 2 星、通關且擊殺 1500 以上或有通緝等級 3 星
@@ -1031,16 +1058,23 @@ export class UIScene extends Phaser.Scene {
       }
     }
 
-    const rows: [string, string][] = [
-      [T.statTime, formatTime(r.time)],
-      [T.statKills, String(r.kills)],
-      [T.statLevel, String(r.level)],
-      [T.statCredits, `${r.credits} ＋ ${r.bonus}`],
+    // 評價：S／A／B／C
+    const grade = resultGrade(r);
+    const gColor = { S: '#ffd84d', A: '#ff6ab0', B: '#7fd4ff', C: '#a9a5c8' }[grade];
+    const gt = this.add.text(W - 70, top + 4, grade, textStyle(88, gColor)).setOrigin(0.5).setStroke('#07060d', 10).setAngle(-12);
+    gt.setScale(3).setAlpha(0);
+    this.modalLayer.add(gt);
+    this.tweens.add({ targets: gt, scale: 1, alpha: 1, delay: 900, duration: 260, ease: 'Back.Out', onStart: () => Audio.play(grade === 'S' ? 'sfx-gacha-ssr' : 'sfx-chest', 0.6) });
+    const rows: [string, string, (k: number) => string][] = [
+      [T.statTime, formatTime(r.time), (k) => formatTime(r.time * k)],
+      [T.statKills, String(r.kills), (k) => String(Math.round(r.kills * k))],
+      [T.statLevel, String(r.level), (k) => String(Math.max(1, Math.round(r.level * k)))],
+      [T.statCredits, `${r.credits} ＋ ${r.bonus}`, (k) => `${Math.round(r.credits * k)} ＋ ${Math.round(r.bonus * k)}`],
     ];
     const panelY = top + 90;
     const panel = this.add.rectangle(W / 2, panelY + 100, 420, 200, COLORS.panel, 1).setStrokeStyle(1, 0x2e2650);
     this.modalLayer.add(panel);
-    rows.forEach(([k, v], i) => {
+    rows.forEach(([k, v, fmt], i) => {
       const y = panelY + 28 + i * 46;
       const kt = this.add.text(W / 2 - 180, y, k, textStyle(18, '#a9a5c8', false)).setOrigin(0, 0);
       const vt = this.add.text(W / 2 + 180, y - 2, v, textStyle(22)).setOrigin(1, 0);
@@ -1050,6 +1084,9 @@ export class UIScene extends Phaser.Scene {
         o.setAlpha(0);
         this.tweens.add({ targets: o, alpha: 1, x: { from: o.x - 40, to: o.x }, delay: 200 + i * 120, duration: 260, ease: 'Cubic.Out' });
       }
+      // 數字從 0 跳到結果
+      vt.setText(fmt(0));
+      this.tweens.addCounter({ from: 0, to: 1, delay: 200 + i * 120, duration: 700, ease: 'Cubic.Out', onUpdate: (tw) => vt.setText(fmt(tw.getValue() ?? 1)), onComplete: () => vt.setText(v) });
     });
     if (r.newBest) {
       const nb = this.add.text(W / 2, panelY + 222, T.newBest, textStyle(20, '#ffc83d')).setOrigin(0.5);

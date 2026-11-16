@@ -1,7 +1,16 @@
 // 特殊模式：無盡模式、每週 Boss 挑戰。
 import type { StageId } from './stages';
 
-export type GameMode = 'normal' | 'endless' | 'weekly';
+export type GameMode = 'normal' | 'endless' | 'weekly' | 'tower';
+
+/** 霓虹塔：每 90 秒上一層，敵人每層變強，每 5 層一隻 Boss */
+export const TOWER = {
+  floorTime: 90,
+  hpPerFloor: 0.2,
+  bossEvery: 5,
+  /** 每層的晶片獎勵 */
+  chipsPerFloor: 8,
+};
 
 /** 無盡模式：10 分鐘後不結束，每 150 秒來一隻 Boss，敵人持續變強 */
 export const ENDLESS = {
@@ -26,6 +35,7 @@ export const WEEKLY_BOSSES: WeeklyBoss[] = [
   { tex: 'boss-necro', title: '亡靈主機', variant: 'spider', stage: 'grave' },
   { tex: 'boss-apex', title: '鬼面將軍・極', variant: 'apex', stage: 'slums' },
   { tex: 'boss-amaterasu', title: '軌道兵器・天照', variant: 'apex', stage: 'orbit' },
+  { tex: 'boss-kraken', title: '機械海妖・利維坦', variant: 'spider', stage: 'abyss' },
 ];
 
 export const WEEKLY = {

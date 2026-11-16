@@ -19,7 +19,7 @@ export const LOGIN_REWARDS: LoginReward[] = [
   { label: '晶片 150', icon: 'ui-ic-chip', apply: (s) => (s.chips += 150) },
   { label: '靈符 ×2', icon: 'spirit-fox', apply: (s) => (s.tickets.spirit += 2) },
   { label: '零件 150', icon: 'ui-ic-parts', apply: (s) => (s.parts += 150) },
-  { label: '浪人券 ×3＋萬能碎片 20', icon: 'avatar-kagura', apply: (s) => ((s.tickets.char += 3), (s.wildShards += 20)) },
+  { label: '浪人券 ×10＋萬能碎片 30', icon: 'avatar-kagura', apply: (s) => ((s.tickets.char += 10), (s.wildShards += 30)) },
 ];
 
 function yesterdayKey(): string {
@@ -36,10 +36,13 @@ export function pendingLoginDay(s: SaveData): number {
   return cont ? (s.loginStreak % 7) + 1 : 1;
 }
 
-export function showLoginBonus(scene: Phaser.Scene, onDone: () => void) {
+/** view：從大廳按鈕打開時，今天已領過也顯示簽到表 */
+export function showLoginBonus(scene: Phaser.Scene, onDone: () => void, view = false) {
   const s = loadSave();
-  const day = pendingLoginDay(s);
-  if (!day) return onDone();
+  const pend = pendingLoginDay(s);
+  if (!pend && !view) return onDone();
+  // 今天已領：顯示目前連續天數，下一格是明天
+  const day = pend || (s.loginStreak % 7) + 1;
   const layer = scene.add.container(0, 0).setDepth(150);
   layer.add(scene.add.rectangle(W / 2, H / 2, W, H, 0x05040a, 0.86).setInteractive());
   const top = H * 0.2;
@@ -68,6 +71,16 @@ export function showLoginBonus(scene: Phaser.Scene, onDone: () => void) {
     layer.add(scene.add.text(big ? x + 20 : x, y + 38, r.label, textStyle(big ? 16 : 13, done ? '#55516e' : '#ffffff')).setOrigin(big ? 0.3 : 0.5).setStroke('#07060d', 3));
     if (done) layer.add(scene.add.text(x, y, '已領', textStyle(20, '#5dff7a')).setOrigin(0.5).setAngle(-12).setStroke('#07060d', 4));
   });
+  if (!pend) {
+    layer.add(scene.add.text(W / 2, top + 452, `已連續登入 ${s.loginStreak} 天，明天再來領第 ${day} 天`, textStyle(14, '#7fefff', false)).setOrigin(0.5));
+    layer.add(
+      makeButton(scene, W / 2, top + 500, 220, 56, '關閉', COLORS.cyan, () => {
+        layer.destroy();
+        onDone();
+      }, 20),
+    );
+    return;
+  }
   const btn = makeButton(scene, W / 2, top + 500, 260, 64, `領取第 ${day} 天`, COLORS.gold, () => {
     const sv = loadSave();
     if (pendingLoginDay(sv) !== day) return;

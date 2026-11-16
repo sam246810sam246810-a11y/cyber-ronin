@@ -2,6 +2,7 @@
 import Phaser from 'phaser';
 import { cloudState, isDeveloper } from './cloud';
 import { openSaveCodeDialog } from './saveCode';
+import { currentTitle } from './titles';
 import { openDevPanel } from './devPanel';
 import { COLORS, H, W, textStyle } from './layout';
 import { makeButton } from './ui';
@@ -80,7 +81,8 @@ export function topBar(scene: Phaser.Scene, save: SaveData) {
     });
   });
   const wanted = save.bestWanted ?? 0;
-  const lv = scene.add.text(ax, ay + 28, save.wins > 0 ? `通緝 ${wanted}` : '新人', textStyle(11, '#ffd84d')).setOrigin(0.5);
+  const ttl = currentTitle(save);
+  const lv = scene.add.text(ax, ay + 28, ttl ? ttl.name : save.wins > 0 ? `通緝 ${wanted}` : '新人', textStyle(11, ttl ? ttl.color : '#ffd84d')).setOrigin(0.5);
   lv.setStroke('#07060d', 3);
   lv.setDepth(2);
 
@@ -263,7 +265,7 @@ export function panelBox(scene: Phaser.Scene, x: number, y: number, w: number, h
 
 /** 大廳背景：生成的雨夜街景＋雨滴 */
 /** 大廳天氣：雨、櫻花、資料塵、星光 */
-export type Weather = 'rain' | 'petals' | 'dust' | 'stars';
+export type Weather = 'rain' | 'petals' | 'dust' | 'stars' | 'bubbles';
 
 export function lobbyBackground(scene: Phaser.Scene, dim = 0, key = 'ui-lobby-bg', weather: Weather = 'rain') {
   const k = scene.textures.exists(key) ? key : 'ui-lobby-bg';
@@ -297,6 +299,12 @@ export function lobbyBackground(scene: Phaser.Scene, dim = 0, key = 'ui-lobby-bg
         d.x += Math.sin(t / 900 + d.p) * 0.2;
         if (d.y < -10) ((d.y = H + 10), (d.x = Math.random() * W));
         fx.fillStyle(0x5dff7a, 0.25 + 0.35 * Math.abs(Math.sin(t / 500 + d.p))).fillRect(d.x, d.y, 2, 2);
+      } else if (weather === 'bubbles') {
+        // 氣泡：往上浮並輕輕搖擺
+        d.y -= ((30 + d.v * 50) * dt) / 1000;
+        d.x += Math.sin(t / 600 + d.p) * 0.3;
+        if (d.y < -10) ((d.y = H + 10), (d.x = Math.random() * W));
+        fx.lineStyle(1, 0x9fefff, 0.55).strokeCircle(d.x, d.y, 2 + d.v * 4);
       } else {
         // 星光：閃爍
         const a = 0.15 + 0.6 * Math.abs(Math.sin(t / (600 + d.v * 900) + d.p));

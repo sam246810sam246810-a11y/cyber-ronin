@@ -112,6 +112,20 @@ export interface SaveData extends UnlockStats {
   mailClaimed: string[];
   /** 角色好感度（累積點數） */
   affinity: Partial<Record<CharId, number>>;
+  /** 每個角色選的換色皮膚 */
+  skins: Partial<Record<CharId, number>>;
+  /** 稱號 */
+  title: string;
+  /** 霓虹塔最高樓層 */
+  towerBest: number;
+  /** 賽季通行證：哪個月、經驗、已領的階 */
+  passMonth: string;
+  passXp: number;
+  passClaimed: number[];
+  /** 拿過通行證滿階（解鎖賽季框） */
+  seasonFrame: boolean;
+  /** 抽過的總次數（給稱號用） */
+  totalPulls: number;
   /** 掃蕩：每天 3 次 */
   sweepDay: string;
   sweepUsed: number;
@@ -196,6 +210,14 @@ const EMPTY: SaveData = {
   mailRead: [],
   mailClaimed: [],
   affinity: {},
+  skins: {},
+  title: '',
+  towerBest: 0,
+  passMonth: '',
+  passXp: 0,
+  passClaimed: [],
+  seasonFrame: false,
+  totalPulls: 0,
   sweepDay: '',
   sweepUsed: 0,
   loginStreak: 0,

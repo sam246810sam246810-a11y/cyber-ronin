@@ -35,6 +35,14 @@ const wild = (n: number): MailReward => ({ icon: 'avatar-kagura', label: `萬能
 /** 新的郵件放最上面 */
 export const MAILS: Mail[] = [
   {
+    id: 'news-abyss',
+    title: '大型更新：深海都市、霓虹塔與賽季通行證',
+    from: '營運團隊',
+    date: '2026/11/16',
+    body: '・第 6 關「深海都市」開放！小心會把人拉進去的漩渦，以及機械海妖利維坦。\n・新模式「霓虹塔」：每 90 秒爬一層，看你能爬多高。\n・賽季通行證、稱號、角色換色皮膚、7 日簽到隨時可看。\n・角色有了日文語音，四隻關卡 Boss 學會了招牌技，兩把特定武器一起帶會觸發武器羈絆。\n送上浪人券與晶片，祝你玩得開心！',
+    rewards: [charT(10), chips(1000)],
+  },
+  {
     id: 'news-koma',
     title: '更新公告：新角色「狛」與武器進化',
     from: '營運團隊',

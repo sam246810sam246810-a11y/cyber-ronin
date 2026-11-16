@@ -5,6 +5,7 @@ import { CONTENT_BOTTOM, CONTENT_TOP, enter, lobbyBackground, tabBar, topBar } f
 
 import { loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
+import { SKINS, applySkin, skinUnlocked } from '../game/skins';
 import { AFF_LINES, AFF_MAX, AFF_PERKS, affinityLevel, affinityPoints, affinityProgress } from '../game/affinity';
 import { dismantle, equippedStats, upgradeModule } from '../game/meta';
 import { CHARACTERS, CHAR_ORDER, CharId } from '../config/balance';
@@ -63,6 +64,7 @@ export class ArmoryScene extends Phaser.Scene {
     const hero = this.add.image(W / 2, top + heroH, key).setOrigin(0.5, 1);
     hero.setScale(heroH / hero.texture.getSourceImage().height);
     if (!ownsChar(s, id)) hero.setTint(0x2a2440);
+    else applySkin(hero, s, id);
     this.tweens.add({ targets: hero, scaleY: hero.scaleY * 1.012, yoyo: true, repeat: -1, duration: 1500, ease: 'Sine.InOut' });
     const nameY = top + heroH + 18;
     this.add.text(W / 2, nameY, CHARACTERS[id].name, textStyle(18, ownsChar(s, id) ? '#ffffff' : '#8a86a8')).setOrigin(0.5).setStroke('#07060d', 4);
@@ -194,8 +196,26 @@ export class ArmoryScene extends Phaser.Scene {
     this.add.rectangle(W / 2, y0 + 24, bw, 10, 0x1a1430).setStrokeStyle(1, 0x2bd98a, 0.6);
     this.add.rectangle(W / 2 - bw / 2, y0 + 24, bw * pr.ratio, 10, 0x2bd98a).setOrigin(0, 0.5);
     this.add.text(W / 2, y0 + 44, '用這個角色出擊就會累積好感（存活越久越多，勝利額外 +15）', textStyle(11, COLORS.dim, false)).setOrigin(0.5);
+    // 換色皮膚：好感度到對應等級解鎖
+    const owned = ownsChar(s, id);
+    const cur = s.skins?.[id] ?? 0;
+    SKINS.forEach((sk, i) => {
+      const x = W / 2 + (i - (SKINS.length - 1) / 2) * 96;
+      const y = y0 + 80;
+      const ok = owned && skinUnlocked(s, id, i);
+      const chip = this.add.circle(x, y, 17, sk.tint || 0xffffff, ok ? 1 : 0.25).setStrokeStyle(i === cur ? 3 : 1, i === cur ? 0x5dffb0 : 0x3a3452);
+      this.add.text(x + 24, y, ok ? sk.name : `Lv${i + 1}`, textStyle(12, ok ? (i === cur ? '#5dffb0' : '#ffffff') : '#55516e', false)).setOrigin(0, 0.5);
+      if (ok)
+        chip.setInteractive({ useHandCursor: true }).on('pointerup', () => {
+          const sv = loadSave();
+          sv.skins = { ...(sv.skins ?? {}), [id]: i };
+          writeSave(sv);
+          Audio.play('sfx-click', 0.4);
+          this.draw();
+        });
+    });
     const lines = AFF_LINES[id];
-    const top = y0 + 64;
+    const top = y0 + 106;
     const rowH = Math.min(86, (CONTENT_BOTTOM - top - 6) / AFF_MAX);
     for (let i = 0; i < AFF_MAX; i++) {
       const y = top + i * rowH + rowH / 2;

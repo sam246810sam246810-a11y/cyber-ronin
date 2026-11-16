@@ -3,6 +3,7 @@ import type Phaser from 'phaser';
 import { CHAR_ORDER, WEAPON_POOL } from '../config/balance';
 import { STAGES } from '../config/stages';
 import { loadSave, resetSave, writeSave } from './storage';
+import { syncPass } from './pass';
 import type { GameScene } from '../scenes/GameScene';
 
 type Btn = [string, () => string | void];
@@ -75,6 +76,10 @@ export function openDevPanel(scene: Phaser.Scene, game: GameScene | null) {
       s.tickets.char += 100;
       s.tickets.equip += 100;
       s.tickets.spirit += 100;
+    })],
+    ['通行證經驗 +500', () => edit((s) => {
+      syncPass(s);
+      s.passXp = (s.passXp ?? 0) + 500;
     })],
     ['萬能碎片 +1,000', () => edit((s) => (s.wildShards += 1000))],
     ['全部角色好感 +500', () => edit((s) => {

@@ -1,8 +1,8 @@
 // 關卡：每關有自己的地面、敵人外觀、最終 Boss、地形機關與難度。
 import type { EnemyKind } from './balance';
 
-export type StageId = 'slums' | 'tower' | 'shrine' | 'grave' | 'orbit';
-export type HazardKind = 'none' | 'laser' | 'curse' | 'storm' | 'meteor';
+export type StageId = 'slums' | 'tower' | 'shrine' | 'grave' | 'orbit' | 'abyss';
+export type HazardKind = 'none' | 'laser' | 'curse' | 'storm' | 'meteor' | 'whirl';
 
 export interface EnemySkin {
   tex: string;
@@ -139,6 +139,27 @@ export const STAGES: StageDef[] = [
     hazard: 'meteor',
     hazardDesc: '隕石雨：橘色預警圈出現後，隕石會砸下來',
     firstClear: { chips: 300, char: 3, spirit: 3 },
+  },
+  {
+    id: 'abyss',
+    bgm: 'bgm-abyss',
+    name: '深海都市',
+    desc: '沉在海底玻璃穹頂裡的霓虹城市，傳說中的機械海妖就睡在這裡。',
+    ground: 'ground-abyss',
+    card: 'ui-stage-abyss',
+    color: 0x3de0ff,
+    css: '#7fefff',
+    hpMult: 3.8,
+    dmgMult: 1.8,
+    rewardMult: 3,
+    skins: {
+      drone: { tex: 'enemy-angler', name: '鮟鱇無人機', desc: '用發光誘餌引誘獵物的機械深海魚。' },
+      gunner: { tex: 'enemy-diver', name: '深潛兵', desc: '穿著重裝潛水服的魚叉槍兵，遠距射擊。' },
+    },
+    finalBoss: { tex: 'boss-kraken', title: '機械海妖・利維坦', desc: '沉睡在深海的巨大機械章魚。八條刀刃觸手橫掃，並召喚漩渦。', variant: 'spider', hp: 32000 },
+    hazard: 'whirl',
+    hazardDesc: '漩渦：海流形成漩渦，會把你往中心拉並持續造成傷害',
+    firstClear: { chips: 400, char: 5, spirit: 3 },
   },
 ];
 

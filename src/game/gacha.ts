@@ -108,6 +108,7 @@ export function pullPool(s: SaveData, pool: PoolId, n: 1 | 10): PullItem[] | nul
   const out = rars.map((r) => grant(s, pool, r));
   s.gachaPulls += n;
   s.ssrCount += rars.filter((r) => r === 3).length;
+  s.totalPulls = (s.totalPulls ?? 0) + n;
   return out;
 }
 

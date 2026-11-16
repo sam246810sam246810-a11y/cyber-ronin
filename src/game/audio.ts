@@ -58,6 +58,11 @@ class AudioManager {
     this.playMusic(hasMusic(k) ? k : 'bgm-menu');
   }
 
+  /** 角色語音：start（出擊）、ult（大招）、win（勝利） */
+  voice(char: string, kind: 'start' | 'ult' | 'win', volume = 0.9) {
+    this.play(`vo-${char}-${kind}`, volume, 800);
+  }
+
   stopMusic() {
     this.music?.stop();
     this.music?.destroy();

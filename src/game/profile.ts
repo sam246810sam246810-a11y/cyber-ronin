@@ -6,6 +6,7 @@ import { SaveData, loadSave, writeSave } from './storage';
 import { Audio } from './audio';
 import { CHARACTERS, CharId } from '../config/balance';
 import { anyMaxAffinity } from './affinity';
+import { currentTitle, openTitles } from './titles';
 
 export interface FrameDef {
   id: string;
@@ -26,6 +27,7 @@ export const FRAMES: FrameDef[] = [
   { id: 'gold', name: '黃金傳說框', tint: 0xffd84d, glow: 0xffc83d, how: '抽到任一 SSR', unlocked: (s) => (s.ssrCount ?? 0) >= 1 },
   { id: 'spirit', name: '百鬼框', tint: 0x7dff8a, glow: 0x2bd96b, how: '收集 8 種式神', unlocked: (s) => Object.values(s.spirits ?? {}).filter((n) => (n ?? 0) > 0).length >= 8 },
   { id: 'bond', name: '羈絆框', tint: 0x5dffb0, glow: 0x2bd98a, how: '任一角色好感度達到 Lv5', unlocked: (s) => anyMaxAffinity(s) },
+  { id: 'season', name: '賽季框', tint: 0x7fefff, glow: 0x3de0ff, how: '通行證第 30 階', unlocked: (s) => !!s.seasonFrame },
   { id: 'sakura', name: '櫻花祭框', tint: 0xff9ad0, glow: 0xff6ab0, how: '活動限定（敬請期待）', unlocked: () => false, event: true },
 ];
 
@@ -93,7 +95,10 @@ export function openProfile(scene: Phaser.Scene, onChange: () => void) {
     const curA = currentAvatar(s);
     const curF = currentFrame(s);
     layer.add(drawAvatar(scene, W / 2, top + 110, 120, curA, curF));
-    layer.add(scene.add.text(W / 2, top + 182, `最佳通緝等級 ${s.bestWanted ?? 0}　通關 ${s.wins} 次`, textStyle(14, '#ffd84d', false)).setOrigin(0.5));
+    layer.add(scene.add.text(W / 2, top + 176, `最佳通緝等級 ${s.bestWanted ?? 0}　通關 ${s.wins} 次`, textStyle(13, '#ffd84d', false)).setOrigin(0.5));
+    const ct = currentTitle(s);
+    const tb = makeButton(scene, W / 2 + 150, top + 60, 150, 40, ct ? ct.name : '選擇稱號', COLORS.gold, () => openTitles(scene, () => { onChange(); draw(); }), 13);
+    layer.add(tb);
 
     layer.add(scene.add.text(46, top + 220, '頭像', textStyle(18, '#3df5ff')).setOrigin(0, 0.5));
     layer.add(scene.add.text(W - 46, top + 220, '解鎖角色後就能使用', textStyle(12, COLORS.dim, false)).setOrigin(1, 0.5));

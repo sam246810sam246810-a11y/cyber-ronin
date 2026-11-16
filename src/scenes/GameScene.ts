@@ -31,17 +31,20 @@ import {
 import { T } from '../i18n/zh-TW';
 import { COLORS, H, W, Z, snapFont, textStyle } from '../game/layout';
 import { SpatialGrid } from '../game/SpatialGrid';
+import { setupLogicalCamera } from '../game/ui';
 import { TEX } from '../game/textures';
 import { SaveData, formatTime, loadSave, writeSave } from '../game/storage';
 import { Audio } from '../game/audio';
 import { ULT_FX, buildAnims, hasMusic, queueLazy } from '../game/assets';
 import { gainAffinity } from '../game/affinity';
+import { gainPassXp } from '../game/pass';
+import { applySkin, skinTint } from '../game/skins';
 import { vibrate } from '../game/haptics';
 import { applyRunToDaily, equippedStats } from '../game/meta';
 import { charStats, mergeStats, spiritStats, starOf, talentLevel } from '../game/gacha';
 import { SPIRITS, spiritLevel } from '../config/gacha';
 import { STAGES, StageDef, stageById, stageWantedMax } from '../config/stages';
-import { ENDLESS, GameMode, WEEKLY, weekKey, weeklyBoss } from '../config/modes';
+import { ENDLESS, GameMode, TOWER, WEEKLY, weekKey, weeklyBoss } from '../config/modes';
 import { STORY } from '../config/story';
 import { MOD_RARITY, MODULE_BASES, ModuleItem, StatKey, dailyChallenge, dropRarity, makeModule, mulberry32, todayKey } from '../config/meta';
 import {
@@ -60,6 +63,8 @@ import {
   Tag,
   TAGS,
   WEAPON_TAG,
+  WEAPON_SYNERGIES,
+  WeaponSynergy,
   WantedMods,
   ULTIMATES,
   ULT_FREEZE,
@@ -113,6 +118,8 @@ interface Enemy {
   ringT: number;
   spiralT: number;
   summonT: number;
+  /** Boss 招牌技計時 */
+  sigT: number;
   fireT: number;
   spinA: number;
   aimX: number;
@@ -249,6 +256,8 @@ export interface RunResult {
   wanted: number;
   wantedUnlocked: number | null;
   victory: boolean;
+  /** 霓虹塔：到達的樓層 */
+  floor?: number;
   time: number;
   kills: number;
   level: number;
@@ -299,6 +308,8 @@ interface CurseZone {
   t: number;
   tick: number;
   g: Phaser.GameObjects.Graphics;
+  /** 漩渦：會把人往中心拉 */
+  whirl?: boolean;
 }
 
 const PROP_TEX: Record<InteractKind, string> = {
@@ -391,6 +402,8 @@ export class GameScene extends Phaser.Scene {
     g: Phaser.GameObjects.Graphics;
   } | null = null;
   private nextRandEvent = 80;
+  /** 霓虹塔目前樓層 */
+  floor = 0;
   private origRandom: (() => number) | null = null;
 
   // M2.5：暴擊、幸運、遺物、羈絆、通緝等級
@@ -528,6 +541,50 @@ export class GameScene extends Phaser.Scene {
     if (stage.finalBoss) texs.add(stage.finalBoss.tex);
     if (mode === 'weekly') texs.add(weeklyBoss().tex);
     queueLazy(this, [...texs, ...(ULT_FX[charId] ?? []).map((f) => `fx-${f}`)]);
+    this.drawLoading(charId, stage);
+  }
+
+  /** 出擊載入畫面：角色立繪、進度條、小提示 */
+  private loadingObjs: Phaser.GameObjects.GameObject[] = [];
+  private drawLoading(charId: CharId, stage: StageDef) {
+    setupLogicalCamera(this);
+    const o: Phaser.GameObjects.GameObject[] = [];
+    o.push(this.add.rectangle(W / 2, H / 2, W, H, 0x07060d, 1));
+    if (this.textures.exists(stage.card)) {
+      const bg = this.add.image(W / 2, H * 0.3, stage.card).setAlpha(0.35);
+      bg.setScale(Math.max(W / bg.width, (H * 0.6) / bg.height));
+      o.push(bg);
+    }
+    const hk = this.textures.exists(`hd-${charId}`) ? `hd-${charId}` : `char-${charId}`;
+    const hero = this.add.image(W / 2, H * 0.66, hk).setOrigin(0.5, 1);
+    hero.setScale((H * 0.42) / hero.texture.getSourceImage().height);
+    o.push(hero);
+    o.push(this.add.text(W / 2, H * 0.7, stage.name, textStyle(26, stage.css)).setOrigin(0.5).setStroke('#07060d', 6));
+    o.push(this.add.text(W / 2, H * 0.7 + 34, CHARACTERS[charId].name, textStyle(15, '#c9c6e0', false)).setOrigin(0.5));
+    const bw = 360;
+    o.push(this.add.rectangle(W / 2, H * 0.8, bw, 12, 0x1a1430).setStrokeStyle(1, 0x3df5ff, 0.6));
+    const bar = this.add.rectangle(W / 2 - bw / 2, H * 0.8, 4, 12, 0x3df5ff).setOrigin(0, 0.5);
+    o.push(bar);
+    const tips = [
+      '狛的機犬會把經驗晶片叼回來，記得讓牠多跑幾趟',
+      '武器滿級並帶著對應道具時，開寶箱就能進化',
+      '刃的大招「居合・一閃」能秒殺畫面內的雜兵',
+      '好感度在「義體 → 好感度」，用角色出擊就會增加',
+      '隨機事件完成可以拿到寶箱，記得留意畫面上方',
+      '兩把特定武器一起帶會觸發「武器羈絆」',
+      '深海都市的漩渦會把你往中心拉，看到藍圈快離開',
+      '霓虹塔每 5 層有 Boss，爬越高晶片越多',
+      '設定裡可以複製存檔碼，換手機也能還原',
+    ];
+    o.push(
+      this.add
+        .text(W / 2, H * 0.8 + 34, `提示：${tips[Math.floor(Math.random() * tips.length)]}`, { ...textStyle(13, '#ffd84d', false), align: 'center', wordWrap: { width: 440 } })
+        .setOrigin(0.5, 0),
+    );
+    for (const x of o) (x as unknown as Phaser.GameObjects.Components.Depth).setDepth?.(1000);
+    this.load.off('progress');
+    this.load.on('progress', (p: number) => bar.setSize(Math.max(4, bw * p), 12));
+    this.loadingObjs = o;
   }
 
   /** 該關卡專屬的 Boss 曲（沒有就用共用的） */
@@ -539,6 +596,8 @@ export class GameScene extends Phaser.Scene {
   // ---------- 初始化 ----------
   create(data: { char?: CharId; wanted?: number; daily?: boolean; stage?: string; mode?: GameMode }) {
     buildAnims(this);
+    for (const o of this.loadingObjs) o.destroy();
+    this.loadingObjs = [];
     this.resetState();
     this.save = loadSave();
     this.modStats = equippedStats(this.save);
@@ -558,6 +617,7 @@ export class GameScene extends Phaser.Scene {
     this.familiar = null;
     this.familiarT = 8;
     this.nextEndlessBoss = RUN.duration + ENDLESS.bossEvery;
+    this.floor = 0;
     this.evt = null;
     this.nextRandEvent = 70 + Math.random() * 30;
     this.stage = this.isDaily ? STAGES[0] : this.mode === 'weekly' ? stageById(weeklyBoss().stage) : stageById(data?.stage);
@@ -605,6 +665,8 @@ export class GameScene extends Phaser.Scene {
     const ringKey = this.textures.exists('field-ring') ? 'field-ring' : 'ring';
     this.fieldImg = this.add.image(0, 0, ringKey).setDepth(4).setVisible(false).setBlendMode(Phaser.BlendModes.ADD);
     this.playerImg = this.add.sprite(0, 0, `char-${this.char.id}`).setScale(0.8).setDepth(10).setOrigin(0.5, 0.8);
+    applySkin(this.playerImg, this.save, this.char.id);
+    this.skinTint = skinTint(this.save, this.char.id);
     this.facingImg = this.add.image(0, 0, 'facing').setScale(0.7 / TEX).setDepth(1).setAlpha(0.45).setTint(0x3df5ff);
     this.sparks = this.add.particles(0, 0, 'spark', {
       lifespan: 380,
@@ -655,6 +717,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('UI');
     this.ui = this.scene.get('UI') as UIScene;
     Audio.playMusic(this.stage.bgm);
+    this.time.delayedCall(400, () => Audio.voice(this.char.id, 'start'));
   }
 
   private groundSize() {
@@ -662,6 +725,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resetState() {
+    this.synergyShown.clear();
+    this.slowMo = 0;
     this.tagKills = {};
     this.maxCombo = 0;
     this.moduleDrops = [];
@@ -837,13 +902,53 @@ export class GameScene extends Phaser.Scene {
     }
     if (def.projectile) s.amount += this.char?.extraAmount ?? 0;
     s.area *= this.areaMult;
+    // 武器羈絆
+    const bid = this.baseWeapon(id);
+    for (const syn of this.activeSynergies()) {
+      if (syn.id === 'twin' && (bid === 'katana' || bid === 'drones')) s.damage *= 1.25;
+      if (syn.id === 'venom' && bid === 'shuriken') s.damage *= 1.2;
+      if (syn.id === 'venom' && bid === 'virus') s.bounce += 2;
+      if (syn.id === 'heaven' && bid === 'orbital') s.amount += 2;
+      if (syn.id === 'voltdog' && bid === 'hound') {
+        s.area *= 1.3;
+        s.damage *= 1.15;
+      }
+    }
     return s;
   }
+
+  private hasSynergy(id: string) {
+    return this.activeSynergies().some((s) => s.id === id);
+  }
+
+  /** 進化武器對應的原本武器 */
+  private baseWeapon(id: WeaponId): WeaponId {
+    return EVOLUTIONS.find((e) => e.result === id)?.weapon ?? id;
+  }
+
+  /** 目前生效的武器羈絆 */
+  activeSynergies(): WeaponSynergy[] {
+    const have = new Set((this.weapons ?? []).map((w) => this.baseWeapon(w.id)));
+    return WEAPON_SYNERGIES.filter((s) => have.has(s.a) && have.has(s.b));
+  }
+
+  /** 武器組合變了：重算所有武器數值，新觸發的羈絆跳出提示 */
+  private refreshSynergies() {
+    for (const w of this.weapons) w.stats = this.computeStats(w.id, w.level);
+    for (const syn of this.activeSynergies()) {
+      if (this.synergyShown.has(syn.id)) continue;
+      this.synergyShown.add(syn.id);
+      this.ui.banner(`武器羈絆「${syn.name}」：${syn.desc}`, '#7fefff', 3);
+      Audio.play('sfx-evolve', 0.5);
+    }
+  }
+  private synergyShown = new Set<string>();
 
   addWeapon(id: WeaponId, bonus = 0) {
     this.weapons.push({ id, level: 1, bonus, timer: 0.3, timer2: 1, stats: this.computeStats(id, 1), angle: 0 });
     this.markSeenWeapon(id);
     this.inventoryVersion++;
+    this.refreshSynergies();
   }
 
   private markSeenWeapon(id: WeaponId) {
@@ -861,7 +966,12 @@ export class GameScene extends Phaser.Scene {
 
   // ---------- 主迴圈 ----------
   update(_time: number, deltaMs: number) {
-    const dt = Math.min(deltaMs, 50) / 1000;
+    let dt = Math.min(deltaMs, 50) / 1000;
+    // 擊破精英／Boss 時的短暫慢動作
+    if (this.slowMo > 0) {
+      this.slowMo -= dt;
+      dt *= 0.3;
+    }
     const steps = this.simSpeed * this.gameSpeed;
     for (let i = 0; i < steps; i++) {
       if (this.modal || this.ended) break;
@@ -957,6 +1067,31 @@ export class GameScene extends Phaser.Scene {
       }
       return;
     }
+    if (this.mode === 'tower') {
+      // 霓虹塔：每 90 秒上一層
+      const f = 1 + Math.floor(this.t / TOWER.floorTime);
+      if (f > this.floor) {
+        this.floor = f;
+        if (f > 1) {
+          this.heal(this.maxHp * 0.15);
+          this.credits += 10 * f;
+          this.ui.banner(`霓虹塔 第 ${f} 層`, '#7fefff', 2.4);
+          Audio.play('sfx-levelup', 0.5);
+        }
+        if (f % TOWER.bossEvery === 0) {
+          const pool = BOSSES.filter((b) => !b.final);
+          const b = pool[Math.floor(Math.random() * pool.length)];
+          const fb = this.stage.finalBoss;
+          const def = f % (TOWER.bossEvery * 2) === 0 && fb ? { ...b, tex: fb.tex, title: fb.title, variant: fb.variant, hp: fb.hp * 0.5 } : b;
+          this.spawnBoss({ ...def, final: false });
+          const e = this.bosses[this.bosses.length - 1];
+          e.maxHp = e.hp = e.maxHp * (1 + TOWER.hpPerFloor * (f - 1));
+          this.ui.banner(T.bossWarn(def.title), '#ff2244', 2.4);
+          Audio.play('sfx-bosswarn', 0.6);
+          Audio.playMusic(this.bossMusic());
+        }
+      }
+    }
     if (this.mode === 'endless' && this.t >= this.nextEndlessBoss) {
       // 無盡模式：10 分鐘後每 150 秒來一隻 Boss，越來越強
       this.nextEndlessBoss += ENDLESS.bossEvery;
@@ -985,7 +1120,7 @@ export class GameScene extends Phaser.Scene {
       this.spawnSwarm();
       this.ui.banner(T.swarmWarn, '#ff3d81');
     }
-    while (this.nextBoss < BOSSES.length && this.t >= BOSSES[this.nextBoss].at) {
+    while (this.mode !== 'tower' && this.nextBoss < BOSSES.length && this.t >= BOSSES[this.nextBoss].at) {
       const b = BOSSES[this.nextBoss++];
       this.spawnBoss(b);
       const fbTitle = b.final ? this.stage.finalBoss?.title : undefined;
@@ -1035,7 +1170,7 @@ export class GameScene extends Phaser.Scene {
     const e = this.obtainEnemy();
     const [x, y] = at ?? this.spawnPoint(def.radius + 30);
     const grunt = kind !== 'boss' && kind !== 'elite';
-    const endlessMul = this.mode === 'endless' && this.t > RUN.duration ? 1 + (ENDLESS.hpPerMin * (this.t - RUN.duration)) / 60 : 1;
+    const endlessMul = (this.mode === 'endless' && this.t > RUN.duration ? 1 + (ENDLESS.hpPerMin * (this.t - RUN.duration)) / 60 : 1) * (this.mode === 'tower' ? 1 + TOWER.hpPerFloor * (this.floor - 1) : 1);
     const mult = (kind === 'boss' ? 1 : enemyHpMult(this.t) * this.wmods.hp * (grunt ? RUN.gruntHpScale : 1) * endlessMul) * this.stage.hpMult;
     Object.assign(e, {
       active: true,
@@ -1066,6 +1201,7 @@ export class GameScene extends Phaser.Scene {
       ringT: 2,
       spiralT: 4,
       summonT: 3,
+      sigT: 4,
       fireT: 0,
       spinA: 0,
       aimX: 0,
@@ -1302,6 +1438,11 @@ export class GameScene extends Phaser.Scene {
         this.stageHazardT = 7;
         const horizontal = Math.random() < 0.5;
         this.stageLines.push({ x: this.px, y: this.py, horizontal, t: 1.4, g: this.add.graphics().setDepth(3) });
+      } else if (kind === 'whirl') {
+        this.stageHazardT = 8;
+        const a = Math.random() * Math.PI * 2;
+        const d = 90 + Math.random() * 150;
+        this.curses.push({ x: this.px + Math.cos(a) * d, y: this.py + Math.sin(a) * d, r: 130, t: 7, tick: 0.5, g: this.add.graphics().setDepth(0), whirl: true });
       } else if (kind === 'curse') {
         this.stageHazardT = 9;
         const a = Math.random() * Math.PI * 2;
@@ -1365,6 +1506,28 @@ export class GameScene extends Phaser.Scene {
       c.t -= dt;
       c.g.clear();
       const a = Math.min(1, c.t / 0.5);
+      if (c.whirl) {
+        // 漩渦：旋轉的弧線，往中心拉
+        c.g.fillStyle(0x3de0ff, 0.12 * a).fillCircle(c.x, c.y, c.r);
+        for (let k = 0; k < 4; k++) {
+          const st = this.t * 3 + (k * Math.PI) / 2;
+          c.g.lineStyle(3, 0x7fefff, 0.6 * a).beginPath().arc(c.x, c.y, c.r * (0.35 + k * 0.17), st, st + 2.2).strokePath();
+        }
+        const dx = c.x - this.px;
+        const dy = c.y - this.py;
+        const d = Math.hypot(dx, dy);
+        if (d < c.r && d > 4) {
+          this.px += (dx / d) * 70 * dt;
+          this.py += (dy / d) * 70 * dt;
+          c.tick -= dt;
+          if (c.tick <= 0) {
+            c.tick = 0.8;
+            this.hurt(7 * dm);
+          }
+        }
+        if (c.t <= 0) c.g.destroy();
+        continue;
+      }
       c.g.fillStyle(0x8a3dff, 0.18 * a);
       c.g.fillCircle(c.x, c.y, c.r);
       c.g.lineStyle(3, 0xc48bff, 0.7 * a);
@@ -1743,6 +1906,7 @@ export class GameScene extends Phaser.Scene {
     const canSpiral = b.variant !== 'oni';
     const canSummon = b.variant === 'spider';
 
+    if (e.bossState === 'chase') this.bossSignature(e, b.tex, d, dt);
     if (e.bossState === 'chase') {
       const sp = e.speed * (e.slow > 0 ? 0.85 : 1) * (d > 700 ? 2.5 : 1);
       e.x += (dx / d) * sp * dt;
@@ -1811,6 +1975,91 @@ export class GameScene extends Phaser.Scene {
         e.bossState = 'chase';
         e.bossT = 0;
       }
+    }
+  }
+
+  /** 擊破精英／Boss：碎片四散、短暫慢動作、鏡頭一推 */
+  private deathShards(x: number, y: number, n: number, color: number, big: boolean) {
+    if ((this.save.fxQuality ?? 'high') === 'low') n = Math.ceil(n / 3);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.4;
+      const dist = (big ? 140 : 80) + Math.random() * 60;
+      const r = this.add.rectangle(x, y, big ? 10 : 7, big ? 4 : 3, i % 3 === 0 ? 0xffffff : color).setDepth(9).setRotation(a).setBlendMode(Phaser.BlendModes.ADD);
+      this.tweens.add({ targets: r, x: x + Math.cos(a) * dist, y: y + Math.sin(a) * dist, angle: r.angle + 360, alpha: 0, scale: 0.4, duration: 450 + Math.random() * 250, ease: 'Cubic.Out', onComplete: () => r.destroy() });
+    }
+    this.slowMo = Math.max(this.slowMo, big ? 0.6 : 0.18);
+    if (big) {
+      const cam = this.cameras.main;
+      this.tweens.add({ targets: cam, zoom: cam.zoom * 1.08, yoyo: true, duration: 180, ease: 'Sine.Out' });
+    }
+  }
+
+  /** 各關 Boss 的招牌技 */
+  private bossSignature(e: Enemy, tex: string, d: number, dt: number) {
+    const kind = tex.replace('boss-', '');
+    if (!['tengu', 'orochi', 'necro', 'amaterasu', 'kraken'].includes(kind)) return;
+    e.sigT -= dt;
+    if (e.sigT > 0 || d > 700) return;
+    const toP = Math.atan2(this.py - e.y, this.px - e.x);
+    const alive = () => e.active && !this.ended;
+    if (kind === 'tengu') {
+      // 天狗：瞬移到玩家旁邊，接兩波扇形刀光
+      e.sigT = 6;
+      const ox = this.px + Math.cos(toP + Math.PI) * 220;
+      const oy = this.py + Math.sin(toP + Math.PI) * 220;
+      this.playFx('hit', e.x, e.y, 120, 0, 0xffd84d, 24, 9);
+      e.x = ox;
+      e.y = oy;
+      for (let w = 0; w < 2; w++) {
+        this.time.delayedCall(250 + w * 300, () => {
+          if (!alive()) return;
+          const a0 = Math.atan2(this.py - e.y, this.px - e.x);
+          for (let i = -4; i <= 4; i++) this.fireBullet(e.x, e.y, Math.cos(a0 + i * 0.14) * 240, Math.sin(a0 + i * 0.14) * 240, e.damage * 0.55, 0xffd84d);
+        });
+      }
+    } else if (kind === 'orochi') {
+      // 八岐大蛇：八個頭輪流朝不同方向噴彈
+      e.sigT = 5.5;
+      for (let h = 0; h < 8; h++) {
+        this.time.delayedCall(h * 130, () => {
+          if (!alive()) return;
+          const a = toP + (h - 3.5) * 0.35;
+          for (let k = 0; k < 3; k++) this.fireBullet(e.x, e.y, Math.cos(a) * (170 + k * 40), Math.sin(a) * (170 + k * 40), e.damage * 0.45, 0x9dff3d);
+        });
+      }
+    } else if (kind === 'necro') {
+      // 亡靈主機：綠色資料雨＋召喚幽靈
+      e.sigT = 6.5;
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = i === 0 ? 0 : 60 + Math.random() * 200;
+        this.hazards.push({ x: this.px + Math.cos(a) * r, y: this.py + Math.sin(a) * r, r: 60, t: 1, warn: 1, damage: e.damage * 0.7, color: 0x5dff7a, hitsEnemies: 0, g: this.add.graphics().setDepth(2) });
+      }
+      for (let i = 0; i < 3; i++) this.spawnEnemy('husk', [e.x + (Math.random() - 0.5) * 160, e.y + (Math.random() - 0.5) * 160]);
+    } else if (kind === 'amaterasu') {
+      // 天照：四道旋轉光束
+      e.sigT = 7;
+      for (let k = 0; k < 22; k++) {
+        this.time.delayedCall(k * 90, () => {
+          if (!alive()) return;
+          const base = toP + k * 0.13;
+          for (let j = 0; j < 4; j++) {
+            const a = base + (j * Math.PI) / 2;
+            this.fireBullet(e.x, e.y, Math.cos(a) * 230, Math.sin(a) * 230, e.damage * 0.45, 0xffb06a);
+          }
+        });
+      }
+    } else {
+      // 利維坦：在玩家腳下召喚漩渦，接觸手橫掃（一圈水彈）
+      e.sigT = 6;
+      this.curses.push({ x: this.px, y: this.py, r: 120, t: 4, tick: 0.6, g: this.add.graphics().setDepth(0), whirl: true });
+      this.time.delayedCall(500, () => {
+        if (!alive()) return;
+        for (let i = 0; i < 18; i++) {
+          const a = (i / 18) * Math.PI * 2;
+          this.fireBullet(e.x, e.y, Math.cos(a) * 190, Math.sin(a) * 190, e.damage * 0.5, 0x7fefff);
+        }
+      });
     }
   }
 
@@ -1945,6 +2194,7 @@ export class GameScene extends Phaser.Scene {
     this.seenEnemies.add(e.boss ? e.boss.tex : (this.stage.skins[kind]?.tex ?? kind));
     this.sparks.explode(kind === 'boss' ? 40 : kind === 'elite' ? 18 : 5, e.x, e.y);
     this.playFx('death', e.x, e.y, e.radius * (kind === 'boss' ? 3.5 : 3), 0, kind === 'boss' || kind === 'elite' ? 0xffffff : e.def.color, 26, 8);
+    if (kind === 'boss' || kind === 'elite') this.deathShards(e.x, e.y, kind === 'boss' ? 18 : 9, e.def.color, kind === 'boss');
     Audio.play('sfx-kill', 0.22, 45, 500);
     if (!fromIai) {
       this.intent += (kind === 'elite' ? INTENT.eliteBonus : kind === 'boss' ? 0 : 1) * this.intentMult;
@@ -2137,6 +2387,7 @@ export class GameScene extends Phaser.Scene {
               const a = Math.atan2(tgt.y - this.py, tgt.x - this.px) + (i > 0 ? (Math.random() - 0.5) * 0.6 : 0);
               this.fireLaser(Math.cos(a), Math.sin(a), 330 * s.area, 9 * s.area, dmg);
             }
+            if (this.hasSynergy('thunder')) this.lightning(1, 320, dmg * 0.8);
           }
           break;
         }
@@ -2282,6 +2533,7 @@ export class GameScene extends Phaser.Scene {
               const a = a0 + (i / s.amount) * Math.PI * 2;
               this.fireLaser(Math.cos(a), Math.sin(a), 360 * s.area, 10 * s.area, dmg);
             }
+            if (this.hasSynergy('thunder')) this.lightning(2, 360, dmg * 0.8);
           }
           break;
         }
@@ -3087,6 +3339,7 @@ export class GameScene extends Phaser.Scene {
         w.level = 1;
         w.stats = this.computeStats(evo.result, 1);
         w.timer = 0.1;
+        this.refreshSynergies();
         this.markSeenWeapon(evo.result);
         this.inventoryVersion++;
         this.ui.banner(T.evolved(WEAPONS[evo.result].name), '#ff7ad9', 2.6);
@@ -3132,6 +3385,7 @@ export class GameScene extends Phaser.Scene {
       this.iaiFreeze = ULT_FREEZE;
       this.ui.playUltimate(this.char.id);
       Audio.play(this.char.id === 'jin' ? 'sfx-iai' : 'sfx-ult', 0.75);
+      Audio.voice(this.char.id, 'ult');
     }
   }
 
@@ -3443,7 +3697,9 @@ export class GameScene extends Phaser.Scene {
         const evo = EVOLUTIONS.find((e) => e.weapon === c.id);
         const evoHint = evo ? T.evoHint(PASSIVES[evo.passive].name, WEAPONS[evo.result].name) : '';
         const tg = WEAPON_TAG[c.id];
-        const synergy = tg ? `${TAGS[tg].name}系` : '';
+        const have = new Set(this.weapons.map((w) => this.baseWeapon(w.id)));
+        const bond = WEAPON_SYNERGIES.find((sy) => (sy.a === c.id && have.has(sy.b)) || (sy.b === c.id && have.has(sy.a)));
+        const synergy = (tg ? `${TAGS[tg].name}系` : '') + (bond && !have.has(c.id) ? `　羈絆「${bond.name}」` : '');
         if (!w) return { name: def.name, desc: def.desc + bonusLine, tag: T.isNew, icon: `icon-${c.id}`, color: def.color, isNew: true, evoHint, rarity, synergy };
         return { name: def.name, desc: (def.levels[w.level - 1]?.desc ?? '') + bonusLine, tag: T.lv(w.level, w.level + 1), icon: `icon-${c.id}`, color: def.color, isNew: false, evoHint, rarity, synergy };
       }
@@ -3555,6 +3811,13 @@ export class GameScene extends Phaser.Scene {
     // 檢查新解鎖
     const unlocked: string[] = [];
     let outro = false;
+    // 霓虹塔紀錄與樓層獎勵
+    if (this.mode === 'tower') {
+      if (this.floor > (save.towerBest ?? 0)) {
+        save.towerBest = this.floor;
+        unlocked.push(`霓虹塔新紀錄：第 ${this.floor} 層`);
+      }
+    }
     // 無盡模式紀錄
     if (this.mode === 'endless') {
       const eb = save.endlessBest ?? { time: 0, kills: 0 };
@@ -3609,7 +3872,7 @@ export class GameScene extends Phaser.Scene {
       unlocked.push(u.kind === 'weapon' ? WEAPONS[u.id as WeaponId].name : PASSIVES[u.id as PassiveId].name);
     }
     // 第二期：模組、晶片、每日任務、每日挑戰
-    let chips = this.bossKills * 10 + (victory ? 30 : 0);
+    let chips = this.bossKills * 10 + (victory ? 30 : 0) + (this.mode === 'tower' ? this.floor * TOWER.chipsPerFloor : 0);
     if (this.isDaily) {
       const firstClear = victory && save.dailyChallengeDay !== todayKey();
       if (firstClear) {
@@ -3628,6 +3891,7 @@ export class GameScene extends Phaser.Scene {
     save.maxCombo = Math.max(save.maxCombo ?? 0, this.maxCombo);
     // 角色好感度
     const aff = gainAffinity(save, this.char.id, this.t, victory);
+    unlocked.push(`通行證經驗 +${gainPassXp(save, this.t, this.kills, victory)}`);
     unlocked.push(`${this.char.name} 好感度 +${aff.gain}${aff.levelUp ? `（升到 Lv${aff.levelUp}！）` : ''}`);
     applyRunToDaily(save, {
       kills: this.kills,
@@ -3647,7 +3911,7 @@ export class GameScene extends Phaser.Scene {
     if (wasRunning) this.scene.pause();
     Audio.stopMusic();
     Audio.play(victory ? 'sfx-victory' : 'sfx-defeat', 0.6);
-    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked, modules: this.moduleDrops, chips, daily: this.isDaily, mode: this.mode, weeklyDmg: Math.round(this.weeklyDmg) };
+    const result: RunResult = { victory, time: this.t, kills: this.kills, level: this.level, credits: this.credits, bonus, newBest, unlocked, wanted: this.wanted, wantedUnlocked, modules: this.moduleDrops, chips, daily: this.isDaily, mode: this.mode, weeklyDmg: Math.round(this.weeklyDmg), floor: this.floor };
     // 第一次通關：先播通關劇情再顯示結算
     if (outro) this.ui.showStory(STORY[this.stage.id].outro, () => this.ui.showResults(result));
     else this.ui.showResults(result);
@@ -3689,7 +3953,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.evt) {
       if (this.mode === 'weekly' || this.t < this.nextRandEvent) return;
       // Boss 戰中或最後 40 秒不開新事件
-      if (this.bosses.some((b) => b.active) || (this.mode !== 'endless' && this.t > RUN.duration - 40)) {
+      if (this.bosses.some((b) => b.active) || (this.mode === 'normal' && this.t > RUN.duration - 40)) {
         this.nextRandEvent = this.t + 10;
         return;
       }
@@ -3812,6 +4076,10 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
+  /** 慢動作剩餘時間（真實秒） */
+  slowMo = 0;
+  /** 角色皮膚染色（0 = 原色） */
+  skinTint = 0;
   /** 開發者：無敵 */
   devGod = false;
   debugUlt() {
@@ -4031,6 +4299,7 @@ export class GameScene extends Phaser.Scene {
         .setFlipX(flip);
     }
     if (this.hurtFlash > 0) this.playerImg.setTint(0xff7090);
+    else if (this.skinTint) this.playerImg.setTint(this.skinTint);
     else this.playerImg.clearTint();
     this.facingImg.setPosition(this.px + this.faceX * 36, this.py + 8 + this.faceY * 22).setRotation(Math.atan2(this.faceY, this.faceX));
 
