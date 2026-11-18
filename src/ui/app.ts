@@ -657,7 +657,6 @@ export class App {
     }, run, node.kind, node.row);
     b.bot = this.bot;
     b.timeScale = Math.max(1, Number(params.get('speed')) || 1);
-    b.stopOnRelease = S.save.settings.stopOnRelease;
     b.tutMove = !S.save.flags.tutMove && !this.bot;
     b.onTutDone = () => { S.save.flags.tutMove = true; S.persist(); };
     this.battle = b;
@@ -939,7 +938,6 @@ export class App {
       <button class="btn" data-a="toggleMute">${S.save.settings.muted ? '🔇 音效：關' : '🔊 音效：開'}</button>
       <button class="btn" data-a="toggleVibe">${S.save.settings.vibrate ? '📳 震動：開' : '📴 震動：關'}</button>
       <button class="btn" data-a="toggleMusic">${S.save.settings.music ? '🎵 音樂：開' : '🎵 音樂：關'}</button>
-      <button class="btn" data-a="toggleStop">${S.save.settings.stopOnRelease ? '✋ 放開手指：隊伍停下' : '➡️ 放開手指：隊伍繼續前進'}</button>
       <h3 class="sec">測試工具</h3>
       <p class="muted small">目前嘉年華第 ${S.currentDay()} 天・美術素材 ${loaded}/${ASSETS.length} 已替換・埋點 ${ev.length} 筆</p>
       <button class="btn blue" data-a="nextDay">⏭ 跳到下一天</button>
@@ -1131,7 +1129,6 @@ export class App {
     },
     toggleStop: (_a, el) => {
       S.save.settings.stopOnRelease = !S.save.settings.stopOnRelease; S.persist();
-      if (this.battle) this.battle.stopOnRelease = S.save.settings.stopOnRelease;
       el.textContent = S.save.settings.stopOnRelease ? '✋ 放開手指：隊伍停下' : '➡️ 放開手指：隊伍繼續前進';
     },
     continue: () => { sfx.click(); this.resumeRun(); },
