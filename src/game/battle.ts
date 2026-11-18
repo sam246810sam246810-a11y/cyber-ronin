@@ -15,7 +15,7 @@ export const VW = 540;
 export const VH = 960;
 const RX0 = 22, RX1 = 518, RY0 = 130, RY1 = 936;
 const TAU = Math.PI * 2;
-const ENEMY_HP_SCALE = 1.85; // 車隊火力比單人高，敵人血量整體放大
+const ENEMY_HP_SCALE = 1.75; // 隊伍火力比單人高，敵人血量整體放大
 
 interface Bullet {
   x: number; y: number; vx: number; vy: number; r: number; dmg: number;
@@ -53,16 +53,6 @@ export class Battle {
 
   head = { x: VW / 2, y: RY1 - 120, ang: -Math.PI / 2 };
   pos: Pos[] = [];      // 每幀計算的隊員位置
-  /** plan：時間暫停畫路線；march：照路線前進；free：沒有敵人時自由走動 */
-  phase: 'plan' | 'march' | 'free' = 'free';
-  path: number[] = [];
-  pathSeg = 0;
-  pathPos = 0;
-  ink = 0;
-  drawing = false;
-  fStart: [number, number] = [0, 0];
-  holdT = 0;
-  marches = 0;
   slots = new Map<Member, { x: number; y: number }>();
 
   enemies: Enemy[] = [];
@@ -98,6 +88,7 @@ export class Battle {
   fps = 60; private fpsAcc = 0; private fpsN = 0;
   bot = false;
   timeScale = 1;
+  stopOnRelease = false;
   regenT = 0;
   tutMove = false;
   tutT = 0;
@@ -110,7 +101,6 @@ export class Battle {
     this.buildWaves();
     this.buildFloor();
     this.resize();
-    this.path = [this.head.x, this.head.y];
     this.layout();
     for (const m of run.team) { m.invuln = 0; m.flash = 0; }
     if (kind === 'boss') {
@@ -217,11 +207,10 @@ export class Battle {
     this.time += dt;
     this.updateFx(dt);
     if (this.fade > 0) this.fade = Math.max(0, this.fade - dt * 3);
-    if (this.state !== 'play') { if (this.drawing) { this.drawing = false; this.path = [this.head.x, this.head.y]; } return; }
-    if (this.phase === 'plan') { this.updatePlan(); return; }
+    if (this.state !== 'play') return;
     if (this.freeze > 0) { this.freeze -= dt; return; }
 
-    this.updateMarch(dt);
+    this.updateMove(dt);
     if (this.run.forestRegen) {
       this.regenT += dt;
       if (this.regenT >= 5) { this.regenT = 0; for (const p of this.pos) this.healMember(p.m, p.m.maxHp * 0.03, p.x, p.y, true); }
@@ -234,106 +223,38 @@ export class Battle {
     if (this.pendingLevels > 0 && this.state === 'play') this.openPick();
   }
 
-  // ---------------- 畫路線行軍 ----------------
-  /** 一段路線能畫多長（世界像素）；移動速度越快，墨水越多 */
-  get inkMax() { return this.run.speed * 1.75; }
-  get marchSpeed() { return this.run.speed * 1.3; }
-
-  hasTargets() { return this.enemies.some((e) => e.alive && e.spawn <= 0); }
-
-  /** 規劃階段：時間暫停，手指拖曳畫出隊長接下來的路線（相對畫法：從任何地方開始畫都行） */
-  updatePlan() {
-    const inp = this.input;
-    if (this.bot) { this.botPlan(); return; }
-    if (inp.active) {
-      const [fx, fy] = this.toWorld(inp.cx, inp.cy);
-      if (!this.drawing) {
-        this.drawing = true;
-        this.fStart = [fx, fy];
-        this.path = [this.head.x, this.head.y];
-        this.ink = 0;
-      }
-      if (this.ink >= this.inkMax) return;
-      const n = this.path.length;
-      const lx = this.path[n - 2], ly = this.path[n - 1];
-      let tx = clamp(this.head.x + fx - this.fStart[0], RX0 + 22, RX1 - 22);
-      let ty = clamp(this.head.y + fy - this.fStart[1], RY0 + 22, RY1 - 22);
-      let d = Math.hypot(tx - lx, ty - ly);
-      if (d < 6) return;
-      const left = this.inkMax - this.ink;
-      if (d > left) { tx = lx + (tx - lx) * (left / d); ty = ly + (ty - ly) * (left / d); d = left; }
-      this.path.push(tx, ty);
-      this.ink += d;
-      if (this.ink >= this.inkMax) { sfx.pick(); vibrate(15); }
-    } else if (this.drawing) {
-      this.drawing = false;
-      this.beginMarch();
-    }
-  }
-
-  botPlan() {
-    const mv = this.botMove();
-    const d = Math.hypot(mv.x, mv.y) || 1;
-    const L = this.inkMax * 0.55;
+  // ---------------- 移動 ----------------
+  /** 拖曳控制方向，隊伍一直移動；夥伴圍在隊長身邊 */
+  updateMove(dt: number) {
     const h = this.head;
-    this.path = [h.x, h.y];
-    let x = h.x, y = h.y;
-    for (let i = 1; i <= 6; i++) {
-      x = clamp(h.x + (mv.x / d) * L * (i / 6), RX0 + 22, RX1 - 22);
-      y = clamp(h.y + (mv.y / d) * L * (i / 6), RY0 + 22, RY1 - 22);
-      this.path.push(x, y);
+    const mv = this.bot ? this.botMove() : this.input.move();
+    const mag = Math.hypot(mv.x, mv.y);
+    const steering = mag > 0.2;
+    if (this.tutMove && this.input.active) {
+      this.tutT += dt;
+      if (this.tutT > 1.2) { this.tutMove = false; this.onTutDone?.(); }
     }
-    this.ink = L;
-    this.beginMarch();
-  }
-
-  beginMarch() {
-    if (this.ink < 14) {
-      // 只點一下：原地堅守一小段時間
-      this.path = [this.head.x, this.head.y];
-      this.holdT = 0.9;
-      this.banner = { text: '原地堅守', sub: '', t: 0.6, color: '#bfe8ff' };
-    } else this.holdT = 0;
-    this.pathPos = 0;
-    this.pathSeg = 0;
-    this.phase = 'march';
-    this.marches++;
-    if (this.tutMove) { this.tutMove = false; this.onTutDone?.(); }
-    sfx.pick();
-  }
-
-  /** 行軍階段：隊長沿著路線前進，夥伴圍在旁邊 */
-  updateMarch(dt: number) {
-    const h = this.head;
-    const t = this.path;
-    if (this.phase === 'march') {
-      if (this.holdT > 0) {
-        this.holdT -= dt;
-        if (this.holdT <= 0) this.endMarch();
-      } else {
-        let move = this.marchSpeed * dt;
-        while (move > 0 && this.pathSeg + 3 < t.length) {
-          const bx = t[this.pathSeg + 2], by = t[this.pathSeg + 3];
-          const d = Math.hypot(bx - h.x, by - h.y);
-          if (d <= move) { h.x = bx; h.y = by; move -= d; this.pathSeg += 2; continue; }
-          h.ang = Math.atan2(by - h.y, bx - h.x);
-          h.x += ((bx - h.x) / d) * move; h.y += ((by - h.y) / d) * move;
-          move = 0;
-        }
-        if (Math.random() < dt * 12) this.addPart(h.x + rand(-6, 6), h.y + 14, rand(-20, 20), rand(-30, -10), 0.35, 4, 'rgba(255,255,255,0.7)', 0, 0);
-        if (this.pathSeg + 3 >= t.length) this.endMarch();
+    const idle = !steering && this.stopOnRelease && !this.bot;
+    if (!idle) {
+      if (steering) {
+        const want = Math.atan2(mv.y, mv.x);
+        let d = want - h.ang;
+        while (d > Math.PI) d -= TAU;
+        while (d < -Math.PI) d += TAU;
+        const turn = 14 * dt;
+        h.ang += clamp(d, -turn, turn);
       }
-    } else if (this.hasTargets() && this.clearT < 0) {
-      // 自由階段（波次之間）：敵人一出現就回到規劃
-      this.phase = 'plan';
+      const sp = this.run.speed;
+      let nx = h.x + Math.cos(h.ang) * sp * dt;
+      let ny = h.y + Math.sin(h.ang) * sp * dt;
+      const r = 24;
+      if (nx < RX0 + r || nx > RX1 - r) { if (!steering) h.ang = Math.PI - h.ang; nx = clamp(nx, RX0 + r, RX1 - r); }
+      if (ny < RY0 + r || ny > RY1 - r) { if (!steering) h.ang = -h.ang; ny = clamp(ny, RY0 + r, RY1 - r); }
+      h.x = nx; h.y = ny;
+      if (Math.random() < dt * 10) this.addPart(h.x + rand(-6, 6), h.y + 14, rand(-20, 20), rand(-30, -10), 0.35, 4, 'rgba(255,255,255,0.7)', 0, 0);
     }
     this.layout(dt);
     for (const m of this.run.team) { m.flash -= dt; m.invuln -= dt; }
-  }
-
-  endMarch() {
-    this.path = [this.head.x, this.head.y];
-    this.phase = this.hasTargets() && this.clearT < 0 ? 'plan' : 'free';
   }
 
   /** 夥伴陣形：圍在隊長身邊兩圈，平滑跟上 */
@@ -1199,25 +1120,23 @@ export class Battle {
     g.setTransform(this.scale, 0, 0, this.scale, this.offX, this.offY);
     this.drawHud(g);
     this.drawOverlay(g);
-    this.drawPlan(g);
+    this.drawJoystick(g);
     if (this.tutMove && this.state === 'play') this.drawTutorial(g);
   }
 
   drawTutorial(g: CanvasRenderingContext2D) {
-    if (this.phase !== 'plan' || this.drawing) return;
-    const y = 780;
-    g.fillStyle = 'rgba(20,30,45,0.82)';
+    const y = 760;
+    g.fillStyle = 'rgba(20,30,45,0.78)';
     roundRect(g, 40, y - 70, VW - 80, 150, 22); g.fill();
-    const k = (this.time * 0.8) % 1;
-    const hx = VW / 2 - 90 + Math.sin(k * Math.PI) * 30, hy = y - 10 - k * 40;
+    const hx = VW / 2 + Math.sin(this.time * 2.5) * 90;
     g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 4; g.setLineDash([8, 8]);
-    g.beginPath(); g.moveTo(VW / 2 - 90, y - 10); g.quadraticCurveTo(VW / 2 - 40, y - 60, VW / 2 + 90, y - 50); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.moveTo(VW / 2 - 100, y - 10); g.lineTo(VW / 2 + 100, y - 10); g.stroke(); g.setLineDash([]);
     g.font = '44px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('👆', hx + k * 180, hy);
+    g.fillText('👆', hx, y - 18);
     g.fillStyle = '#fff'; g.font = '900 22px system-ui,sans-serif';
-    g.fillText('在任何地方拖曳，畫出隊伍的路線', VW / 2, y + 36);
+    g.fillText('按住任意處拖曳，帶隊伍轉向', VW / 2, y + 36);
     g.font = '700 15px system-ui,sans-serif'; g.fillStyle = '#ffe066';
-    g.fillText('放手就出發・走完會再暫停・只點一下＝原地堅守', VW / 2, y + 62);
+    g.fillText(this.stopOnRelease ? '放開手指隊伍會停下・夥伴自動攻擊' : '放開手指隊伍會繼續前進・夥伴自動攻擊', VW / 2, y + 62);
   }
 
   drawArena(g: CanvasRenderingContext2D) {
@@ -1495,59 +1414,15 @@ export class Battle {
     if (this.fade > 0) { g.fillStyle = `rgba(10,14,20,${this.fade})`; g.fillRect(0, 0, VW, VH); }
   }
 
-  /** 路線、墨水條與敵人行動預告 */
-  drawPlan(g: CanvasRenderingContext2D) {
-    if (this.state !== 'play') return;
-    const plan = this.phase === 'plan';
-    const t = this.path;
-    if (plan) {
-      // 預告：敵人子彈與移動方向（以一段完整行軍的時間估算）
-      const T = this.inkMax / this.marchSpeed;
-      g.lineWidth = 2; g.strokeStyle = 'rgba(255,80,80,0.45)'; g.setLineDash([5, 6]);
-      g.beginPath();
-      for (const b of this.bullets.active) if (b.enemy) { g.moveTo(b.x, b.y); g.lineTo(b.x + b.vx * T, b.y + b.vy * T); }
-      g.stroke(); g.setLineDash([]);
-      g.fillStyle = 'rgba(255,90,90,0.75)';
-      for (const e of this.enemies) {
-        if (!e.alive || e.spawn > 0 || e.def.speed <= 0) continue;
-        const p = this.nearestMember(e.x, e.y); if (!p) continue;
-        const a = Math.atan2(p.y - e.y, p.x - e.x);
-        const L = Math.min(e.def.speed * T * (this.run.enemySlow ? 1 - this.run.enemySlow : 1), Math.hypot(p.x - e.x, p.y - e.y));
-        const ex = e.x + Math.cos(a) * (e.r + L), ey = e.y + Math.sin(a) * (e.r + L);
-        g.strokeStyle = 'rgba(255,90,90,0.5)'; g.lineWidth = 3;
-        g.beginPath(); g.moveTo(e.x + Math.cos(a) * e.r, e.y + Math.sin(a) * e.r); g.lineTo(ex, ey); g.stroke();
-        g.save(); g.translate(ex, ey); g.rotate(a);
-        g.beginPath(); g.moveTo(7, 0); g.lineTo(-5, -6); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
-      }
-    }
-    // 路線
-    if (t.length >= 4) {
-      const start = this.phase === 'march' ? this.pathSeg : 0;
-      g.lineCap = 'round'; g.lineJoin = 'round';
-      g.strokeStyle = 'rgba(40,30,20,0.35)'; g.lineWidth = 12;
-      g.beginPath(); g.moveTo(this.phase === 'march' ? this.head.x : t[0], this.phase === 'march' ? this.head.y : t[1]);
-      for (let i = start + 2; i < t.length; i += 2) g.lineTo(t[i], t[i + 1]);
-      g.stroke();
-      g.strokeStyle = '#fff'; g.lineWidth = 6; g.setLineDash([2, 12]); g.lineDashOffset = -this.time * 40;
-      g.stroke(); g.setLineDash([]); g.lineDashOffset = 0;
-      const n = t.length;
-      const a = Math.atan2(t[n - 1] - t[n - 3], t[n - 2] - t[n - 4]);
-      g.fillStyle = '#fff';
-      g.save(); g.translate(t[n - 2], t[n - 1]); g.rotate(a);
-      g.beginPath(); g.moveTo(12, 0); g.lineTo(-6, -10); g.lineTo(-6, 10); g.closePath(); g.fill(); g.restore();
-      g.lineCap = 'butt';
-    }
-    if (!plan) return;
-    // 暫停提示 + 墨水條
-    const pulse = 0.5 + 0.5 * Math.sin(this.time * 4);
-    g.strokeStyle = `rgba(255,255,255,${0.35 + pulse * 0.3})`; g.lineWidth = 3;
-    g.beginPath(); g.arc(this.head.x, this.head.y, 30 + pulse * 6, 0, TAU); g.stroke();
-    const bw = 260, bx = VW / 2 - bw / 2, by = RY0 + 34;
-    g.fillStyle = 'rgba(0,0,0,0.5)'; roundRect(g, bx - 4, by - 4, bw + 8, 22, 11); g.fill();
-    const left = 1 - this.ink / this.inkMax;
-    g.fillStyle = left > 0.25 ? '#7fdcff' : '#ff8a6b'; roundRect(g, bx, by, bw * left, 14, 7); g.fill();
-    g.font = '800 15px system-ui,sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = '#fff'; g.fillText(this.drawing ? '✏️ 放手出發' : '⏸ 畫出路線', VW / 2, by - 18);
+  drawJoystick(g: CanvasRenderingContext2D) {
+    if (!this.input.active || this.state !== 'play') return;
+    const toW = (cx: number, cy: number) => [(cx * this.dpr - this.offX) / this.scale, (cy * this.dpr - this.offY) / this.scale];
+    const [ox, oy] = toW(this.input.ox, this.input.oy);
+    const [cx, cy] = toW(this.input.cx, this.input.cy);
+    g.fillStyle = 'rgba(255,255,255,0.15)'; g.strokeStyle = 'rgba(255,255,255,0.5)'; g.lineWidth = 3;
+    g.beginPath(); g.arc(ox, oy, 60, 0, TAU); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,0.7)';
+    g.beginPath(); g.arc(cx, cy, 26, 0, TAU); g.fill();
   }
 }
 

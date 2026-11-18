@@ -14,7 +14,7 @@ export interface ComboDef {
 export const BUFFS: BuffDef[] = [
   { id: 'atk', name: '團隊特訓', desc: '全隊攻擊 +15%', icon: '⚔️', maxLv: 6, weight: 10 },
   { id: 'aspd', name: '興奮點心', desc: '全隊攻擊速度 +12%', icon: '⚡', maxLv: 6, weight: 10 },
-  { id: 'speed', name: '輕快腳步', desc: '行軍速度與路線長度 +10%', icon: '👟', maxLv: 3, weight: 5 },
+  { id: 'speed', name: '輕快腳步', desc: '隊伍移動速度 +10%', icon: '👟', maxLv: 3, weight: 5 },
   { id: 'maxhp', name: '大胃王', desc: '全隊最大生命 +20%，並回復等量', icon: '🍖', maxLv: 5, weight: 8 },
   { id: 'heal', name: '野餐便當', desc: '全隊回復 40% 生命，並救回倒下的夥伴', icon: '🧺', maxLv: 99, weight: 5 },
   { id: 'magnet', name: '吸吸磁鐵', desc: '撿取範圍 +60%', icon: '🧲', maxLv: 2, weight: 5 },
