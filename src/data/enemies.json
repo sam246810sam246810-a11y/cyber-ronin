@@ -1,0 +1,9 @@
+{
+  "crawler": { "type": "crawler", "name": "藤蔓爬蟲", "hp": 3, "speed": 90, "radius": 18, "color": "#5fae46", "contactDamage": 1 },
+  "spitter": { "type": "spitter", "name": "噴刺花", "hp": 6, "speed": 0, "radius": 24, "color": "#d0558a", "contactDamage": 1,
+    "attackInterval": 3, "telegraph": 0.8, "thorns": 5, "spread": 60, "thornSpeed": 380, "range": 420 },
+  "hopper": { "type": "hopper", "name": "跳躍蘑菇", "hp": 8, "speed": 40, "radius": 24, "color": "#c08a4a", "contactDamage": 1,
+    "attackInterval": 3.5, "telegraph": 1.0, "slamRadius": 72 },
+  "boss": { "type": "boss", "name": "食人巨花", "hp": 250, "speed": 50, "radius": 58, "color": "#9a2f6e", "contactDamage": 1,
+    "attackInterval": 2.6, "telegraph": 0.9 }
+}

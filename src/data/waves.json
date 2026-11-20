@@ -1,0 +1,12 @@
+[
+  { "spawnWindow": 30, "groups": [{ "type": "crawler", "count": 10 }] },
+  { "spawnWindow": 34, "groups": [{ "type": "crawler", "count": 14 }] },
+  { "spawnWindow": 36, "groups": [{ "type": "crawler", "count": 16 }, { "type": "crawler", "count": 1, "elite": true }] },
+  { "spawnWindow": 38, "groups": [{ "type": "crawler", "count": 12 }, { "type": "spitter", "count": 2 }] },
+  { "spawnWindow": 40, "groups": [{ "type": "crawler", "count": 14 }, { "type": "spitter", "count": 3 }, { "type": "crawler", "count": 1, "elite": true }] },
+  { "spawnWindow": 40, "groups": [{ "type": "crawler", "count": 16 }, { "type": "spitter", "count": 3 }, { "type": "spitter", "count": 1, "elite": true }] },
+  { "spawnWindow": 40, "groups": [{ "type": "crawler", "count": 12 }, { "type": "spitter", "count": 2 }, { "type": "hopper", "count": 2 }] },
+  { "spawnWindow": 42, "groups": [{ "type": "crawler", "count": 16 }, { "type": "spitter", "count": 3 }, { "type": "hopper", "count": 3 }] },
+  { "spawnWindow": 42, "groups": [{ "type": "crawler", "count": 18 }, { "type": "spitter", "count": 3 }, { "type": "hopper", "count": 3 }, { "type": "hopper", "count": 1, "elite": true }] },
+  { "spawnWindow": 44, "groups": [{ "type": "crawler", "count": 22 }, { "type": "spitter", "count": 4 }, { "type": "hopper", "count": 4 }, { "type": "crawler", "count": 2, "elite": true }] }
+]

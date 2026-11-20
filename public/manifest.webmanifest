@@ -1,0 +1,12 @@
+{
+  "name": "坩堝花園",
+  "short_name": "坩堝花園",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#050806",
+  "theme_color": "#0f1a14",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
