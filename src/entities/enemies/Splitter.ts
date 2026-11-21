@@ -11,12 +11,14 @@ export class Splitter extends Enemy {
       this.radius *= k;
       this.maxHp = this.hp = this.maxHp * Math.pow(0.4, gen);
       this.speed *= 1 + 0.3 * gen;
-      this.sprite.setDisplaySize(this.radius * 3.4, this.radius * 3.4);
+      this.displayH *= k;
     }
   }
 
   protected act(dt: number): void {
     const p = this.targetPoint();
+    // 毛線球：彈跳撲過去（分裂出來的小顆蓄力更短、更煩人）
+    if (this.tryLunge(dt, { range: 170, wind: 0.55 - this.gen * 0.1, dist: 190, dur: 0.25, cd: 1.8 - this.gen * 0.3 })) return;
     const wobble = 1 + 0.15 * Math.sin(this.game.time.now / 120 + this.x);
     this.moveToward(p.x, p.y, dt, this.speed * wobble);
   }

@@ -414,3 +414,136 @@ export function circleBlocked(x: number, y: number, r: number): boolean {
   }
   return false;
 }
+
+// ---------------- 導航（flow field）：敵人繞過任何形狀的障礙物走向玩家 ----------------
+
+const NAV_CELL = 36;
+const NAV = {
+  layout: undefined as RoomLayout | undefined,
+  cols: 0,
+  rows: 0,
+  ox: 0,
+  oy: 0,
+  blocked: new Uint8Array(0),
+  dist: new Int32Array(0),
+  tx: 0,
+  ty: 0,
+};
+
+function navBuild(l: RoomLayout): void {
+  const i = l.interior;
+  NAV.layout = l;
+  NAV.ox = i.x;
+  NAV.oy = i.y;
+  NAV.cols = Math.ceil(i.w / NAV_CELL);
+  NAV.rows = Math.ceil(i.h / NAV_CELL);
+  NAV.blocked = new Uint8Array(NAV.cols * NAV.rows);
+  NAV.dist = new Int32Array(NAV.cols * NAV.rows).fill(-1);
+  for (let r = 0; r < NAV.rows; r++) {
+    for (let c = 0; c < NAV.cols; c++) {
+      const x = i.x + (c + 0.5) * NAV_CELL;
+      const y = i.y + (r + 0.5) * NAV_CELL;
+      // 用小半徑判定，讓貼牆的通道也算可走
+      NAV.blocked[r * NAV.cols + c] = circleBlocked(x, y, 14) ? 1 : 0;
+    }
+  }
+}
+
+/** 以玩家位置為終點算一次距離場（BFS，8 方向）。每隔一小段時間呼叫即可 */
+export function navUpdate(px: number, py: number): void {
+  const l = WORLD.layout;
+  if (!l) return;
+  if (NAV.layout !== l) navBuild(l);
+  NAV.tx = px;
+  NAV.ty = py;
+  const { cols, rows, blocked, dist } = NAV;
+  dist.fill(-1);
+  const c0 = Math.max(0, Math.min(cols - 1, Math.floor((px - NAV.ox) / NAV_CELL)));
+  const r0 = Math.max(0, Math.min(rows - 1, Math.floor((py - NAV.oy) / NAV_CELL)));
+  const q = new Int32Array(cols * rows);
+  let head = 0;
+  let tail = 0;
+  const start = r0 * cols + c0;
+  dist[start] = 0;
+  q[tail++] = start;
+  while (head < tail) {
+    const cur = q[head++];
+    const cc = cur % cols;
+    const cr = (cur - cc) / cols;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const nc = cc + dc;
+        const nr = cr + dr;
+        if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+        const n = nr * cols + nc;
+        if (blocked[n] || dist[n] >= 0) continue;
+        // 斜走不能切牆角
+        if (dr && dc && (blocked[cr * cols + nc] || blocked[nr * cols + cc])) continue;
+        dist[n] = dist[cur] + 1;
+        q[tail++] = n;
+      }
+    }
+  }
+}
+
+/** 兩點之間直線有沒有被擋（每 18px 取樣） */
+function lineClear(x0: number, y0: number, x1: number, y1: number, r: number): boolean {
+  const d = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.ceil(d / 18);
+  for (let k = 1; k <= n; k++) {
+    const t = k / n;
+    if (circleBlocked(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, r)) return false;
+  }
+  return true;
+}
+
+/**
+ * 走向玩家的方向：直線看得到就直走，否則沿距離場往下一格。
+ * 回傳 undefined 代表沒有導航資料（照舊直走）。
+ */
+export function navDirection(x: number, y: number, r: number, prev?: number): number | undefined {
+  const l = WORLD.layout;
+  if (!l || NAV.layout !== l) return undefined;
+  if (lineClear(x, y, NAV.tx, NAV.ty, r * 0.8)) return Math.atan2(NAV.ty - y, NAV.tx - x);
+  const { cols, rows, dist } = NAV;
+  const c = Math.max(0, Math.min(cols - 1, Math.floor((x - NAV.ox) / NAV_CELL)));
+  const rr = Math.max(0, Math.min(rows - 1, Math.floor((y - NAV.oy) / NAV_CELL)));
+  let best = -1;
+  let bd = dist[rr * cols + c] >= 0 ? dist[rr * cols + c] : 1e9;
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let dc = -1; dc <= 1; dc++) {
+      if (!dr && !dc) continue;
+      const nc = c + dc;
+      const nr = rr + dr;
+      if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+      const v = dist[nr * cols + nc];
+      if (v < 0) continue;
+      // 同樣近的時候，選跟上一次方向最接近的（左右對稱的障礙物前面不會來回抖）
+      let tie = false;
+      if (v === bd && best >= 0 && prev !== undefined) {
+        const aNew = Math.atan2(dr, dc);
+        const bc0 = best % cols;
+        const aOld = Math.atan2((best - bc0) / cols - rr, bc0 - c);
+        const dn = Math.abs(Math.atan2(Math.sin(aNew - prev), Math.cos(aNew - prev)));
+        const dold = Math.abs(Math.atan2(Math.sin(aOld - prev), Math.cos(aOld - prev)));
+        tie = dn < dold;
+      }
+      if (v < bd || tie) {
+        bd = v;
+        best = nr * cols + nc;
+      }
+    }
+  }
+  if (best < 0) return undefined;
+  const bc = best % cols;
+  const br = (best - bc) / cols;
+  const tx = NAV.ox + (bc + 0.5) * NAV_CELL;
+  const ty = NAV.oy + (br + 0.5) * NAV_CELL;
+  return Math.atan2(ty - y, tx - x);
+}
+
+/** 導航目標（玩家）位置：moveToward 用來判斷目標是不是玩家 */
+export function navTarget(): { x: number; y: number } {
+  return { x: NAV.tx, y: NAV.ty };
+}

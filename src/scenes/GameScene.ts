@@ -27,7 +27,7 @@ import { RelicSystem } from '../systems/RelicSystem';
 import { MetaStore } from '../systems/MetaStore';
 import { Dummy } from '../entities/enemies/Dummy';
 import { RoomRenderer } from '../systems/RoomRenderer';
-import { WORLD, activateLayout, buildSceneLayout, corridorExit, entryPoint, generateLayout, pickScene, inGrass, nearestFree, type RoomLayout } from '../systems/WorldSystem';
+import { WORLD, navUpdate, activateLayout, buildSceneLayout, corridorExit, entryPoint, generateLayout, pickScene, inGrass, nearestFree, type RoomLayout } from '../systems/WorldSystem';
 import { TerrainSystem } from '../systems/TerrainSystem';
 import { GuardianFlower } from '../entities/Ally';
 import { HazardSystem } from '../systems/HazardSystem';
@@ -112,6 +112,7 @@ export class GameScene extends Phaser.Scene {
   private layoutSeed = 0;
   private grassHidden = false;
   private dashBuffer = 0;
+  private navT = 0;
   private lastKillStop = 0;
   private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
@@ -381,6 +382,12 @@ export class GameScene extends Phaser.Scene {
     this.weapons.update(dt);
     this.skills.update(dt);
 
+    // 導航距離場：每 0.25 秒以玩家位置重算一次
+    this.navT -= dt;
+    if (WORLD.active && this.navT <= 0) {
+      this.navT = 0.25;
+      navUpdate(this.player.x, this.player.y);
+    }
     this.enemies.forEach((e) => e.update(dt));
     this.separateEnemies();
     this.enemies = this.enemies.filter((e) => e.alive);
@@ -503,6 +510,18 @@ export class GameScene extends Phaser.Scene {
           b.nudge(nx * push, ny * push);
         }
       }
+      // 不衝撞時不會整隻壓在玩家身上（衝撞那一下才會撞到）
+      const p = this.player;
+      if (!a.contactHarmful) {
+        const dx = a.x - p.x;
+        const dy = a.y - p.y;
+        const min = a.radius + p.radius * 0.8;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > 0.01 && d2 < min * min) {
+          const d = Math.sqrt(d2);
+          a.nudge((dx / d) * (min - d), (dy / d) * (min - d));
+        }
+      }
     }
   }
 
@@ -510,7 +529,7 @@ export class GameScene extends Phaser.Scene {
     const p = this.player;
     if (p.invulnerable || this.playerHidden) return;
     for (const e of this.enemies) {
-      if (!e.alive || e.airborne || e.frozen) continue;
+      if (!e.alive || e.airborne || e.frozen || !e.contactHarmful) continue;
       const rr = e.radius + p.radius * 0.7;
       if ((e.x - p.x) ** 2 + (e.y - p.y) ** 2 <= rr * rr) {
         this.hurtPlayer(e.def.contactDamage);

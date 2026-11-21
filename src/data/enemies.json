@@ -3,7 +3,7 @@
     "type": "crawler",
     "name": "小跑鼠",
     "hp": 3,
-    "speed": 90,
+    "speed": 105,
     "radius": 18,
     "color": "#c8a888",
     "contactDamage": 1
@@ -32,7 +32,7 @@
     "color": "#7ac65a",
     "contactDamage": 1,
     "attackInterval": 3.5,
-    "telegraph": 1.0,
+    "telegraph": 0.9,
     "slamRadius": 72
   },
   "bomber": {
@@ -43,7 +43,7 @@
     "radius": 18,
     "color": "#ff7a4a",
     "contactDamage": 1,
-    "telegraph": 0.7,
+    "telegraph": 0.85,
     "blastRadius": 85,
     "triggerRange": 90
   },
@@ -78,7 +78,7 @@
     "color": "#b8a6ff",
     "contactDamage": 1,
     "attackInterval": 3.4,
-    "telegraph": 0.8,
+    "telegraph": 0.95,
     "beamWidth": 34,
     "beamLength": 640
   },

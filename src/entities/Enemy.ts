@@ -4,7 +4,7 @@ import { hexToInt } from '../data';
 import type { EnemyDef } from '../types';
 import type { GameScene } from '../scenes/GameScene';
 import { clamp, isArtTexture } from '../utils';
-import { WORLD, circleBlocked, resolveCircle } from '../systems/WorldSystem';
+import { WORLD, circleBlocked, navDirection, navTarget, resolveCircle } from '../systems/WorldSystem';
 
 export interface DamageOptions {
   /** 是否觸發受擊閃白與傷害數字（持續傷害不觸發） */
@@ -47,7 +47,77 @@ export abstract class Enemy {
   private atkKey?: string;
   private runKey?: string;
   /** 2.5D 生動化：顯示高度、出場、呼吸／走路擺動、受擊壓扁 */
-  private displayH = 0;
+  protected displayH = 0;
+  /** 蓄力提示：頭上的「!」 */
+  private alert?: Phaser.GameObjects.Text;
+  /** 近戰衝撞：蓄力（畫出直線預警）→ 衝出去；只有衝出去的那一下會傷人 */
+  protected lunge?: { phase: 'wind' | 'go'; ang: number; speed: number; left: number };
+  protected lungeCd = 0.8 + Math.random() * 1.2;
+  private orbitDir = Math.random() < 0.5 ? 1 : -1;
+  private lastNavAng?: number;
+
+  /** 碰到玩家會不會受傷：一般小怪只有衝撞中才會；Boss 一直都會 */
+  get contactHarmful(): boolean {
+    return !!this.def.boss || this.lunge?.phase === 'go';
+  }
+
+  /**
+   * 近戰小怪的攻擊：靠近到 range 內就停下蓄力 wind 秒（直線預警，方向鎖定，可以閃），
+   * 然後以 dist / dur 的速度衝出去。回傳 true 代表正在攻擊（呼叫端不要再移動）。
+   */
+  protected tryLunge(dt: number, o: { range: number; wind: number; dist: number; dur: number; cd: number }): boolean {
+    if (this.lunge?.phase === 'go') {
+      const L = this.lunge;
+      const step = Math.min(L.left, L.speed * dt);
+      const bx = this.x;
+      const by = this.y;
+      this.x += Math.cos(L.ang) * step;
+      this.y += Math.sin(L.ang) * step;
+      L.left -= step;
+      // 撞到障礙物就提早停
+      if (WORLD.active && circleBlocked(this.x, this.y, this.radius)) {
+        this.x = bx;
+        this.y = by;
+        L.left = 0;
+      }
+      if (L.left <= 0) {
+        this.lunge = undefined;
+        this.lungeCd = o.cd * this.game.dungeon.attackMul;
+      }
+      return true;
+    }
+    if (this.lunge) return true;
+    this.lungeCd -= dt;
+    const p = this.targetPoint();
+    const d = Math.hypot(p.x - this.x, p.y - this.y);
+    if (this.lungeCd > 0 && !this.game.playerHidden && d < o.range * 0.75) {
+      // 冷卻中：不要擠到玩家身上，繞著保持距離（像黑帝斯的小怪會找角度）
+      const a = Math.atan2(this.y - p.y, this.x - p.x) + this.orbitDir * 0.9;
+      this.moveToward(p.x + Math.cos(a) * o.range * 0.8, p.y + Math.sin(a) * o.range * 0.8, dt, this.speed * 0.7);
+      this.sprite.setFlipX(p.x < this.x);
+      return true;
+    }
+    if (this.lungeCd > 0 || this.game.playerHidden || d > o.range) return false;
+    const ang = Math.atan2(p.y - this.y, p.x - this.x);
+    const len = o.dist + this.radius;
+    this.lunge = { phase: 'wind', ang, speed: o.dist / o.dur, left: o.dist };
+    this.sprite.setFlipX(Math.cos(ang) < 0);
+    this.game.telegraphs.add({
+      owner: this,
+      duration: o.wind,
+      shape: { kind: 'line', x1: this.x, y1: this.y, x2: this.x + Math.cos(ang) * len, y2: this.y + Math.sin(ang) * len, width: this.radius * 2 },
+      onDone: () => {
+        if (!this.alive || !this.lunge) return;
+        if (this.frozen) {
+          this.lunge = undefined;
+          this.lungeCd = o.cd;
+          return;
+        }
+        this.lunge.phase = 'go';
+      },
+    });
+    return true;
+  }
   private spawnT = 0;
   private walkT = Math.random() * 10;
   private lastX = 0;
@@ -130,6 +200,7 @@ export abstract class Enemy {
     }
 
     if (!this.frozen) this.act(dt);
+    else if (this.lunge?.phase === 'go') this.lunge = undefined;
 
     if (WORLD.active) {
       const r = resolveCircle(this.x, this.y, this.radius, false);
@@ -177,33 +248,54 @@ export abstract class Enemy {
     if (d < 1) return;
     const step = Math.min(d, speed * this.speedMul * this.game.enemySpeedMul * dt);
     let ang = Math.atan2(dy, dx);
-    if (WORLD.active) ang = this.steer(ang, dt);
+    if (WORLD.active) {
+      // 目標是玩家（或玩家附近）：照導航距離場走，任何形狀的障礙物都繞得過去；其他目標用局部閃避
+      const nt = navTarget();
+      const nav = Math.hypot(tx - nt.x, ty - nt.y) < 60 ? navDirection(this.x, this.y, this.radius, this.lastNavAng) : undefined;
+      ang = nav ?? this.steer(ang, dt);
+      this.lastNavAng = ang;
+    }
     this.x += Math.cos(ang) * step;
     this.y += Math.sin(ang) * step;
   }
 
   /** 繞路：前方被花圃、石柱擋住時，往左或右偏，選定的一邊會維持一小段時間（不會左右抖） */
   private steerSide = 0;
-  private steerT = 0;
-  private steer(ang: number, dt: number): number {
+  private steer(ang: number, _dt: number): number {
     const look = this.radius + 34;
-    const clear = (a: number) => !circleBlocked(this.x + Math.cos(a) * look, this.y + Math.sin(a) * look, this.radius * 0.9);
-    this.steerT = Math.max(0, this.steerT - dt);
-    if (this.steerT <= 0) this.steerSide = 0;
-    if (clear(ang) && this.steerSide === 0) return ang;
-    const sides = this.steerSide ? [this.steerSide] : Math.random() < 0.5 ? [1, -1] : [-1, 1];
-    for (let k = 1; k <= 6; k++) {
-      for (const s of sides) {
-        const a = ang + s * k * 0.45;
-        if (clear(a)) {
-          if (this.steerSide !== s) this.steerT = 0.7;
-          this.steerSide = s;
-          return a;
+    const clear = (a: number, dist = look) => !circleBlocked(this.x + Math.cos(a) * dist, this.y + Math.sin(a) * dist, this.radius * 0.7);
+    // 前方暢通就直走，並忘掉之前選的繞行方向
+    if (clear(ang)) {
+      this.steerSide = 0;
+      return ang;
+    }
+    // 第一次被擋：看左右哪邊比較快繞出去（往旁邊探遠一點），之後一直繞同一邊，直到路通了
+    if (!this.steerSide) {
+      let score = 0;
+      for (const dist of [80, 140, 200, 280, 380]) {
+        const l = clear(ang - Math.PI / 2, dist) && clear(ang - Math.PI / 4, dist);
+        const r = clear(ang + Math.PI / 2, dist) && clear(ang + Math.PI / 4, dist);
+        if (l !== r) {
+          score = l ? -1 : 1;
+          break;
         }
       }
+      this.steerSide = score || (Math.random() < 0.5 ? 1 : -1);
     }
-    return ang;
+    // 候選方向：偏向選定那一邊，每次多轉一點；另外加入「沿牆水平／垂直滑動」的四個正方向
+    const cands: number[] = [];
+    for (let k = 1; k <= 7; k++) cands.push(ang + this.steerSide * k * 0.4);
+    for (const axis of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const diff = Math.atan2(Math.sin(axis - ang), Math.cos(axis - ang));
+      if (Math.abs(diff) <= Math.PI / 2 + 0.01 && (diff === 0 || Math.sign(diff) === this.steerSide)) cands.push(axis);
+    }
+    cands.sort((x, y) => Math.abs(Math.atan2(Math.sin(x - ang), Math.cos(x - ang))) - Math.abs(Math.atan2(Math.sin(y - ang), Math.cos(y - ang))));
+    for (const a of cands) if (clear(a)) return a;
+    // 這邊真的走不通就換邊
+    this.steerSide = -this.steerSide;
+    return ang + this.steerSide * Math.PI / 2;
   }
+
 
   /** Boss 出招時播攻擊動畫 */
   playAttack(): void {
@@ -290,7 +382,9 @@ export abstract class Enemy {
     else if (this.poisonTimer > 0 && Math.floor(this.poisonTimer * 6) % 2 === 0) tint = 0x9cff7e;
     else if (this.slowTimer > 0) tint = 0xc9a3ff;
     // 受擊：真正的白閃（tintFill），不是乘法染色
+    const wind = this.game.telegraphs.windup(this);
     if (this.hitFlash > 0 && !this.frozen) this.sprite.setTintFill(0xffffff);
+    else if (wind > 0.55 && Math.floor(wind * 14) % 2 === 0) this.sprite.setTint(0xff7a7a);
     else this.sprite.setTint(tint);
     this.sprite.setAlpha(this.slowTimer > 0 && !this.frozen ? 0.85 : 1);
 
@@ -311,7 +405,19 @@ export abstract class Enemy {
     const dir = this.sprite.flipX ? -1 : 1;
     this.sprite.setRotation(moving ? Math.sin(this.walkT) * 0.06 * dir : 0);
     const feetY = this.y + this.radius * 0.7;
-    this.sprite.setPosition(this.x, feetY - this.liftOffset() - bob).setDepth(ySortDepth(this.y));
+    // 蓄力：微微顫抖＋頭上「!」；衝撞中身體前傾
+    const shakeX = wind >= 0 ? Math.sin(this.walkT * 9 + wind * 40) * (1.5 + wind * 2.5) : 0;
+    if (this.lunge?.phase === 'go') this.sprite.setRotation(0.25 * (Math.cos(this.lunge.ang) < 0 ? -1 : 1));
+    this.sprite.setPosition(this.x + shakeX, feetY - this.liftOffset() - bob).setDepth(ySortDepth(this.y));
+    if (wind >= 0 && !this.def.boss) {
+      if (!this.alert) {
+        this.alert = this.game.add.text(0, 0, '!', {
+          fontFamily: 'Arial Black, Arial, sans-serif', fontSize: '34px', color: '#ff4a4a', stroke: '#2a0606', strokeThickness: 7,
+        }).setOrigin(0.5, 1).setDepth(DEPTH.projectile - 1);
+      }
+      const pop = 1 + (wind > 0.75 ? 0.25 * Math.sin(wind * 60) : 0);
+      this.alert.setVisible(true).setPosition(this.x, feetY - this.displayH * 0.98 - this.liftOffset()).setScale(pop);
+    } else this.alert?.setVisible(false);
     this.eliteRing?.setDepth(this.sprite.depth - 0.001);
     // 陰影：跳起來（bob／liftOffset）時縮小變淡
     const lift = bob + this.liftOffset();
@@ -337,6 +443,7 @@ export abstract class Enemy {
   }
 
   destroy(): void {
+    this.alert?.destroy();
     this.sprite.destroy();
     this.shadow.destroy();
     this.eliteRing?.destroy();

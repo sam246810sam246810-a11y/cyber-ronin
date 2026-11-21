@@ -20,8 +20,11 @@ export class Beetle extends Enemy {
 
   protected act(dt: number): void {
     const p = this.targetPoint();
-    this.moveToward(p.x, p.y, dt);
-    this.sprite.setFlipX(p.x < this.x);
+    // 盔甲鼠：慢慢逼近，蓄力比較久，但衝撞又遠又重（看到就衝刺閃開）
+    if (!this.tryLunge(dt, { range: 230, wind: 0.75, dist: 300, dur: 0.32, cd: 2.4 })) {
+      this.moveToward(p.x, p.y, dt);
+      this.sprite.setFlipX(p.x < this.x);
+    }
     this.sinceHit += dt;
     if (this.sinceHit > Number(this.def.shieldRegen ?? 4) && this.shield < this.maxShield) {
       this.shield = Math.min(this.maxShield, this.shield + this.maxShield * 0.5 * dt);

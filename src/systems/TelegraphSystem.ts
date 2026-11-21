@@ -35,6 +35,13 @@ export class TelegraphSystem {
     this.list.push({ ...opts, elapsed: 0, gfx, color: opts.color ?? COLORS.telegraph });
   }
 
+  /** 這個敵人正在蓄力的進度（0..1），沒有就是 -1；給敵人頭上的「!」與蓄力閃爍用 */
+  windup(owner: object): number {
+    let best = -1;
+    for (const t of this.list) if (t.owner === owner) best = Math.max(best, Math.min(1, t.elapsed / t.duration));
+    return best;
+  }
+
   cancelOwner(owner: object): void {
     this.list = this.list.filter((t) => {
       if (t.owner === owner) {
@@ -71,15 +78,23 @@ export class TelegraphSystem {
     const g = t.gfx;
     g.clear();
     const s = t.shape;
-    const pulse = 0.6 + 0.4 * Math.sin(t.elapsed * 30);
-    g.lineStyle(3, t.color, 0.9 * pulse);
-    g.fillStyle(t.color, 0.12);
+    // 黑帝斯式預警：淡底＋由內往外填滿；最後 25% 邊框加粗變白、底色變亮（「要打了！」）
+    const late = Math.max(0, (p - 0.75) / 0.25);
+    const pulse = 0.75 + 0.25 * Math.sin(t.elapsed * (18 + late * 30));
+    const edge = late > 0 ? Phaser.Display.Color.Interpolate.ColorWithColor(
+      Phaser.Display.Color.ValueToColor(t.color), Phaser.Display.Color.ValueToColor(0xffffff), 100, Math.round(late * 70)) : undefined;
+    const edgeColor = edge ? Phaser.Display.Color.GetColor(edge.r, edge.g, edge.b) : t.color;
+    // 一般混合（加法在亮地板上會變粉色看不清楚）：深紅底＋亮邊
+    g.lineStyle(3 + late * 4, edgeColor, 0.95 * pulse);
+    g.fillStyle(t.color, 0.22 + late * 0.12);
     switch (s.kind) {
       case 'circle':
         g.fillCircle(s.x, s.y, s.r);
         g.strokeCircle(s.x, s.y, s.r);
-        g.fillStyle(t.color, 0.3);
+        g.fillStyle(t.color, 0.42 + late * 0.2);
         g.fillCircle(s.x, s.y, s.r * p);
+        g.lineStyle(2, edgeColor, 0.7);
+        g.strokeCircle(s.x, s.y, s.r * p);
         break;
       case 'sector': {
         const a0 = s.angle - s.spread / 2;
@@ -87,7 +102,7 @@ export class TelegraphSystem {
         g.slice(s.x, s.y, s.len, a0, a1, false);
         g.fillPath();
         g.strokePath();
-        g.fillStyle(t.color, 0.3);
+        g.fillStyle(t.color, 0.42 + late * 0.2);
         g.slice(s.x, s.y, s.len * p, a0, a1, false);
         g.fillPath();
         break;
@@ -105,7 +120,7 @@ export class TelegraphSystem {
         ];
         g.fillPoints(pts(len), true);
         g.strokePoints(pts(len), true);
-        g.fillStyle(t.color, 0.3);
+        g.fillStyle(t.color, 0.42 + late * 0.2);
         g.fillPoints(pts(len * p), true);
         break;
       }
