@@ -385,3 +385,17 @@ export function pickScene(room: Room, seed: number): { def: SceneDef; flip: bool
   const h = Math.abs(Math.imul(room.gx * 73856093 ^ room.gy * 19349663, 2654435761) + seed) >>> 0;
   return { def: list[h % list.length], flip: ((h >> 8) & 1) === 1 };
 }
+
+/** 這個圓（敵人）放在這裡會不會撞到擋路物或走出地板 */
+export function circleBlocked(x: number, y: number, r: number): boolean {
+  const l = WORLD.layout;
+  if (!l) return false;
+  const i = l.interior;
+  if (x < i.x + r || x > i.x + i.w - r || y < i.y + r || y > i.y + i.h - r) return true;
+  for (const b of WORLD.blocks) {
+    const nx = Math.max(b.x, Math.min(b.x + b.w, x));
+    const ny = Math.max(b.y, Math.min(b.y + b.h, y));
+    if ((x - nx) ** 2 + (y - ny) ** 2 < r * r) return true;
+  }
+  return false;
+}

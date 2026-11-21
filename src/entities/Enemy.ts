@@ -4,7 +4,7 @@ import { hexToInt } from '../data';
 import type { EnemyDef } from '../types';
 import type { GameScene } from '../scenes/GameScene';
 import { clamp, isArtTexture } from '../utils';
-import { WORLD, resolveCircle } from '../systems/WorldSystem';
+import { WORLD, circleBlocked, resolveCircle } from '../systems/WorldSystem';
 
 export interface DamageOptions {
   /** 是否觸發受擊閃白與傷害數字（持續傷害不觸發） */
@@ -176,8 +176,33 @@ export abstract class Enemy {
     const d = Math.hypot(dx, dy);
     if (d < 1) return;
     const step = Math.min(d, speed * this.speedMul * this.game.enemySpeedMul * dt);
-    this.x += (dx / d) * step;
-    this.y += (dy / d) * step;
+    let ang = Math.atan2(dy, dx);
+    if (WORLD.active) ang = this.steer(ang, dt);
+    this.x += Math.cos(ang) * step;
+    this.y += Math.sin(ang) * step;
+  }
+
+  /** 繞路：前方被花圃、石柱擋住時，往左或右偏，選定的一邊會維持一小段時間（不會左右抖） */
+  private steerSide = 0;
+  private steerT = 0;
+  private steer(ang: number, dt: number): number {
+    const look = this.radius + 34;
+    const clear = (a: number) => !circleBlocked(this.x + Math.cos(a) * look, this.y + Math.sin(a) * look, this.radius * 0.9);
+    this.steerT = Math.max(0, this.steerT - dt);
+    if (this.steerT <= 0) this.steerSide = 0;
+    if (clear(ang) && this.steerSide === 0) return ang;
+    const sides = this.steerSide ? [this.steerSide] : Math.random() < 0.5 ? [1, -1] : [-1, 1];
+    for (let k = 1; k <= 6; k++) {
+      for (const s of sides) {
+        const a = ang + s * k * 0.45;
+        if (clear(a)) {
+          if (this.steerSide !== s) this.steerT = 0.7;
+          this.steerSide = s;
+          return a;
+        }
+      }
+    }
+    return ang;
   }
 
   /** Boss 出招時播攻擊動畫 */

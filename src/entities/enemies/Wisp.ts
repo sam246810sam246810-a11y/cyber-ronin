@@ -3,6 +3,7 @@ import { ARENA, ARENA_BOTTOM, ARENA_RIGHT } from '../../config';
 import { TelegraphSystem } from '../../systems/TelegraphSystem';
 import { Sound } from '../../systems/SoundSystem';
 import { dist, rand } from '../../utils';
+import { circleBlocked } from '../../systems/WorldSystem';
 
 /** 雷靈：瞬移到別處，再朝玩家方向放出直線雷射 */
 export class Wisp extends Enemy {
@@ -12,6 +13,9 @@ export class Wisp extends Enemy {
   protected act(dt: number): void {
     this.sprite.setAlpha(0.7 + 0.3 * Math.sin(this.game.time.now / 150));
     if (this.busy) return;
+    // 平常緩緩飄向玩家（不會看起來像卡住）
+    const tp = this.targetPoint();
+    if (dist(this.x, this.y, tp.x, tp.y) > 200) this.moveToward(tp.x, tp.y, dt, 45);
     this.attackTimer -= dt;
     if (this.attackTimer > 0) return;
     this.busy = true;
@@ -45,7 +49,7 @@ export class Wisp extends Enemy {
     for (let i = 0; i < 10; i++) {
       const x = rand(ARENA.x + 60, ARENA_RIGHT - 60);
       const y = rand(ARENA.y + 60, ARENA_BOTTOM - 60);
-      if (dist(x, y, p.x, p.y) > 240 && dist(x, y, p.x, p.y) < 480) {
+      if (dist(x, y, p.x, p.y) > 240 && dist(x, y, p.x, p.y) < 480 && !circleBlocked(x, y, this.radius)) {
         this.x = x;
         this.y = y;
         break;

@@ -12,7 +12,7 @@
     "type": "spitter",
     "name": "吹箭鼠",
     "hp": 6,
-    "speed": 0,
+    "speed": 90,
     "radius": 24,
     "color": "#b88ad0",
     "contactDamage": 1,

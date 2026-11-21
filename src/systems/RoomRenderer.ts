@@ -256,26 +256,37 @@ export class RoomRenderer {
   }
 
   /** 戰鬥中封住走廊口：紅色符文柵欄 */
-  setBarriers(l: RoomLayout | undefined, on: boolean): void {
+  /**
+   * 出口狀態（黑帝斯式）：戰鬥中不畫任何柵欄；清空後每個出口亮起光暈，上方浮著「下一間是什麼」的圖示。
+   * iconFor：回傳該方向下一間房的圖示 frame（icons 圖集），visited＝去過的房間圖示變暗。
+   */
+  setExits(l: RoomLayout | undefined, locked: boolean, iconFor: (dir: Dir) => { frame?: string; visited: boolean }): void {
     this.clearBarriers();
-    if (!l || !on) return;
+    if (!l || locked) return;
     const s = this.scene;
     const i = l.interior;
     for (const c of l.corridors) {
-      const g = s.add.graphics().setDepth(ySortDepth(c.dir === 's' ? i.y + i.h : c.dir === 'n' ? i.y : c.y + c.h));
-      g.fillStyle(0xff3b5a, 0.22);
-      g.lineStyle(4, 0xff5a7a, 0.9);
-      if (c.dir === 'n' || c.dir === 's') {
-        const y = c.dir === 'n' ? i.y - 6 : i.y + i.h - 6;
-        g.fillRect(c.x, y - 40, c.w, 52);
-        for (let k = 0; k <= 6; k++) g.lineBetween(c.x + (k * c.w) / 6, y - 40, c.x + (k * c.w) / 6, y + 12);
-      } else {
-        const x = c.dir === 'w' ? i.x - 6 : i.x + i.w - 6;
-        g.fillRect(x, c.y, 12, c.h);
-        for (let k = 0; k <= 5; k++) g.lineBetween(x - 10, c.y + (k * c.h) / 5, x + 22, c.y + (k * c.h) / 5);
+      // 出口開口處（地板邊緣）的位置
+      const mx = c.dir === 'w' ? i.x + 10 : c.dir === 'e' ? i.x + i.w - 10 : c.x + c.w / 2;
+      const my = c.dir === 'n' ? i.y - 10 : c.dir === 's' ? i.y + i.h - 6 : c.y + c.h * 0.62;
+      const info = iconFor(c.dir);
+      const glow = s.add.image(mx, my, 'proj_orb').setBlendMode(Phaser.BlendModes.ADD).setTint(0xffd98a)
+        .setDisplaySize(c.dir === 'n' || c.dir === 's' ? c.w * 1.3 : 150, 110).setAlpha(info.visited ? 0.25 : 0.55)
+        .setDepth(DEPTH.floor + 1);
+      s.tweens.add({ targets: glow, alpha: info.visited ? 0.15 : 0.85, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      this.barriers.push(glow);
+      if (info.frame && s.textures.exists('icons') && s.textures.get('icons').has(info.frame)) {
+        const iy = c.dir === 's' ? my - 70 : my - 95;
+        const plate = s.add.image(mx, iy, 'ui_minimap').setDisplaySize(64, 64).setDepth(DEPTH.fx - 1)
+          .setAlpha(s.textures.exists('ui_minimap') ? 1 : 0);
+        const icon = s.add.image(mx, iy, 'icons', info.frame).setDisplaySize(40, 40).setDepth(DEPTH.fx);
+        if (info.visited) {
+          plate.setAlpha(0.5);
+          icon.setAlpha(0.5);
+        }
+        s.tweens.add({ targets: [plate, icon], y: iy - 8, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+        this.barriers.push(plate, icon);
       }
-      s.tweens.add({ targets: g, alpha: 0.55, duration: 500, yoyo: true, repeat: -1 });
-      this.barriers.push(g);
     }
   }
 

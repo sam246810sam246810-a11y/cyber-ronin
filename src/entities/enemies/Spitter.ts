@@ -6,12 +6,28 @@ export class Spitter extends Enemy {
   private attackTimer = 1 + Math.random() * 1.5;
   private attacking = false;
 
+  private strafe = Math.random() < 0.5 ? 1 : -1;
+  private strafeT = 0;
+
   protected act(dt: number): void {
     if (this.attacking) return;
     this.attackTimer -= dt;
     const p = this.targetPoint();
     const range = Number(this.def.range ?? 420);
-    if (this.attackTimer > 0 || dist(this.x, this.y, p.x, p.y) > range * 1.6) return;
+    const d = dist(this.x, this.y, p.x, p.y);
+    // 吹箭鼠：保持在射程內的舒適距離，太遠就靠近、太近就後退，平常繞著玩家橫移
+    this.strafeT -= dt;
+    if (this.strafeT <= 0) {
+      this.strafeT = 1.2 + Math.random() * 1.2;
+      if (Math.random() < 0.4) this.strafe *= -1;
+    }
+    const a = Math.atan2(p.y - this.y, p.x - this.x);
+    const want = range * 0.75;
+    const tx = d > want + 60 ? p.x : d < want - 80 ? this.x - Math.cos(a) * 100 : this.x + Math.cos(a + this.strafe * Math.PI / 2) * 100;
+    const ty = d > want + 60 ? p.y : d < want - 80 ? this.y - Math.sin(a) * 100 : this.y + Math.sin(a + this.strafe * Math.PI / 2) * 100;
+    this.moveToward(tx, ty, dt, this.speed * (d > want + 60 ? 1 : 0.55));
+    this.sprite.setFlipX(p.x < this.x);
+    if (this.attackTimer > 0 || d > range * 1.1) return;
 
     this.attacking = true;
     const angle = Math.atan2(p.y - this.y, p.x - this.x);

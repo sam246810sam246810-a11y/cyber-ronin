@@ -681,7 +681,7 @@ export class GameScene extends Phaser.Scene {
   setDoorsLocked(locked: boolean): void {
     this.doorsLocked = locked;
     WORLD.locked = locked && WORLD.active;
-    if (WORLD.active) this.roomRenderer.setBarriers(WORLD.layout, locked);
+    if (WORLD.active) this.refreshExits();
     this.drawDoors();
   }
 
@@ -692,7 +692,24 @@ export class GameScene extends Phaser.Scene {
     return (ARENA.y + ARENA_BOTTOM) / 2;
   }
 
+  private sealedMsgT = 0;
+
   private checkDoors(): void {
+    // 戰鬥中走到出口：提示一下（出口本身用碰撞擋住，不畫紅線）
+    if (WORLD.active && this.doorsLocked && WORLD.layout && this.time.now - this.sealedMsgT > 1800) {
+      const p = this.player;
+      const i = WORLD.layout.interior;
+      const near = WORLD.layout.corridors.some((c) => {
+        if (c.dir === 'n') return p.y < i.y + 40 && p.x > c.x && p.x < c.x + c.w;
+        if (c.dir === 's') return p.y > i.y + i.h - 40 && p.x > c.x && p.x < c.x + c.w;
+        if (c.dir === 'w') return p.x < i.x + 40 && p.y > c.y && p.y < c.y + c.h;
+        return p.x > i.x + i.w - 40 && p.y > c.y && p.y < c.y + c.h;
+      });
+      if (near) {
+        this.sealedMsgT = this.time.now;
+        this.fx.floatText(p.x, p.y - 110, '打倒所有敵人才能離開', '#ffd166', 20);
+      }
+    }
     if (this.transitioning || this.dungeon.phase !== 'explore' || this.doorsLocked) return;
     if (WORLD.active) {
       // 大地圖：走進走廊夠深就到下一間
@@ -764,6 +781,7 @@ export class GameScene extends Phaser.Scene {
       this.refreshModText();
       this.doorsLocked = false;
       this.drawDoors();
+      this.refreshExits();
       this.encounters.setupRoom(room);
       this.minimap.draw();
       this.hud.setInfoY(this.minimap.bottom);
@@ -838,6 +856,19 @@ export class GameScene extends Phaser.Scene {
     this.camTarget.setPosition(p.x, p.y - 40);
     cam.startFollow(this.camTarget, true, 0.14, 0.14);
     cam.centerOn(p.x, p.y - 40);
+  }
+
+  /** 出口圖示：下一間的房型（去過的變暗） */
+  private refreshExits(): void {
+    const room = this.dungeon.current;
+    this.roomRenderer.setExits(WORLD.layout, this.doorsLocked, (dir) => {
+      const d = DIRS[dir];
+      const n = this.dungeon.roomAt(room.gx + d.dx, room.gy + d.dy);
+      if (!n) return { visited: false };
+      const t = n.type === 'rift_past' || n.type === 'rift_future' ? 'rift' : n.type;
+      const frame = n.type === 'treasure' && n.used ? undefined : `room_${t}`;
+      return { frame, visited: n.visited };
+    });
   }
 
   /** 回到單畫面模式（大廳） */
