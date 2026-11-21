@@ -42,23 +42,24 @@ export class HUD {
       fontFamily: FONT, fontSize: '52px', color: '#ffffff', fontStyle: 'bold', stroke: '#2a1a3a', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(DEPTH.overlay).setAlpha(0);
 
-    const toastBg = this.toastBg = scene.add.rectangle(0, 0, 560, 96, 0x2a1a3a, 0.95).setStrokeStyle(3, COLORS.gold, 1);
-    this.toastText = scene.add.text(0, -16, '', {
+    const toastBg = this.toastBg = scene.add.rectangle(0, 0, 660, 124, 0x2a1a3a, 0.95).setStrokeStyle(3, COLORS.gold, 1);
+    this.toastText = scene.add.text(0, -34, '', {
       fontFamily: FONT, fontSize: '30px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0.5);
-    this.toastSub = scene.add.text(0, 22, '', {
-      fontFamily: FONT, fontSize: '18px', color: '#ffffff',
+    this.toastSub = scene.add.text(0, 16, '', {
+      fontFamily: FONT, fontSize: '17px', color: '#ffffff', align: 'center',
+      wordWrap: { width: 620, useAdvancedWrap: true }, lineSpacing: 2,
     }).setOrigin(0.5);
     this.toast = scene.add.container(GAME_W / 2, 200, [toastBg, this.toastText, this.toastSub])
       .setDepth(DEPTH.overlay).setAlpha(0);
   }
 
-  /** 最大血量會成長，最多 12 顆，每排 6 顆 */
+  /** 最大血量會成長，最多 14 顆，每排 7 顆 */
   private ensureHearts(n: number): void {
     while (this.hearts.length < n) {
       const i = this.hearts.length;
-      this.hearts.push(this.scene.add.image(28 + (i % 6) * 30, 26 + Math.floor(i / 6) * 32, 'heart')
-        .setDepth(DEPTH.ui).setDisplaySize(26, 24));
+      this.hearts.push(this.scene.add.image(26 + (i % 7) * 29, 26 + Math.floor(i / 7) * 32, 'heart')
+        .setDepth(DEPTH.ui).setDisplaySize(25, 23));
     }
   }
 
@@ -89,10 +90,13 @@ export class HUD {
     });
   }
 
-  showToast(title: string, sub: string, legendary = false): void {
-    this.toastBg.setStrokeStyle(legendary ? 5 : 3, legendary ? 0xff9f43 : COLORS.gold, 1);
-    this.toastBg.setFillStyle(legendary ? 0x4a2a10 : 0x2a1a3a, 0.95);
-    this.toastText.setColor(legendary ? '#ffb86b' : '#ffd166');
+  /** color：稀有度顏色（有傳入時加粗外框並延長顯示） */
+  showToast(title: string, sub: string, color?: string): void {
+    const legendary = !!color;
+    const c = color ? parseInt(color.replace('#', ''), 16) : COLORS.gold;
+    this.toastBg.setStrokeStyle(legendary ? 5 : 3, c, 1);
+    this.toastBg.setFillStyle(0x1e1428, 0.96);
+    this.toastText.setColor(color ?? '#ffd166');
     this.toastText.setText(title);
     this.toastSub.setText(sub);
     this.scene.tweens.killTweensOf(this.toast);

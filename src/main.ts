@@ -4,6 +4,7 @@ import { BootScene } from './scenes/BootScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
 import { GameScene } from './scenes/GameScene';
+import { CharacterSelectScene } from './scenes/CharacterSelectScene';
 import { CardSelectScene } from './scenes/CardSelectScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
@@ -35,7 +36,7 @@ const game = new Phaser.Game({
   },
   input: { activePointers: 4 },
   render: { antialias: true, roundPixels: false },
-  scene: [BootScene, PreloadScene, MainMenuScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene],
+  scene: [BootScene, PreloadScene, MainMenuScene, CharacterSelectScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene],
 });
 
 (window as unknown as { __phaser?: Phaser.Game }).__phaser = game;

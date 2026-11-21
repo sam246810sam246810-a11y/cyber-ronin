@@ -1,33 +1,35 @@
 import Phaser from 'phaser';
 import {
-  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, GAME_H, GAME_W, PLAYER,
+  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, DROP_RARITY, GAME_H, GAME_W, MYTHIC, PLAYER, RARITY,
 } from '../config';
-import { INGREDIENTS } from '../data';
+import { ELEMENT_IDS, ELEMENT_MAP, MYTHICS, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { Pickup } from '../entities/Pickup';
 import { Player } from '../entities/Player';
+import { moduleLabel } from '../potions/passives';
+import { BuffSystem } from '../systems/BuffSystem';
 import { CrucibleSystem } from '../systems/CrucibleSystem';
+import { EffectSystem } from '../systems/EffectSystem';
 import { FxSystem } from '../systems/FxSystem';
 import { InputSystem } from '../systems/InputSystem';
-import { MutationSystem } from '../systems/MutationSystem';
-import { EffectSystem } from '../systems/EffectSystem';
-import { BuffSystem } from '../systems/BuffSystem';
+import { MutationSystem, rollRarity } from '../systems/MutationSystem';
+import { ProgressStore } from '../systems/ProgressStore';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { TelegraphSystem } from '../systems/TelegraphSystem';
 import { WaveSystem } from '../systems/WaveSystem';
-import type { Brew, IngredientId } from '../types';
-import { clamp } from '../utils';
+import type { Brew, CharacterDef, ElementId, Material } from '../types';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
-import { LEGENDARIES, RECIPES, hexToInt } from '../data';
+import { pick } from '../utils';
 import type { ResultData } from './ResultScene';
 
 export interface RunSummary {
+  character: string;
   drinks: number;
-  elements: Record<IngredientId, number>;
-  passives: { name: string; stacks: number; color: string; legendary: boolean }[];
-  mutations: { name: string; icon: string; stacks: number }[];
+  elements: Record<ElementId, number>;
+  passives: { name: string; stacks: number; color: string; mythic: boolean }[];
+  mutations: { name: string; icon: string; value: string }[];
   stats: [string, string][];
 }
 
@@ -35,6 +37,7 @@ export class GameScene extends Phaser.Scene {
   player!: Player;
   enemies: Enemy[] = [];
   pickups: Pickup[] = [];
+  character!: CharacterDef;
 
   telegraphs!: TelegraphSystem;
   projectiles!: ProjectileSystem;
@@ -53,6 +56,8 @@ export class GameScene extends Phaser.Scene {
   runTime = 0;
   kills = 0;
   private ended = false;
+  /** 本局新解鎖的角色 */
+  private unlocks: CharacterDef[] = [];
 
   constructor() {
     super('Game');
@@ -65,6 +70,8 @@ export class GameScene extends Phaser.Scene {
     this.kills = 0;
     this.ended = false;
     this.fireTimer = 0;
+    this.unlocks = [];
+    this.character = ProgressStore.selected;
 
     this.drawArena();
 
@@ -73,15 +80,18 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = new ProjectileSystem(this);
     this.mutations = new MutationSystem();
     this.crucible = new CrucibleSystem(this.mutations);
+    this.crucible.bonusChance = this.character.fissionBonus ?? 0;
     this.effects = new EffectSystem(this);
     this.waves = new WaveSystem(this);
-    this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7);
-    this.buffs = new BuffSystem(this);
+    this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7, hexToInt(this.character.color));
+    this.buffs = new BuffSystem(this, this.character);
+    this.player.hp = this.player.maxHp = this.character.stats.hp;
     this.buffs.recompute();
+    this.character.startModules?.forEach((m) => this.buffs.addModule(m.id, m.n));
 
     // UI
     this.add.rectangle(GAME_W / 2, (CONTROLS_Y + GAME_H) / 2, GAME_W, GAME_H - CONTROLS_Y, 0x0b0910).setDepth(DEPTH.ui - 2);
-    this.hud = new HUD(this, PLAYER.hp, () => this.openPause());
+    this.hud = new HUD(this, this.player.maxHp, () => this.openPause());
     new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
     this.input2 = new InputSystem(this);
     this.dashBtn = createRoundButton(this, 622, 1098, 68, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
@@ -96,9 +106,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('resume', () => this.input2.consume());
     this.waves.start();
 
-    // 給測試與 debug 面板使用
     (window as unknown as { __game?: GameScene }).__game = this;
-    this.game.events.emit('game-scene-ready', this);
   }
 
   private drawArena(): void {
@@ -132,7 +140,7 @@ export class GameScene extends Phaser.Scene {
 
     const actions = this.input2.consume();
     const move = this.input2.move;
-    if (actions.dash) this.dash(move.x, move.y);
+    if (actions.dash) this.player.tryDash(move.x, move.y);
     if (actions.brew) this.brewAndDrink();
 
     this.player.update(dt, move.x, move.y);
@@ -151,7 +159,6 @@ export class GameScene extends Phaser.Scene {
     this.updatePickups(dt);
     this.waves.update(dt);
 
-    // UI
     this.dashBtn.setCooldown(this.player.dashCooldownRatio);
     this.brewBtn.setEnabled(this.crucible.canBrew);
     const boss = this.waves.boss;
@@ -170,31 +177,19 @@ export class GameScene extends Phaser.Scene {
     const a = Math.atan2(target.y - p.y, target.x - p.x);
     const n = Math.max(1, Math.round(st.shots));
     for (let i = 0; i < n; i++) {
-      const ang = a + (i - (n - 1) / 2) * 0.16;
-      this.projectiles.fireFriendly(p.x, p.y, ang, PLAYER.bulletSpeed, st.damage, {
+      this.projectiles.fireFriendly(p.x, p.y, a + (i - (n - 1) / 2) * 0.16, PLAYER.bulletSpeed, st.damage, {
         poison: st.poisonDps > 0 ? { dps: st.poisonDps, time: 2 } : undefined,
         slow: st.slow > 0 ? { factor: st.slow, time: 1 } : undefined,
         pierce: st.pierce,
         bounces: st.bounces,
         splash: st.splash,
         freezeChance: st.freezeChance,
+        critChance: st.critChance,
         triggerPassives: true,
-        color: st.splash ? 0xf0b0ff : st.poisonDps > 0 ? 0xc8ffa8 : undefined,
+        color: st.splash ? 0xf0b0ff : st.critChance > 0.2 ? 0xffe14d : st.poisonDps > 0 ? 0xc8ffa8 : undefined,
       });
     }
     this.buffs.onShot();
-  }
-
-  private dash(mx: number, my: number): void {
-    const p = this.player;
-    const sx = p.x;
-    const sy = p.y;
-    if (!p.tryDash(mx, my)) return;
-    const len = Math.hypot(mx, my) > 0.1 ? Math.hypot(mx, my) : 0;
-    const a = len ? Math.atan2(my, mx) : p.facing;
-    const ex = clamp(sx + Math.cos(a) * PLAYER.dashDistance, ARENA.x + p.radius, ARENA_RIGHT - p.radius);
-    const ey = clamp(sy + Math.sin(a) * PLAYER.dashDistance, ARENA.y + p.radius, ARENA_BOTTOM - p.radius);
-    this.buffs.onDash(sx, sy, ex, ey);
   }
 
   /** 煉成並立刻喝下 */
@@ -206,26 +201,27 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.buffs.drink(brew);
+    if (brew.kind === 'mythic') this.unlocks.push(...ProgressStore.record({ fission: true }));
     this.announceBrew(brew);
   }
 
   private announceBrew(brew: Brew): void {
     const p = this.player;
-    if (brew.kind === 'legendary') {
-      const L = brew.legendary;
-      const color = hexToInt(L.color);
+    if (brew.kind === 'mythic') {
+      const M = brew.mythic;
+      const color = hexToInt(M.color);
       this.fx.burst(p.x, p.y, 160, color, 500);
       this.fx.burst(150, 920, 160, color, 500);
-      this.cameras.main.flash(250, 255, 220, 120);
+      this.cameras.main.flash(250, 255, 120, 140);
       this.cameras.main.shake(200, 0.006);
-      this.hud.showToast(`裂變！${L.name}`, L.desc, true);
+      this.hud.showToast(`裂變！【${MYTHIC.name}】${M.name}`, M.desc, MYTHIC.color);
     } else {
       const r = brew.recipe;
-      const color = hexToInt(r.color);
-      this.fx.burst(p.x, p.y, 70, color, 350);
-      this.fx.burst(150, 920, 120, color);
-      const n = this.buffs.stacksOf(r.id);
-      this.hud.showToast(`${r.name}${n > 1 ? ` Lv.${n}` : ''}`, r.desc, false);
+      const q = RARITY[brew.quality];
+      this.fx.burst(p.x, p.y, 70 + brew.quality * 25, hexToInt(q.color), 350);
+      this.fx.burst(150, 920, 120, hexToInt(r.color));
+      if (brew.quality >= 2) this.cameras.main.flash(150, 180, 140, 255);
+      this.hud.showToast(`【${q.name}】${r.name}`, r.desc.replace('\n', '　'), brew.quality > 0 ? q.color : undefined);
     }
   }
 
@@ -274,8 +270,8 @@ export class GameScene extends Phaser.Scene {
       pk.update(dt, blocked);
       if (!pk.alive) continue;
       if (!blocked && (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2 <= (this.buffs.stats.pickupRadius + p.radius) ** 2) {
-        if (this.crucible.add(pk.id)) {
-          this.fx.sparks(pk.x, pk.y, 0xffffff, 4);
+        if (this.crucible.add(pk.mat)) {
+          this.fx.sparks(pk.x, pk.y, hexToInt(RARITY[pk.mat.r].color), 4 + pk.mat.r * 3);
           pk.destroy();
         }
       }
@@ -297,18 +293,12 @@ export class GameScene extends Phaser.Scene {
     if (navigator.vibrate) {
       try { navigator.vibrate(60); } catch { /* ignore */ }
     }
-    if (this.player.hp <= 0) {
-      if (this.buffs.revives > 0) {
-        this.buffs.revives--;
-        this.player.revive(Math.ceil(this.player.maxHp / 2));
-        this.fx.burst(this.player.x, this.player.y, 200, 0xff9f43, 600);
-        this.effects.explode(this.player.x, this.player.y, 200, 5, 0xff9f43, { knockback: 120 });
-        this.hud.showToast('不死鳥復活！', `剩餘復活次數 ${this.buffs.revives}`, true);
-        this.projectiles.clearEnemyBullets();
-        return;
-      }
-      this.onDefeat();
+    const blast = this.character.hurtBlast;
+    if (blast) {
+      this.effects.explode(this.player.x, this.player.y, blast.radius, blast.damage * (1 + this.buffs.elements.F * 0.05),
+        0xff8a3d, { knockback: 80 });
     }
+    if (this.player.hp <= 0) this.onDefeat();
   }
 
   onEnemyKilled(e: Enemy): void {
@@ -316,16 +306,21 @@ export class GameScene extends Phaser.Scene {
     this.fx.burst(e.x, e.y, e.radius * 1.6, hexToInt(e.def.color), 200);
     this.buffs.onKill(e);
     if (e.def.type === 'boss') return;
-    if (e.elite || Math.random() < this.buffs.stats.dropChance) this.dropIngredient(e.x, e.y);
+    if (e.elite || Math.random() < this.buffs.stats.dropChance) this.dropMaterial(e.x, e.y, undefined, e.elite);
   }
 
-  dropIngredient(x: number, y: number, id?: IngredientId): void {
-    const total = INGREDIENTS.reduce((s, i) => s + i.weight, 0);
-    if (!id) {
-      let r = Math.random() * total;
-      id = INGREDIENTS.find((i) => (r -= i.weight) < 0)?.id ?? 'J';
+  /** 掉落素材：元素隨機，稀有度依波數、精英、鑑寶卡決定 */
+  dropMaterial(x: number, y: number, mat?: Material, elite = false): void {
+    if (!mat) {
+      const base = elite ? DROP_RARITY.elite : DROP_RARITY.normal;
+      const w = base.map((b, i) => {
+        let v = b + (elite ? 0 : DROP_RARITY.perWave[i] * Math.max(0, this.waves.wave - 1));
+        if (i > 0) v *= this.buffs.stats.fortune;
+        return Math.max(0.1, v);
+      });
+      mat = { el: pick(ELEMENT_IDS), r: rollRarity(w) };
     }
-    this.pickups.push(new Pickup(this, id, x, y));
+    this.pickups.push(new Pickup(this, mat, x, y));
   }
 
   showBanner(text: string): void {
@@ -334,17 +329,19 @@ export class GameScene extends Phaser.Scene {
 
   onWaveCleared(wave: number): void {
     this.projectiles.clearEnemyBullets();
+    this.unlocks.push(...ProgressStore.record({ wave: wave + 1 }));
     this.time.delayedCall(700, () => this.openCardSelect(wave));
   }
 
   openCardSelect(wave?: number): void {
     if (this.ended) return;
-    const choices = this.mutations.roll(3);
+    const offers = this.mutations.roll(this.waves.wave);
     this.scene.launch('CardSelect', {
       wave,
-      choices: choices.map((c) => ({ ...c, stacks: this.mutations.stacks(c.id) })),
-      onPick: (id: string) => {
-        this.mutations.add(id);
+      offers: offers.map((o) => ({ ...o, owned: this.mutations.value(o.def.id) })),
+      onPick: (index: number) => {
+        const o = offers[index];
+        this.mutations.add(o.def.id, RARITY[o.rarity].mult);
         this.buffs.recompute();
         this.crucible.emit('changed');
         this.buffs.emit('changed', false);
@@ -365,38 +362,46 @@ export class GameScene extends Phaser.Scene {
   summary(): RunSummary {
     const passives: RunSummary['passives'] = [];
     for (const [id, n] of this.buffs.stacks) {
-      const r = Object.values(RECIPES).find((x) => x.id === id);
-      const L = LEGENDARIES.find((x) => x.id === id);
-      if (r) passives.push({ name: r.name, stacks: n, color: r.color, legendary: false });
-      if (L) passives.push({ name: L.name, stacks: n, color: L.color, legendary: true });
+      if (id === 'tri_damage' || n <= 0) continue;
+      const l = moduleLabel(id, ELEMENT_MAP, MYTHICS);
+      passives.push({ name: l.name, stacks: n, color: l.color, mythic: l.mythic });
     }
-    passives.sort((a, b) => Number(b.legendary) - Number(a.legendary) || b.stacks - a.stacks);
+    passives.sort((a, b) => Number(b.mythic) - Number(a.mythic) || b.stacks - a.stacks);
     const st = this.buffs.stats;
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
     return {
+      character: this.character.name,
       drinks: this.buffs.drinks,
       elements: { ...this.buffs.elements },
       passives,
-      mutations: this.mutations.owned().map((m) => ({ name: m.def.name, icon: m.def.icon, stacks: m.stacks })),
+      mutations: this.mutations.owned().map((m) => ({
+        name: m.def.name, icon: m.def.icon, value: `${Math.round(m.value * 10) / 10}${m.def.unit}`,
+      })),
       stats: [
         ['最大血量', String(st.maxHp)],
         ['攻擊間隔', `${st.fireInterval.toFixed(2)} 秒`],
-        ['傷害', st.damage.toFixed(1)],
-        ['每次射擊', `${st.shots} 發`],
+        ['傷害', st.damage.toFixed(2)],
+        ['暴擊率', pct(st.critChance)],
         ['衝刺冷卻', `${st.dashCooldown.toFixed(2)} 秒`],
         ['移速', String(Math.round(st.speed))],
         ['命中附毒', `${st.poisonDps.toFixed(2)}/秒`],
-        ['命中減速', `${Math.round(st.slow * 100)}%`],
-        ['復活次數', String(this.buffs.revives)],
+        ['命中減速', pct(st.slow)],
+        ['冰凍率', pct(st.freezeChance)],
+        ['爆炸率', pct(st.explodeChance)],
+        ['連鎖率', pct(st.chainChance)],
+        ['彈射/穿透', `${st.bounces} / ${st.pierce}`],
       ],
     };
   }
 
   private onDefeat(): void {
     this.waves.phase = 'defeat';
+    this.unlocks.push(...ProgressStore.record({ wave: this.waves.wave }));
     this.endRun(false);
   }
 
   onVictory(): void {
+    this.unlocks.push(...ProgressStore.record({ bossKill: true }));
     this.endRun(true);
   }
 
@@ -410,6 +415,8 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       wave: this.waves.wave,
       discoveries: [...this.crucible.discoveredThisRun],
+      fissions: this.crucible.fissions,
+      unlocks: this.unlocks.map((c) => c.name),
       ...this.summary(),
     };
     this.hud.showBanner(victory ? '勝利！' : '倒下了…');

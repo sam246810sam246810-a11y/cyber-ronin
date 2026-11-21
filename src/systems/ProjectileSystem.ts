@@ -14,6 +14,7 @@ export interface BulletOptions {
   /** 命中時小範圍爆炸（混沌原液） */
   splash?: number;
   freezeChance?: number;
+  critChance?: number;
   /** 觸發藥水被動的 onHit（只有主武器） */
   triggerPassives?: boolean;
 }
@@ -104,8 +105,11 @@ export class ProjectileSystem {
     if (o.poison) e.applyPoison(o.poison.dps, o.poison.time);
     if (o.slow) e.applySlow(o.slow.factor, o.slow.time);
     if (o.freezeChance && Math.random() < o.freezeChance) e.applyFreeze(0.8);
-    if (o.triggerPassives) this.game.buffs.onHit(e);
-    e.takeDamage(b.damage);
+    const crit = !!o.critChance && Math.random() < o.critChance;
+    const dmg = crit ? b.damage * 2 : b.damage;
+    if (crit) this.game.fx.floatText(e.x, e.y - e.radius - 10, '暴擊', '#ffe14d', 16);
+    if (o.triggerPassives) this.game.buffs.onHit(e, dmg);
+    e.takeDamage(dmg);
     this.game.fx.sparks(b.x, b.y, o.color ?? COLORS.bullet, 3);
     if (o.splash) {
       this.game.effects.explode(b.x, b.y, o.splash, b.damage * 0.5, 0xe06bff);

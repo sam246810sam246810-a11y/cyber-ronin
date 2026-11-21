@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from '../config';
-import { LEGENDARIES, RECIPE_ORDER, legendaryKey } from '../data';
+import { MYTHICS, RECIPE_ORDER, mythicKey } from '../data';
 
-const ALL_KEYS = [...RECIPE_ORDER, ...LEGENDARIES.map((l) => legendaryKey(l.id))];
+const ALL_KEYS = [...RECIPE_ORDER, ...MYTHICS.map((m) => mythicKey(m.id))];
 
 /** 圖鑑解鎖紀錄（唯一會存進 localStorage 的資料） */
 class CodexStoreImpl {

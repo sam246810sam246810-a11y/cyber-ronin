@@ -28,12 +28,12 @@ export class Player {
   private readonly pointer: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Image;
 
-  constructor(private scene: Phaser.Scene, x: number, y: number) {
+  constructor(private scene: Phaser.Scene, x: number, y: number, private color: number = COLORS.player) {
     this.x = x;
     this.y = y;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.4).setScale(0.7, 0.35);
-    this.sprite = scene.add.image(x, y, 'circle').setDepth(DEPTH.player).setTint(COLORS.player)
-      .setDisplaySize(this.radius * 2, this.radius * 2);
+    this.sprite = scene.add.image(x, y, 'hero').setDepth(DEPTH.player).setTint(color)
+      .setDisplaySize(this.radius * 2.2, this.radius * 2.2);
     this.pointer = scene.add.image(x, y, 'triangle').setDepth(DEPTH.player + 1).setTint(0x7ed4ff).setDisplaySize(14, 14);
   }
 
@@ -81,13 +81,6 @@ export class Player {
     return true;
   }
 
-  /** 不死鳥之淚的復活 */
-  revive(hp: number): void {
-    this.hp = Math.min(this.maxHp, hp);
-    this.state = 'idle';
-    this.invulnTimer = 2;
-  }
-
   update(dt: number, moveX: number, moveY: number): void {
     if (this.state === 'dead') {
       this.sync();
@@ -127,7 +120,7 @@ export class Player {
     // 無敵時閃爍
     const blink = this.invulnTimer > 0 && this.state !== 'dash' && !this.godMode;
     this.sprite.setAlpha(blink ? (Math.floor(this.invulnTimer * 20) % 2 ? 0.3 : 1) : 1);
-    this.sprite.setTint(this.state === 'dash' ? 0x7ed4ff : this.hurtTimer > 0 ? 0xff6b6b : COLORS.player);
+    this.sprite.setTint(this.state === 'dash' ? 0x7ed4ff : this.hurtTimer > 0 ? 0xff6b6b : this.color);
     if (this.state === 'dead') this.sprite.setAlpha(0.3);
   }
 

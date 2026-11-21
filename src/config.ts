@@ -49,29 +49,53 @@ export const DROP = {
   blinkAt: 3,
 } as const;
 
-/** 煉成時裂變成傳說藥水 */
-export const FISSION = {
-  baseChance: 0.15,
-  perCatalyst: 0.08,
-  maxChance: 0.6,
+/** 稀有度：素材、藥水、突變卡、角色共用 */
+export const RARITY = [
+  { id: 'common', name: '普通', color: '#c9c9c9', mult: 1 },
+  { id: 'rare', name: '稀有', color: '#4da3ff', mult: 1.5 },
+  { id: 'epic', name: '史詩', color: '#b36bff', mult: 2 },
+  { id: 'legendary', name: '傳說', color: '#ffb84d', mult: 3 },
+] as const;
+/** 裂變產生的藥水稀有度 */
+export const MYTHIC = { name: '神話', color: '#ff4d6d' } as const;
+
+/** 素材稀有度權重（普通/稀有/史詩/傳說），每波往高稀有度偏移 */
+export const DROP_RARITY = {
+  normal: [80, 16, 3.5, 0.5],
+  elite: [30, 45, 20, 5],
+  perWave: [-1.6, 0.9, 0.5, 0.2],
 } as const;
 
-/** 喝下藥水時，每個藥材帶來的屬性成長 */
+/** 突變卡稀有度權重 */
+export const CARD_RARITY = {
+  base: [62, 27, 9, 2],
+  perWave: [-2.4, 1, 1, 0.4],
+} as const;
+
+/** 煉成時裂變成神話藥水 */
+export const FISSION = {
+  baseChance: 0.1,
+  /** 每個素材依稀有度增加的裂變率 */
+  perMaterial: [0, 0.03, 0.06, 0.12],
+  maxChance: 0.65,
+} as const;
+
+/** 喝下藥水時，每份素材帶來的屬性成長（份數 = 素材稀有度倍率） */
 export const ELEMENT = {
-  /** 果凍：衝刺冷卻 ×0.95、移速 +3%；每 3 個 +1 最大血量 */
   jellyDashMul: 0.95,
   jellySpeed: 0.03,
   jellyPerHeart: 3,
-  /** 冰晶：攻擊間隔 ×0.95、命中減速 +4% */
   iceFireMul: 0.95,
   iceSlow: 0.04,
-  /** 孢子：命中附毒每秒 +0.25 */
   sporePoison: 0.25,
-  maxHp: 12,
+  fireDamage: 0.05,
+  thunderCrit: 0.03,
+  maxHp: 14,
   minDashCooldown: 0.4,
   minFireInterval: 0.12,
   maxSpeedMul: 1.6,
   maxSlow: 0.5,
+  maxCrit: 0.6,
 } as const;
 
 export const WAVE = {
@@ -104,7 +128,8 @@ export const COLORS = {
 } as const;
 
 export const STORAGE_KEYS = {
-  codex: 'crucible-garden.codex.v1',
+  codex: 'crucible-garden.codex.v2',
+  progress: 'crucible-garden.progress.v1',
 } as const;
 
 export const FONT = "'PingFang TC','Noto Sans TC','Microsoft JhengHei','Heiti TC',system-ui,sans-serif";

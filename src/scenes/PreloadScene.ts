@@ -76,6 +76,27 @@ export class PreloadScene extends Phaser.Scene {
       g.fillStyle(0x3a9a46).fillCircle(24, 26, 5).fillCircle(40, 30, 6).fillCircle(30, 42, 4);
       g.fillStyle(0x7eff8a).fillCircle(12, 14, 6).fillCircle(54, 50, 5).fillCircle(52, 12, 4);
     });
+    gen('ing_F', 64, 64, () => {
+      g.fillStyle(0xff8a3d);
+      for (let i = 0; i < 5; i++) {
+        const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+        g.fillCircle(32 + Math.cos(a) * 14, 32 + Math.sin(a) * 14, 12);
+      }
+      g.fillStyle(0xffd166).fillCircle(32, 32, 9);
+      g.fillStyle(0xff4d1a).fillTriangle(32, 2, 40, 18, 24, 18);
+    });
+    gen('ing_T', 64, 64, () => {
+      g.fillStyle(0xfff4c2).fillRect(26, 32, 12, 26);
+      g.fillStyle(0xffe14d).fillEllipse(32, 28, 58, 34);
+      g.fillStyle(0x6a4a00).fillTriangle(34, 14, 24, 32, 32, 32);
+      g.fillTriangle(30, 30, 40, 30, 28, 46);
+    });
+    // 角色佔位圖（白色可上色）
+    gen('hero', 64, 64, () => {
+      g.fillStyle(0xffffff).fillCircle(32, 36, 24);
+      g.fillTriangle(10, 22, 54, 22, 32, -6);
+      g.fillStyle(0xcccccc).fillRect(8, 20, 48, 6);
+    });
     g.destroy();
 
     this.scene.start('MainMenu');

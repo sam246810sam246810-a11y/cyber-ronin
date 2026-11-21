@@ -1,11 +1,12 @@
 [
-  { "id": "concentrate", "name": "濃縮", "desc": "藥材的屬性加成 +25%", "icon": "✦" },
-  { "id": "spread", "name": "擴散", "desc": "藥水被動的範圍 +20%", "icon": "◎" },
-  { "id": "linger", "name": "延時", "desc": "週期型被動觸發加快 15%，場地效果 +1 秒", "icon": "⧗" },
-  { "id": "resonance", "name": "共鳴", "desc": "喝下三格同色藥水時，被動額外 +1 層", "icon": "❂" },
-  { "id": "catalyst", "name": "裂變催化", "desc": "煉成時裂變成傳說藥水的機率 +8%", "icon": "☢" },
-  { "id": "double_brew", "name": "雙倍釀造", "desc": "喝下時 20% 機率效果發揮兩次", "icon": "⚗" },
-  { "id": "rejuvenate", "name": "回春", "desc": "每喝一瓶藥水 25% 機率回復 1 點血", "icon": "♥" },
-  { "id": "harvest", "name": "豐收", "desc": "藥材掉落率 +10%", "icon": "✿" },
-  { "id": "magnet", "name": "磁吸", "desc": "藥材拾取範圍 +40%", "icon": "⊛" }
+  { "id": "concentrate", "name": "濃縮", "desc": "素材的屬性加成 +{v}", "icon": "✦", "base": 25, "unit": "%" },
+  { "id": "spread", "name": "擴散", "desc": "藥水被動的範圍 +{v}", "icon": "◎", "base": 20, "unit": "%" },
+  { "id": "linger", "name": "延時", "desc": "週期型被動加快 {v}", "icon": "⧗", "base": 15, "unit": "%" },
+  { "id": "resonance", "name": "共鳴", "desc": "喝下純色藥水時，核心被動額外 +{v} 層", "icon": "❂", "base": 0.5, "unit": "" },
+  { "id": "catalyst", "name": "裂變催化", "desc": "裂變成神話藥水的機率 +{v}", "icon": "☢", "base": 5, "unit": "%" },
+  { "id": "double_brew", "name": "雙倍釀造", "desc": "喝下時 {v} 機率效果發揮兩次", "icon": "⚗", "base": 15, "unit": "%" },
+  { "id": "rejuvenate", "name": "回春", "desc": "每喝一瓶藥水 {v} 機率回復 1 點血", "icon": "♥", "base": 20, "unit": "%" },
+  { "id": "harvest", "name": "豐收", "desc": "素材掉落率 +{v}", "icon": "✿", "base": 8, "unit": "%" },
+  { "id": "fortune", "name": "鑑寶", "desc": "掉落高稀有度素材的機率提高 {v}", "icon": "◆", "base": 20, "unit": "%" },
+  { "id": "magnet", "name": "磁吸", "desc": "素材拾取範圍 +{v}", "icon": "⊛", "base": 30, "unit": "%" }
 ]

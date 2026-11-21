@@ -1,7 +1,8 @@
 import type Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { CodexStore } from '../systems/CodexStore';
-import type { IngredientId } from '../types';
+import { ProgressStore } from '../systems/ProgressStore';
+import type { ElementId, RarityIndex } from '../types';
 
 /**
  * 開發用 debug 面板（DOM 疊層）。
@@ -44,14 +45,17 @@ export function installDebugPanel(game: Phaser.Game): void {
     panel.appendChild(b);
   };
 
-  const give = (id: IngredientId) => {
+  const give = (el: ElementId, r: RarityIndex) => {
     const g = getGame();
-    if (g) g.dropIngredient(g.player.x, g.player.y, id);
+    if (g) g.dropMaterial(g.player.x, g.player.y, { el, r });
   };
-
-  add('+果凍 J', () => give('J'));
-  add('+冰晶 I', () => give('I'));
-  add('+孢子 S', () => give('S'));
+  const rarityNames = ['普', '稀', '史', '傳'];
+  let giveRarity: RarityIndex = 0;
+  add('素材稀有度: 普', () => {
+    giveRarity = ((giveRarity + 1) % 4) as RarityIndex;
+    (panel.children[0] as HTMLButtonElement).textContent = `素材稀有度: ${rarityNames[giveRarity]}`;
+  });
+  (['J', 'I', 'S', 'F', 'T'] as ElementId[]).forEach((el) => add(`+${el}`, () => give(el, giveRarity)));
   add('下次必裂變', () => {
     const g = getGame();
     if (g) g.crucible.forceFission = true;
@@ -68,13 +72,17 @@ export function installDebugPanel(game: Phaser.Game): void {
     if (g) g.player.hp = g.player.maxHp;
   });
   add('解鎖全圖鑑', () => CodexStore.unlockAll());
-  add('重置圖鑑', () => CodexStore.reset());
+  add('解鎖全角色', () => ProgressStore.debugUnlockAll());
+  add('重置圖鑑/進度', () => {
+    CodexStore.reset();
+    ProgressStore.reset();
+  });
   panel.appendChild(status);
 
   const refresh = () => {
     const g = getGame();
     status.textContent = g
-      ? `波:${g.waves.wave} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}%`
+      ? `波:${g.waves.wave} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}% 角色:${g.character.name}`
       : `圖鑑:${CodexStore.count}/${CodexStore.total}（在遊戲中才能用大部分按鈕）`;
   };
 

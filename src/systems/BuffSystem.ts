@@ -1,12 +1,13 @@
 import Phaser from 'phaser';
-import { DROP, ELEMENT, PLAYER } from '../config';
+import { DROP, ELEMENT, PLAYER, RARITY } from '../config';
+import { ELEMENT_IDS } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { PASSIVES, type PassiveCtx } from '../potions/passives';
 import type { GameScene } from '../scenes/GameScene';
-import type { Brew, IngredientId } from '../types';
+import type { Brew, CharacterDef, ElementId } from '../types';
 import type { Zone } from './EffectSystem';
 
-/** 角色在本局的即時數值（由喝下的藥水、突變卡計算而來） */
+/** 角色在本局的即時數值 */
 export interface Stats {
   maxHp: number;
   speed: number;
@@ -19,48 +20,57 @@ export interface Stats {
   poisonDps: number;
   slow: number;
   freezeChance: number;
+  critChance: number;
+  explodeChance: number;
+  chainChance: number;
   splash: number;
   pickupRadius: number;
   dropChance: number;
+  /** 高稀有度素材掉落加成（倍率） */
+  fortune: number;
 }
 
-export function baseStats(): Stats {
+export function baseStats(c?: CharacterDef): Stats {
   return {
-    maxHp: PLAYER.hp,
-    speed: PLAYER.speed,
-    dashCooldown: PLAYER.dashCooldown,
-    fireInterval: PLAYER.fireInterval,
-    damage: PLAYER.bulletDamage,
+    maxHp: c?.stats.hp ?? PLAYER.hp,
+    speed: c?.stats.speed ?? PLAYER.speed,
+    dashCooldown: c?.stats.dashCooldown ?? PLAYER.dashCooldown,
+    fireInterval: c?.stats.fireInterval ?? PLAYER.fireInterval,
+    damage: c?.stats.damage ?? PLAYER.bulletDamage,
     shots: 1,
     pierce: 0,
     bounces: 0,
     poisonDps: 0,
     slow: 0,
     freezeChance: 0,
+    critChance: 0,
+    explodeChance: 0,
+    chainChance: 0,
     splash: 0,
-    pickupRadius: PLAYER.pickupRadius,
+    pickupRadius: PLAYER.pickupRadius * (1 + (c?.pickupBonus ?? 0)),
     dropChance: DROP.chance,
+    fortune: 1,
   };
 }
 
 /**
- * 喝下的藥水帶來的「本局永久」強化：
- * 1. 屬性：每個藥材各給一份數值（果凍＝血量/衝刺/移速、冰晶＝攻速/減速、孢子＝附毒）
- * 2. 被動：每種配方 / 傳說藥水的獨特效果，可疊層
+ * 喝下藥水的「本局永久」強化：
+ * 1. 屬性：每個素材依稀有度給「份數」（普通 1、稀有 1.5、史詩 2、傳說 3）
+ * 2. 被動模組：藥水依品質給層數，可疊加
  */
 export class BuffSystem extends Phaser.Events.EventEmitter {
-  elements: Record<IngredientId, number> = { J: 0, I: 0, S: 0 };
-  /** 被動 id → 層數（配方與傳說共用） */
+  elements: Record<ElementId, number> = { J: 0, I: 0, S: 0, F: 0, T: 0 };
   stacks = new Map<string, number>();
-  revives = 0;
   drinks = 0;
-  stats: Stats = baseStats();
+  bestQuality = 0;
+  stats: Stats;
   private periodT = new Map<string, number>();
   private shotIndex = 0;
   private aura?: Zone;
 
-  constructor(private game: GameScene) {
+  constructor(private game: GameScene, readonly character: CharacterDef) {
     super();
+    this.stats = baseStats(character);
   }
 
   stacksOf(id: string): number {
@@ -71,56 +81,69 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
     const m = this.game.mutations;
     return {
       game: this.game,
-      n: this.stacksOf(id),
-      area: 1 + 0.2 * m.stacks('spread'),
-      freq: Math.pow(0.85, m.stacks('linger')) * Math.pow(0.75, this.stacksOf('time_sand')),
-      linger: m.stacks('linger'),
+      n: this.stacksOf(id) * (this.character.moduleMul ?? 1),
+      area: 1 + m.value('spread') / 100,
+      freq: Math.pow(1 - 0.15, m.stacks('linger')) * Math.pow(0.75, this.stacksOf('time_sand')),
     };
   }
 
-  /** 喝下藥水 */
-  drink(brew: Brew): void {
-    const m = this.game.mutations;
-    const recipe = brew.kind === 'recipe' ? brew.recipe : brew.from;
-    const twice = Math.random() < Math.min(1, 0.2 * m.stacks('double_brew'));
-    const times = twice ? 2 : 1;
-    for (let t = 0; t < times; t++) {
-      for (const ch of recipe.key) this.elements[ch as IngredientId]++;
-      const id = brew.kind === 'recipe' ? brew.recipe.id : brew.legendary.id;
-      let add = 1;
-      if (brew.kind === 'recipe' && recipe.key[0] === recipe.key[1] && recipe.key[1] === recipe.key[2]) {
-        add += m.stacks('resonance');
-      }
-      this.stacks.set(id, this.stacksOf(id) + add);
-      this.drinks++;
-      this.recompute();
-      PASSIVES[id]?.onAcquire?.(this.ctx(id));
-    }
-    if (Math.random() < 0.25 * m.stacks('rejuvenate')) {
-      this.game.player.hp = Math.min(this.game.player.maxHp, this.game.player.hp + 1);
-      this.game.fx.floatText(this.game.player.x, this.game.player.y - 50, '+1 ♥', '#ff6b8a');
-    }
-    this.emit('changed', twice);
+  addModule(id: string, n: number): void {
+    this.stacks.set(id, this.stacksOf(id) + n);
+    this.recompute();
+    PASSIVES[id]?.onAcquire?.(this.ctx(id));
   }
 
-  /** 重新計算數值（喝藥、拿突變卡後呼叫） */
+  drink(brew: Brew): boolean {
+    const m = this.game.mutations;
+    const recipe = brew.kind === 'recipe' ? brew.recipe : brew.from;
+    const q = RARITY[brew.quality].mult;
+    const twice = Math.random() < m.value('double_brew') / 100;
+    for (let t = 0; t < (twice ? 2 : 1); t++) {
+      for (const mat of brew.mats) {
+        this.elements[mat.el] += RARITY[mat.r].mult * (this.character.elementBonus?.[mat.el] ?? 1);
+      }
+      if (brew.kind === 'recipe') {
+        for (const mod of recipe.modules) {
+          const extra = recipe.kind === 'pure' ? m.stacks('resonance') * 0.5 : 0;
+          this.stacks.set(mod.id, this.stacksOf(mod.id) + mod.n * q + extra);
+        }
+        if (recipe.damageBonus) this.stacks.set('tri_damage', this.stacksOf('tri_damage') + recipe.damageBonus * q);
+      } else {
+        this.stacks.set(brew.mythic.id, this.stacksOf(brew.mythic.id) + 1);
+      }
+      this.drinks++;
+      this.recompute();
+      const ids = brew.kind === 'recipe' ? recipe.modules.map((x) => x.id) : [brew.mythic.id];
+      ids.forEach((id) => PASSIVES[id]?.onAcquire?.(this.ctx(id)));
+    }
+    this.bestQuality = Math.max(this.bestQuality, brew.quality);
+    if (Math.random() < m.value('rejuvenate') / 100) {
+      const p = this.game.player;
+      p.hp = Math.min(p.maxHp, p.hp + 1);
+      this.game.fx.floatText(p.x, p.y - 50, '+1 ♥', '#ff6b8a');
+    }
+    this.emit('changed', twice);
+    return twice;
+  }
+
   recompute(): void {
     const m = this.game.mutations;
-    const s = baseStats();
-    const mul = 1 + 0.25 * m.stacks('concentrate');
-    const j = this.elements.J * mul;
-    const i = this.elements.I * mul;
-    const sp = this.elements.S * mul;
+    const s = baseStats(this.character);
+    const mul = 1 + m.value('concentrate') / 100;
+    const e = Object.fromEntries(ELEMENT_IDS.map((id) => [id, this.elements[id] * mul])) as Record<ElementId, number>;
 
-    s.dashCooldown *= Math.pow(ELEMENT.jellyDashMul, j);
-    s.speed *= Math.min(ELEMENT.maxSpeedMul, 1 + ELEMENT.jellySpeed * j);
-    s.maxHp += Math.floor(j / ELEMENT.jellyPerHeart);
-    s.fireInterval *= Math.pow(ELEMENT.iceFireMul, i);
-    s.slow = Math.min(ELEMENT.maxSlow, ELEMENT.iceSlow * i);
-    s.poisonDps = ELEMENT.sporePoison * sp;
+    s.dashCooldown *= Math.pow(ELEMENT.jellyDashMul, e.J);
+    s.speed *= Math.min(ELEMENT.maxSpeedMul, 1 + ELEMENT.jellySpeed * e.J);
+    s.maxHp += Math.floor(e.J / ELEMENT.jellyPerHeart);
+    s.fireInterval *= Math.pow(ELEMENT.iceFireMul, e.I);
+    s.slow = Math.min(ELEMENT.maxSlow, ELEMENT.iceSlow * e.I);
+    s.poisonDps = ELEMENT.sporePoison * e.S;
+    s.damage *= 1 + ELEMENT.fireDamage * e.F + this.stacksOf('tri_damage');
+    s.critChance = Math.min(ELEMENT.maxCrit, ELEMENT.thunderCrit * e.T);
 
-    s.dropChance += 0.1 * m.stacks('harvest');
-    s.pickupRadius *= 1 + 0.4 * m.stacks('magnet');
+    s.dropChance += m.value('harvest') / 100;
+    s.fortune += m.value('fortune') / 100;
+    s.pickupRadius *= 1 + m.value('magnet') / 100;
 
     for (const [id, n] of this.stacks) if (n > 0) PASSIVES[id]?.stats?.(s, this.ctx(id));
 
@@ -137,19 +160,18 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
     p.stats = s;
   }
 
-  /** 毒霧光環（瘟疫毒雲） */
   ensureAura(): void {
     if (this.aura && !this.aura.dead) return;
     this.aura = this.game.effects.addZone({
       x: this.game.player.x, y: this.game.player.y, radius: 80, duration: Infinity, color: 0x7eff8a,
       followPlayer: true, tickInterval: 0.5,
       onFrame: (_inside, _dt, z) => {
-        const c = this.ctx('plague_cloud');
+        const c = this.ctx('core_S');
         z.radius = (70 + 12 * c.n) * c.area;
       },
       onTick: (inside) => {
-        const n = this.stacksOf('plague_cloud');
-        inside.forEach((e) => e.takeDamage(0.4 * n, { flash: false }));
+        const n = this.ctx('core_S').n;
+        inside.forEach((en) => en.takeDamage(0.4 * n, { flash: false }));
       },
     });
   }
@@ -180,15 +202,19 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
     this.each((id, c) => PASSIVES[id]?.onShot?.(c, this.shotIndex));
   }
 
-  onHit(e: Enemy): void {
-    this.each((id, c) => PASSIVES[id]?.onHit?.(c, e));
+  /** 主武器命中：灼熱爆炸、帶電連鎖 */
+  onHit(e: Enemy, damage: number): void {
+    const s = this.stats;
+    const area = 1 + this.game.mutations.value('spread') / 100;
+    if (s.explodeChance > 0 && Math.random() < s.explodeChance) {
+      this.game.effects.explode(e.x, e.y, 50 * area, damage * 0.8, 0xff8a3d);
+    }
+    if (s.chainChance > 0 && Math.random() < s.chainChance) {
+      this.game.effects.chain(e.x, e.y, 3, 1.2 + damage * 0.3, 220 * area, 0xffe14d);
+    }
   }
 
   onKill(e: Enemy): void {
     this.each((id, c) => PASSIVES[id]?.onKill?.(c, e));
-  }
-
-  onDash(sx: number, sy: number, ex: number, ey: number): void {
-    this.each((id, c) => PASSIVES[id]?.onDash?.(c, sx, sy, ex, ey));
   }
 }
