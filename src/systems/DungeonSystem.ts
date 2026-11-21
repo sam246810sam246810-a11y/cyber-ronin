@@ -350,6 +350,11 @@ export class DungeonSystem {
   /** 走進某個方向的門 */
   go(dir: Dir): void {
     if (this.phase !== 'explore' || !this.current.doors[dir]) return;
+    // 時空裂縫：走房間的門就回到原本要去的房間（不再用傳送門）
+    if (this.inRift) {
+      this.leaveRift();
+      return;
+    }
     const d = DIRS[dir];
     const next = this.roomAt(this.current.gx + d.dx, this.current.gy + d.dy);
     if (!next) return;
@@ -358,18 +363,18 @@ export class DungeonSystem {
       this.forceRift = false;
       const kind: RoomType = Math.random() < 0.5 ? 'rift_past' : 'rift_future';
       this.riftReturn = { room: next, fromDir: d.opposite };
-      this.game.riftTransition(kind === 'rift_future', () => this.enterRift(kind));
+      this.game.riftTransition(kind === 'rift_future', () => this.enterRift(kind, dir));
       return;
     }
     this.game.transition(() => this.enter(next, d.opposite));
   }
 
-  private enterRift(kind: RoomType): void {
+  private enterRift(kind: RoomType, forward: Dir): void {
     const rift: Room = {
-      gx: -99, gy: -99, type: kind, depth: this.current.depth + 1, doors: {},
+      gx: -99, gy: -99, type: kind, depth: this.current.depth + 1, doors: { [forward]: true },
       visited: true, cleared: false, used: false, stash: [], weapons: [],
     };
-    this.enter(rift);
+    this.enter(rift, DIRS[forward].opposite);
     this.game.time.delayedCall(1200, () => {
       if (this.current === rift) this.startCombat(kind === 'rift_future');
     });

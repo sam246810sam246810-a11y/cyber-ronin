@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import {
   ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, DROP_RARITY, FONT, GAME_W, MYTHIC, RARITY, RIGHT, SAFE_X,
-  resetArenaToScreen, setArena,
+  resetArenaToScreen, setArena, ySortDepth,
 } from '../config';
 import { CHARACTERS, ELEMENT_IDS, ELEMENT_MAP, FUN, LOBBY_THEME, MYTHICS, RELIC_MAP, RIFT_THEMES, WEAPON_MAP, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
@@ -1125,7 +1125,9 @@ export class GameScene extends Phaser.Scene {
   }
 
   private spawnBox(x: number, y: number): void {
-    const sprite = this.add.image(x, y, 'box').setDisplaySize(84, 70).setDepth(DEPTH.pickup);
+    const art = this.textures.exists('obj_box');
+    const sprite = this.add.image(x, y, art ? 'obj_box' : 'box').setDisplaySize(art ? 120 : 84, art ? 106 : 70)
+      .setDepth(art ? ySortDepth(y + 30) : DEPTH.pickup);
     const label = this.add.text(x, y - 52, '紙箱（鑽進去躲 4 秒）', {
       fontFamily: FONT, fontSize: '15px', color: '#e8d0a8', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(DEPTH.pickup + 1);

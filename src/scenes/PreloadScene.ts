@@ -24,6 +24,8 @@ const ART_UI = [
   'proj_dart', 'proj_bomb', 'proj_spore',
   // 高細節手繪角色（綠幕去背，tools/sprite_pipeline.py）
   'hd_cat_apprentice', 'hd_mouse',
+  // 地圖物件（配合手工場景比例）
+  'obj_chest', 'obj_shop', 'obj_barter', 'obj_fountain', 'obj_altar', 'obj_stairs', 'obj_history', 'obj_shelf', 'obj_box',
 ];
 const KIT_JPG = ['gh_floor', 'gh_wall_back', 'gh_wall_side', 'gh_hedge'];
 const KIT_PNG = [

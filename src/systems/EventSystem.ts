@@ -1,24 +1,24 @@
 import Phaser from 'phaser';
-import { ARENA, DEPTH, FONT } from '../config';
+import { ARENA, DEPTH, FONT, ySortDepth } from '../config';
 import { ELEMENT_IDS, FUN, RELIC_MAP, WEAPON_MAP, hexToInt } from '../data';
 import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
 import type { Material, NpcKind, RarityIndex } from '../types';
 import { isArtTexture, pick } from '../utils';
 import { goldify } from '../ui/textStyle';
-import { isRift, type Room } from './DungeonSystem';
+import type { Room } from './DungeonSystem';
 import { Sound } from './SoundSystem';
 
 export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs' | 'npc' | 'portal'
   | 'statue' | 'cauldron' | 'shelf' | 'bookshelf' | 'start' | 'history' | 'knock';
 
 const INFO: Record<EventKind, { name: string; color: number; texture: string }> = {
-  chest: { name: '寶箱', color: 0xffd166, texture: 'chest' },
-  fountain: { name: '祈願泉', color: 0x7ed4ff, texture: 'fountain' },
-  merchant: { name: '以物易物商人', color: 0xc9a3ff, texture: 'merchant' },
-  shop: { name: '商店', color: 0x7eff8a, texture: 'merchant' },
-  altar: { name: '精英祭壇', color: 0xb36bff, texture: 'altar' },
-  stairs: { name: '樓梯', color: 0xffd166, texture: 'stairs' },
+  chest: { name: '寶箱', color: 0xffd166, texture: 'obj_chest' },
+  fountain: { name: '祈願泉', color: 0x7ed4ff, texture: 'obj_fountain' },
+  merchant: { name: '以物易物商人', color: 0xc9a3ff, texture: 'obj_barter' },
+  shop: { name: '商店', color: 0x7eff8a, texture: 'obj_shop' },
+  altar: { name: '精英祭壇', color: 0xb36bff, texture: 'obj_altar' },
+  stairs: { name: '樓梯', color: 0xffd166, texture: 'obj_stairs' },
   npc: { name: 'NPC', color: 0xffffff, texture: 'hero' },
   portal: { name: '時空門', color: 0x7ed4ff, texture: 'ring' },
   statue: { name: '', color: 0xffd166, texture: 'cat_apprentice' },
@@ -26,8 +26,13 @@ const INFO: Record<EventKind, { name: string; color: number; texture: string }> 
   shelf: { name: '聖物展示架', color: 0xffd166, texture: 'shelf' },
   bookshelf: { name: '配方圖鑑', color: 0x7ed4ff, texture: 'bookshelf' },
   start: { name: '出發冒險！', color: 0x7eff8a, texture: 'ring' },
-  history: { name: '時之石・改寫歷史', color: 0xe0c08a, texture: 'relic' },
-  knock: { name: '雜物架（衝刺撞翻）', color: 0xc8a070, texture: 'shelf' },
+  history: { name: '時之石・改寫歷史', color: 0xe0c08a, texture: 'obj_history' },
+  knock: { name: '雜物架（衝刺撞翻）', color: 0xc8a070, texture: 'obj_shelf' },
+};
+
+/** 地圖物件美術（配合場景比例，數字是顯示高度，寬度依圖片比例） */
+const ART_H: Partial<Record<EventKind, number>> = {
+  chest: 115, shop: 250, merchant: 220, fountain: 190, altar: 210, stairs: 170, history: 175, knock: 175, npc: 140,
 };
 
 const SIZES: Partial<Record<EventKind, [number, number]>> = {
@@ -42,6 +47,9 @@ interface RoomObject {
   t: number;
   /** 玩家離開範圍後才能再次觸發 */
   armed: boolean;
+  /** 碰觸範圍（大物件用）；still＝不上下飄 */
+  reach?: number;
+  still?: boolean;
   objs: Phaser.GameObjects.GameObject[];
   sprite: Phaser.GameObjects.Image;
   npc?: NpcKind;
@@ -72,7 +80,6 @@ export class EventSystem {
     if (room.type === 'elite' && !room.cleared) this.spawn('altar', cx, cy);
     if (room.type === 'exit') this.spawn('stairs', cx, cy);
     if (room.type === 'boss' && room.cleared) this.spawn('stairs', cx, cy);
-    if (isRift(room) && room.cleared) this.spawn('portal', cx, cy);
     if (room.type === 'rift_past' && room.cleared && !room.used) this.spawn('history', cx - 220, cy);
     if (room.shelf && !room.shelf.broken) this.spawn('knock', room.shelf.x, room.shelf.y);
     if (room.npc && !room.npcDone && room.cleared) this.spawn('npc', cx + 200, cy, room.npc);
@@ -89,10 +96,22 @@ export class EventSystem {
       }
       : base;
     const glow = this.game.add.image(x, y, 'circle').setTint(info.color).setAlpha(0.25).setDisplaySize(120, 120).setDepth(DEPTH.pickup);
-    const [sw, sh] = SIZES[kind] ?? [68, 68];
+    let [sw, sh] = SIZES[kind] ?? [68, 68];
+    const artH = ART_H[kind];
+    if (artH && isArtTexture(this.game, info.texture)) {
+      const src = this.game.textures.get(info.texture).getSourceImage() as HTMLImageElement;
+      sh = artH;
+      sw = (artH * src.width) / src.height;
+    }
     const ringKind = kind === 'portal' || kind === 'start';
     const tex = ringKind && isArtTexture(this.game, 'portal') ? 'portal' : info.texture;
     const sprite = this.game.add.image(x, y, tex).setDisplaySize(sw, sh).setDepth(DEPTH.pickup + 1);
+    // 場景比例的大物件：跟貓一起前後排序（走到攤位後面會被擋住），光暈改成貼地的淡光
+    const big = !!artH && isArtTexture(this.game, info.texture);
+    if (big) {
+      sprite.setDepth(kind === 'stairs' ? DEPTH.floor + 1 : ySortDepth(y + sh * 0.35));
+      glow.setPosition(x, y + sh * 0.38).setDisplaySize(sw * 1.05, sh * 0.32).setAlpha(0.18);
+    }
     if ((ringKind || npc === 'chatty_mushroom') && !isArtTexture(this.game, tex)) sprite.setTint(info.color);
     else if (kind === 'start') sprite.setTint(0xb8ffc0);
     // 還沒解鎖的貓咪雕像壓暗
@@ -102,17 +121,18 @@ export class EventSystem {
     }
     const labelObj = this.game.add.text(x, y - sh / 2 - 22, info.name, {
       fontFamily: FONT, fontSize: '22px', color: '#ffffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(DEPTH.pickup + 3);
+    }).setOrigin(0.5).setDepth(big ? DEPTH.projectile - 1 : DEPTH.pickup + 3);
     // 文字風格 A：物件名稱放在黃銅名牌上（雕像名稱已經很短，名牌一樣適用）
     const plate = isArtTexture(this.game, 'ui_nameplate') && info.name
       ? this.game.add.nineslice(x, y - sh / 2 - 22, 'ui_nameplate', undefined, labelObj.width + 46, 44, 30, 30, 20, 20)
-        .setDepth(DEPTH.pickup + 2)
+        .setDepth(big ? DEPTH.projectile - 2 : DEPTH.pickup + 2)
       : undefined;
     if (plate) goldify(labelObj, 'gold', 4).setFontSize(20);
-    this.game.tweens.add({ targets: glow, scale: glow.scale * 1.25, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
+    if (!big) this.game.tweens.add({ targets: glow, scale: glow.scale * 1.25, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
     const p = this.game.player;
     const near = (p.x - x) ** 2 + (p.y - y) ** 2 < 70 ** 2;
-    const o: RoomObject = { kind, x, y, t: 0, armed: !near, objs: plate ? [glow, sprite, plate, labelObj] : [glow, sprite, labelObj], sprite, npc, extra };
+    const o: RoomObject = { kind, x, y, t: 0, armed: !near, objs: plate ? [glow, sprite, plate, labelObj] : [glow, sprite, labelObj], sprite, npc, extra,
+      reach: big ? Math.max(48, Math.min(sw, sh) * 0.42) : undefined, still: big && kind !== 'npc' };
     this.list.push(o);
     if (kind === 'cauldron') {
       glow.setDisplaySize(300, 200);
@@ -139,8 +159,8 @@ export class EventSystem {
       o.t += dt;
       if (o.kind === 'portal' || o.kind === 'start') { /* 旋轉由 tween 處理 */ }
       else if (o.kind === 'stairs') o.sprite.setRotation(Math.sin(o.t) * 0.05);
-      else if (o.kind !== 'cauldron' && o.kind !== 'shelf' && o.kind !== 'bookshelf') o.sprite.setY(o.y + Math.sin(o.t * 3) * 4);
-      const reach = o.kind === 'cauldron' ? 90 : o.kind === 'shelf' || o.kind === 'bookshelf' ? 60 : 38;
+      else if (!o.still && o.kind !== 'cauldron' && o.kind !== 'shelf' && o.kind !== 'bookshelf') o.sprite.setY(o.y + Math.sin(o.t * 3) * (o.reach ? 2 : 4));
+      const reach = o.reach ?? (o.kind === 'cauldron' ? 90 : o.kind === 'shelf' || o.kind === 'bookshelf' ? 60 : 38);
       const inside = (p.x - o.x) ** 2 + (p.y - o.y) ** 2 < (p.radius + reach) ** 2;
       if (!inside) {
         o.armed = true;
