@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import {
   ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, DROP_RARITY, FONT, GAME_W, MYTHIC, RARITY, RIGHT, SAFE_X,
+  resetArenaToScreen, setArena,
 } from '../config';
 import { CHARACTERS, ELEMENT_IDS, ELEMENT_MAP, FUN, LOBBY_THEME, MYTHICS, RELIC_MAP, RIFT_THEMES, WEAPON_MAP, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
@@ -25,6 +26,8 @@ import { RelicPickup } from '../entities/RelicPickup';
 import { RelicSystem } from '../systems/RelicSystem';
 import { MetaStore } from '../systems/MetaStore';
 import { Dummy } from '../entities/enemies/Dummy';
+import { RoomRenderer } from '../systems/RoomRenderer';
+import { WORLD, activateLayout, corridorExit, entryPoint, generateLayout, inGrass, nearestFree, type RoomLayout } from '../systems/WorldSystem';
 import { TerrainSystem } from '../systems/TerrainSystem';
 import { GuardianFlower } from '../entities/Ally';
 import { HazardSystem } from '../systems/HazardSystem';
@@ -101,6 +104,13 @@ export class GameScene extends Phaser.Scene {
   private roomBg?: Phaser.GameObjects.Image;
   private roomArt = false;
   private doorSprites: Phaser.GameObjects.Image[] = [];
+  /** 大地圖 */
+  private roomRenderer!: RoomRenderer;
+  private camTarget!: Phaser.GameObjects.Zone;
+  private screenArena = { x: 0, y: 0, w: 0, h: 0 };
+  private uiPending: Phaser.GameObjects.GameObject[] = [];
+  private layoutSeed = 0;
+  private grassHidden = false;
   private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
@@ -130,6 +140,35 @@ export class GameScene extends Phaser.Scene {
 
   create(data?: { mode?: 'lobby' | 'run' }): void {
     this.mode = data?.mode ?? 'run';
+    // 大地圖狀態是模組層級的：每次進場景先回到「一個畫面」並關閉碰撞
+    resetArenaToScreen();
+    activateLayout(undefined);
+    WORLD.locked = false;
+    this.screenArena = { x: ARENA.x, y: ARENA.y, w: ARENA.w, h: ARENA.h };
+    this.layoutSeed = Math.floor(Math.random() * 1e6);
+    this.grassHidden = false;
+    this.cameras.main.stopFollow();
+    this.cameras.main.removeBounds();
+    this.cameras.main.setScroll(0, 0);
+    this.roomRenderer = new RoomRenderer(this);
+    this.camTarget = this.add.zone(0, 0, 1, 1);
+    // 介面（depth ≥ UI）固定在螢幕上，不跟著鏡頭捲動
+    this.uiPending = [];
+    const onAdded = (go: Phaser.GameObjects.GameObject) => this.uiPending.push(go);
+    const flushUi = () => {
+      if (!this.uiPending.length) return;
+      for (const go of this.uiPending) {
+        const o = go as unknown as { depth?: number; setScrollFactor?: (x: number, y?: number, c?: boolean) => void };
+        if ((o.depth ?? 0) >= DEPTH.ui - 5 && o.setScrollFactor) o.setScrollFactor(0, 0, true);
+      }
+      this.uiPending = [];
+    };
+    this.events.on(Phaser.Scenes.Events.ADDED_TO_SCENE, onAdded);
+    this.events.on(Phaser.Scenes.Events.PRE_RENDER, flushUi);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.events.off(Phaser.Scenes.Events.ADDED_TO_SCENE, onAdded);
+      this.events.off(Phaser.Scenes.Events.PRE_RENDER, flushUi);
+    });
     this.enemies = [];
     this.pickups = [];
     this.runTime = 0;
@@ -355,6 +394,8 @@ export class GameScene extends Phaser.Scene {
     this.terrain.update(dt, Math.hypot(move.x, move.y) > 0.1 || this.player.state === 'dash');
     this.allies.forEach((a) => a.update(dt));
     this.updateBox(dt);
+    this.updateGrass();
+    this.camTarget.setPosition(this.player.x, this.player.y - 40);
     this.updateTeaser(dt);
     this.dungeon.update(dt);
 
@@ -419,7 +460,7 @@ export class GameScene extends Phaser.Scene {
       const M = brew.mythic;
       const color = hexToInt(M.color);
       this.fx.burst(p.x, p.y, 160, color, 500);
-      this.fx.burst(this.crucibleBar.cx, this.crucibleBar.cy, 120, color, 500);
+      this.fx.burst(this.crucibleBar.cx + this.cameras.main.scrollX, this.crucibleBar.cy + this.cameras.main.scrollY, 120, color, 500);
       this.cameras.main.flash(250, 255, 120, 140);
       this.cameras.main.shake(200, 0.006);
       this.hud.showToast(`裂變！【${MYTHIC.name}】${M.name}`, M.desc, MYTHIC.color);
@@ -565,6 +606,12 @@ export class GameScene extends Phaser.Scene {
   private drawDoors(): void {
     const g = this.doorGfx;
     g.clear();
+    if (WORLD.active) {
+      // 大地圖的門就是牆上的拱門＋走廊，不另外畫
+      this.doorSprites.forEach((s) => s.destroy());
+      this.doorSprites = [];
+      return;
+    }
     const room = this.dungeon.current;
     if (!room) return;
     const theme = this.dungeon.region.theme;
@@ -621,6 +668,8 @@ export class GameScene extends Phaser.Scene {
 
   setDoorsLocked(locked: boolean): void {
     this.doorsLocked = locked;
+    WORLD.locked = locked && WORLD.active;
+    if (WORLD.active) this.roomRenderer.setBarriers(WORLD.layout, locked);
     this.drawDoors();
   }
 
@@ -633,6 +682,12 @@ export class GameScene extends Phaser.Scene {
 
   private checkDoors(): void {
     if (this.transitioning || this.dungeon.phase !== 'explore' || this.doorsLocked) return;
+    if (WORLD.active) {
+      // 大地圖：走進走廊夠深就到下一間
+      const dir = corridorExit(this.player.x, this.player.y);
+      if (dir) this.dungeon.go(dir);
+      return;
+    }
     const p = this.player;
     const room = this.dungeon.current;
     const half = 60;
@@ -687,6 +742,24 @@ export class GameScene extends Phaser.Scene {
     }
     room.stash = [];
 
+    // 大地圖：冒險中的房間都是可探索的大房間；大廳維持一個畫面
+    const worldRoom = this.mode === 'run' && room.type !== 'lobby';
+    if (worldRoom) {
+      this.enterWorldRoom(room, fromDir);
+      this.terrain.load(room.terrain ?? []);
+      this.clearRoomExtras();
+      if (room.box) this.spawnBox(room.box.x, room.box.y);
+      this.refreshModText();
+      this.doorsLocked = false;
+      this.drawDoors();
+      this.encounters.setupRoom(room);
+      this.minimap.draw();
+      this.hud.setInfoY(this.minimap.bottom);
+      if (room.type === 'exit') this.tutorial.notify('stairs');
+      if (room.type === 'shop') this.tutorial.notify('shop');
+      return;
+    }
+    this.leaveWorld();
     const cx = (ARENA.x + ARENA_RIGHT) / 2;
     const inset = 70;
     const p = this.player;
@@ -713,6 +786,67 @@ export class GameScene extends Phaser.Scene {
     if (room.type === 'shop') this.tutorial.notify('shop');
   }
 
+  /** 建立／套用大房間：碰撞、可走範圍、積木畫面、鏡頭跟隨，玩家出現在剛走出的門口 */
+  private enterWorldRoom(room: Room, fromDir?: Dir): void {
+    if (!room.layout) {
+      room.layout = generateLayout(room, this.layoutSeed + this.dungeon.floor * 31 + this.dungeon.regionIndex * 977, GAME_W);
+      this.remapDecor(room, room.layout);
+    }
+    const l = room.layout;
+    activateLayout(l);
+    WORLD.locked = false;
+    setArena(l.interior.x, l.interior.y, l.interior.w, l.interior.h);
+    // 舊的單畫面背景收掉
+    this.arenaGfx?.destroy();
+    this.arenaGfx = undefined;
+    this.roomBg?.destroy();
+    this.roomBg = undefined;
+    this.floorSprite?.destroy();
+    this.floorSprite = undefined;
+    this.vignette?.destroy();
+    this.vignette = undefined;
+    this.drawnTheme = undefined;
+    const region = this.dungeon.region;
+    const theme = room.type === 'rift_past' ? RIFT_THEMES.past : room.type === 'rift_future' ? RIFT_THEMES.future : region.theme;
+    // 目前只有溫室有專屬積木；其他區域先把溫室積木染成該區色調
+    const tint = room.type === 'rift_past' ? 0xd8b070 : room.type === 'rift_future' ? 0x9a80ff
+      : region.id === 'lava' ? 0xffa080 : region.id === 'storm' ? 0x9aa0ff : undefined;
+    this.roomRenderer.build(l, theme, 'gh', tint);
+    const p = this.player;
+    const i = l.interior;
+    const start = fromDir ? entryPoint(fromDir) : { x: i.x + i.w / 2, y: i.y + i.h * 0.62 };
+    p.setPosition(start.x, start.y);
+    const cam = this.cameras.main;
+    cam.setBounds(l.world.x, l.world.y, l.world.w, l.world.h);
+    this.camTarget.setPosition(p.x, p.y - 40);
+    cam.startFollow(this.camTarget, true, 0.14, 0.14);
+    cam.centerOn(p.x, p.y - 40);
+  }
+
+  /** 回到單畫面模式（大廳） */
+  private leaveWorld(): void {
+    if (!WORLD.active) return;
+    activateLayout(undefined);
+    WORLD.locked = false;
+    resetArenaToScreen();
+    this.roomRenderer.clear();
+    this.cameras.main.stopFollow();
+    this.cameras.main.removeBounds();
+    this.cameras.main.setScroll(0, 0);
+  }
+
+  /** 樓層產生時的地形／紙箱／雜物架是用單畫面座標放的：第一次進大房間時等比放大並避開擋路物 */
+  private remapDecor(room: Room, l: RoomLayout): void {
+    const S = this.screenArena;
+    const i = l.interior;
+    const map = (x: number, y: number, r: number) => nearestFree(
+      i.x + ((x - S.x) / S.w) * i.w, i.y + ((y - S.y) / S.h) * i.h, r,
+    );
+    room.terrain?.forEach((t) => Object.assign(t, map(t.x, t.y, t.r)));
+    if (room.box) room.box = map(room.box.x, room.box.y, 60);
+    if (room.shelf) Object.assign(room.shelf, map(room.shelf.x, room.shelf.y, 60));
+  }
+
   onRoomCleared(room: Room): void {
     this.allies.forEach((a) => a.destroy());
     this.allies = [];
@@ -722,7 +856,7 @@ export class GameScene extends Phaser.Scene {
     if (room.type === 'elite') this.addSand(3);
     if (room.type === 'rift_past') this.addSand(5);
     if (room.type === 'rift_future') this.addSand(8);
-    if (room.type === 'elite' && Math.random() < 0.5) this.dropRelic(GAME_W / 2 + 140, ARENA.y + ARENA.h / 2);
+    if (room.type === 'elite' && Math.random() < 0.5) this.dropRelic(ARENA.x + ARENA.w / 2 + 140, ARENA.y + ARENA.h / 2);
     this.buffs.commitRoom();
     this.projectiles.clearEnemyBullets();
     const cx = (ARENA.x + ARENA_RIGHT) / 2;
@@ -773,8 +907,8 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.clearEnemyBullets();
     this.hazards.clear();
     this.showBanner(`${region.name} 突破！`);
-    for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2 + 80, undefined, true);
-    this.dropWeapon(GAME_W / 2, ARENA.y + ARENA.h / 2 - 140, undefined, 2);
+    for (let i = 0; i < 3; i++) this.dropMaterial(ARENA.x + ARENA.w / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2 + 80, undefined, true);
+    this.dropWeapon(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2 - 140, undefined, 2);
     this.dropRelic(GAME_W / 2 + 160, ARENA.y + ARENA.h / 2 - 140, undefined, 1);
     this.minimap.draw();
     this.hud.setInfoY(this.minimap.bottom);
@@ -950,6 +1084,20 @@ export class GameScene extends Phaser.Scene {
     this.box = { x, y, time: 4, sprite, label };
   }
 
+  /** 草叢：躲進去敵人就找不到（跟紙箱一樣，但沒有時間限制） */
+  private updateGrass(): void {
+    const p = this.player;
+    const inside = WORLD.active && inGrass(p.x, p.y);
+    if (inside && !this.grassHidden) this.fx.floatText(p.x, p.y - 90, '躲進草叢', '#9bff8a', 18);
+    if (inside) {
+      this.playerHidden = true;
+      p.sprite.setAlpha(Math.min(p.sprite.alpha, 0.55));
+    } else if (this.grassHidden && !(this.box && this.box.time > 0 && Math.abs(p.x - this.box.x) < 40 && Math.abs(p.y - this.box.y) < 34)) {
+      this.playerHidden = false;
+    }
+    this.grassHidden = inside;
+  }
+
   private updateBox(dt: number): void {
     const b = this.box;
     if (!b) return;
@@ -979,7 +1127,7 @@ export class GameScene extends Phaser.Scene {
     const active = this.roomMod === 'teaser' && !this.dungeon.current.cleared && this.dungeon.combatActive;
     if (!active) return;
     if (!this.teaser) {
-      this.teaser = { sprite: this.add.image(GAME_W / 2, ARENA.y + 200, 'teaser').setDisplaySize(60, 80).setDepth(DEPTH.player + 2), t: 0 };
+      this.teaser = { sprite: this.add.image(this.player.x, this.player.y - 220, 'teaser').setDisplaySize(60, 80).setDepth(DEPTH.player + 2), t: 0 };
     }
     const t = this.teaser;
     t.t += dt;

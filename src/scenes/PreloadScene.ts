@@ -24,6 +24,11 @@ const ART_UI = [
   // 高細節手繪角色（綠幕去背，tools/sprite_pipeline.py）
   'hd_cat_apprentice', 'hd_mouse',
 ];
+const KIT_JPG = ['gh_floor', 'gh_wall_back', 'gh_wall_side', 'gh_hedge'];
+const KIT_PNG = [
+  'gh_arch_n', 'gh_arch_side', 'gh_wall_block', 'gh_table', 'gh_pond', 'gh_planter', 'gh_pillar', 'gh_shelf', 'gh_crates',
+  'gh_statue', 'gh_grass',
+];
 /** 選單畫面背景（jpg） */
 const ART_BGS = ['bg_menu', 'bg_meta', 'bg_relic', 'bg_codex', 'bg_win', 'bg_lose'];
 /** 會循環播放的特效（其他特效播一次就消失） */
@@ -43,6 +48,9 @@ export class PreloadScene extends Phaser.Scene {
     for (const k of ART_ROOMS) this.load.image(k, `art/${k}.jpg`);
     for (const k of ART_UI) this.load.image(k, `art/${k}.png`);
     for (const k of ART_BGS) this.load.image(k, `art/${k}.jpg`);
+    // 大地圖積木（溫室區 gh_*）：可平鋪的牆是 jpg，其餘透明 png
+    for (const k of KIT_JPG) this.load.image(k, `art/${k}.jpg`);
+    for (const k of KIT_PNG) this.load.image(k, `art/${k}.png`);
     // 圖示圖集：聖物、突變卡、坩堝升級、神話藥水、小地圖房間（frame 名稱見 icons.json）
     this.load.atlas('icons', 'art/icons.png', 'art/icons.json');
     // 動畫：Higgsfield 產生的 GIF 轉成橫向 spritesheet

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, DEPTH, FONT, GAME_W } from '../config';
+import { ARENA, DEPTH, FONT } from '../config';
 import { ELEMENT_IDS, FUN, RELIC_MAP, WEAPON_MAP, hexToInt } from '../data';
 import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
@@ -64,7 +64,7 @@ export class EventSystem {
   /** 進入房間時依房型建立物件 */
   setupRoom(room: Room): void {
     this.clear();
-    const cx = GAME_W / 2;
+    const cx = ARENA.x + ARENA.w / 2;
     const cy = ARENA.y + ARENA.h / 2;
     if (room.type === 'treasure' && !room.used) this.spawn('chest', cx, cy);
     if (room.type === 'event' && !room.used && room.eventKind) this.spawn(room.eventKind, cx, cy);
@@ -78,7 +78,7 @@ export class EventSystem {
     if (room.npc && !room.npcDone && room.cleared) this.spawn('npc', cx + 200, cy, room.npc);
   }
 
-  spawn(kind: EventKind, x = GAME_W / 2, y = ARENA.y + ARENA.h / 2, npc?: NpcKind, extra?: string, label?: string): void {
+  spawn(kind: EventKind, x = ARENA.x + ARENA.w / 2, y = ARENA.y + ARENA.h / 2, npc?: NpcKind, extra?: string, label?: string): void {
     const base = { ...INFO[kind], ...(kind === 'statue' && extra ? { texture: `cat_${extra}` } : {}), ...(label ? { name: label } : {}) };
     const nd = npc ? FUN.npcs[npc] : undefined;
     const info = nd

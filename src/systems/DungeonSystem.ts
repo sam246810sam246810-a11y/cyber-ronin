@@ -1,4 +1,5 @@
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DIFFICULTY, RARITY } from '../config';
+import { WORLD, isFree, nearestFree, type RoomLayout } from './WorldSystem';
 import { ENEMIES, FLOORS_PER_REGION, FUN, REGIONS } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { FlowerBoss } from '../entities/bosses/FlowerBoss';
@@ -64,6 +65,8 @@ export interface Room {
   terrain?: TerrainPatch[];
   /** 紙箱位置（貓咪天性） */
   box?: { x: number; y: number };
+  /** 大地圖：房間形狀與擺設（第一次進房時產生，之後固定） */
+  layout?: RoomLayout;
   /** 可撞翻的雜物架 */
   shelf?: { x: number; y: number; broken: boolean };
 }
@@ -536,6 +539,7 @@ export class DungeonSystem {
     }
     x = Math.max(ARENA.x + r, Math.min(ARENA_RIGHT - r, x));
     y = Math.max(ARENA.y + r, Math.min(ARENA_BOTTOM - r, y));
+    if (WORLD.active) ({ x, y } = nearestFree(x, y, r + 6));
     this.pendingSpawns++;
     const sx = x;
     const sy = y;
@@ -569,9 +573,12 @@ export class DungeonSystem {
   private randomPoint(minDist: number): { x: number; y: number } {
     const p = this.game.player;
     let pt = { x: 0, y: 0 };
-    for (let i = 0; i < 16; i++) {
+    // 大房間：怪物在玩家附近（約一個畫面內）出現，不會生在看不到的遠方
+    const maxDist = WORLD.active ? 760 : Infinity;
+    for (let i = 0; i < 24; i++) {
       pt = { x: rand(ARENA.x + 50, ARENA_RIGHT - 50), y: rand(ARENA.y + 50, ARENA_BOTTOM - 50) };
-      if (dist(pt.x, pt.y, p.x, p.y) >= minDist) break;
+      const d = dist(pt.x, pt.y, p.x, p.y);
+      if (d >= minDist && d <= maxDist && (!WORLD.active || isFree(pt.x, pt.y, 30))) break;
     }
     return pt;
   }

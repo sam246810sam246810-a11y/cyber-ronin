@@ -4,6 +4,7 @@ import { hexToInt } from '../data';
 import type { EnemyDef } from '../types';
 import type { GameScene } from '../scenes/GameScene';
 import { clamp, isArtTexture } from '../utils';
+import { WORLD, resolveCircle } from '../systems/WorldSystem';
 
 export interface DamageOptions {
   /** 是否觸發受擊閃白與傷害數字（持續傷害不觸發） */
@@ -130,8 +131,14 @@ export abstract class Enemy {
 
     if (!this.frozen) this.act(dt);
 
-    this.x = clamp(this.x, ARENA.x + this.radius, ARENA_RIGHT - this.radius);
-    this.y = clamp(this.y, ARENA.y + this.radius, ARENA_BOTTOM - this.radius);
+    if (WORLD.active) {
+      const r = resolveCircle(this.x, this.y, this.radius, false);
+      this.x = r.x;
+      this.y = r.y;
+    } else {
+      this.x = clamp(this.x, ARENA.x + this.radius, ARENA_RIGHT - this.radius);
+      this.y = clamp(this.y, ARENA.y + this.radius, ARENA_BOTTOM - this.radius);
+    }
     this.sync(dt);
   }
 

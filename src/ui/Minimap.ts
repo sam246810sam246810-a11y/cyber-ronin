@@ -42,7 +42,7 @@ export class Minimap {
     this.cym = 84 + this.R;
     if (this.art) {
       this.frame = scene.add.image(this.cxm, this.cym, 'ui_minimap').setDisplaySize(this.R * 2, this.R * 2).setDepth(DEPTH.ui + 4);
-      const maskShape = scene.make.graphics({}, false).fillCircle(this.cxm, this.cym, this.R * 0.8);
+      const maskShape = scene.make.graphics({}, false).fillCircle(this.cxm, this.cym, this.R * 0.8).setScrollFactor(0);
       this.gfx.setMask(maskShape.createGeometryMask());
       this.bottom = this.cym + this.R;
     }

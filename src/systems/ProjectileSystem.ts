@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { isArtTexture } from '../utils';
+import { blocksShot } from './WorldSystem';
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, PLAYER } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
@@ -135,6 +136,12 @@ export class ProjectileSystem {
           this.expire(b);
           continue;
         }
+      }
+      // 撞到桌子、牆塊、石柱：子彈消失並噴一點火花（水池不擋）
+      if (!b.returning && !b.dead && blocksShot(b.x, b.y)) {
+        this.game.fx.sparks(b.x, b.y, b.friendly ? b.opts.color ?? COLORS.bullet : 0xffd0a0, 4);
+        b.dead = true;
+        continue;
       }
       if (!b.returning && (b.x < ARENA.x - 20 || b.x > ARENA_RIGHT + 20 || b.y < ARENA.y - 20 || b.y > ARENA_BOTTOM + 20)) {
         if (b.opts.boomerang) {

@@ -211,3 +211,18 @@ export const DIFFICULTY = {
   attackRatePerFloor: 0.97,
   budgetPerFloor: 0.02,
 } as const;
+
+/** 大地圖：把可走範圍設成目前房間內部（世界座標），換房時呼叫 */
+export function setArena(x: number, y: number, w: number, h: number): void {
+  ARENA.x = x;
+  ARENA.y = y;
+  ARENA.w = w;
+  ARENA.h = h;
+  ARENA_RIGHT = x + w;
+  ARENA_BOTTOM = y + h;
+}
+
+/** 回到「一個畫面一間房」（大廳用） */
+export function resetArenaToScreen(): void {
+  relayout();
+}

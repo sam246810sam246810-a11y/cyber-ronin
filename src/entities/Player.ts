@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, PLAYER, ySortDepth } from '../config';
+import { WORLD, resolveCircle } from '../systems/WorldSystem';
 import { clamp } from '../utils';
 import { baseStats, type Stats } from '../systems/BuffSystem';
 
@@ -164,8 +165,15 @@ export class Player {
       }
     }
 
-    this.x = clamp(this.x, ARENA.x + this.radius, ARENA_RIGHT - this.radius);
-    this.y = clamp(this.y, ARENA.y + this.radius, ARENA_BOTTOM - this.radius);
+    if (WORLD.active) {
+      // 大地圖：房間內部＋（門沒鎖時）走廊，並被桌子、牆塊等擋住
+      const r = resolveCircle(this.x, this.y, this.radius, !WORLD.locked);
+      this.x = r.x;
+      this.y = r.y;
+    } else {
+      this.x = clamp(this.x, ARENA.x + this.radius, ARENA_RIGHT - this.radius);
+      this.y = clamp(this.y, ARENA.y + this.radius, ARENA_BOTTOM - this.radius);
+    }
     this.lastDt = dt;
     this.sync();
   }
