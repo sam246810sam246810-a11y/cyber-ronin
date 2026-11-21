@@ -100,6 +100,7 @@ export class GameScene extends Phaser.Scene {
   private floorSprite?: Phaser.GameObjects.TileSprite;
   private roomBg?: Phaser.GameObjects.Image;
   private roomArt = false;
+  private doorSprites: Phaser.GameObjects.Image[] = [];
   private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
@@ -145,6 +146,7 @@ export class GameScene extends Phaser.Scene {
     this.quest = undefined;
     this.darkness = undefined;
     this.drawnTheme = undefined;
+    this.doorSprites = [];
     this.vignette = undefined;
     this.unlocks = [];
     this.character = ProgressStore.selected;
@@ -400,6 +402,7 @@ export class GameScene extends Phaser.Scene {
     }
     this.buffs.drink(brew);
     this.tutorial.notify('drink');
+    this.fx.anim('vfx_aura', this.player.x, this.player.y - 20, 190);
     if (brew.kind === 'mythic') {
       this.unlocks.push(...ProgressStore.record({ fission: true }));
       Sound.play('fission');
@@ -574,8 +577,26 @@ export class GameScene extends Phaser.Scene {
       w: [ARENA.x - 12, cy - W / 2, 16, W],
       e: [ARENA_RIGHT - 4, cy - W / 2, 16, W],
     };
+    this.doorSprites.forEach((s) => s.destroy());
+    this.doorSprites = [];
+    const portalArt = this.roomArt && this.textures.exists('door_open') && this.textures.exists('door_locked');
     for (const dir of Object.keys(DIRS) as Dir[]) {
       if (!room.doors[dir]) continue;
+      if (portalArt) {
+        // 時鐘齒輪傳送門：開著是藍色漩渦，鎖住是紅色沙漏封印。左右兩側壓扁一點做出透視感
+        const key = this.doorsLocked ? 'door_locked' : 'door_open';
+        const pos: Record<Dir, [number, number, number, number]> = {
+          n: [cx, ARENA.y + 22, 156, 156],
+          s: [cx, 736, 128, 128],
+          w: [ARENA.x + 26, cy - 70, 70, 128],
+          e: [ARENA_RIGHT - 26, cy - 70, 70, 128],
+        };
+        const [px, py, pw, ph] = pos[dir];
+        const s = this.add.image(px, py, key).setOrigin(0.5, 1).setDisplaySize(pw, ph).setDepth(DEPTH.floor + 2);
+        if (!this.doorsLocked) this.tweens.add({ targets: s, alpha: 0.82, duration: 700, yoyo: true, repeat: -1 });
+        this.doorSprites.push(s);
+        continue;
+      }
       const [x, y, w, h] = rects[dir];
       if (this.roomArt) {
         // 背景圖上的門：後牆挖一個拱門，其餘三邊是發光的出入口

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { DEPTH } from '../config';
 
 /** 浮動虛擬搖桿：在指定區域內按下就出現 */
@@ -18,10 +19,12 @@ export class Joystick {
     private restX: number,
     private restY: number,
   ) {
-    this.base = scene.add.image(restX, restY, 'ring').setDepth(DEPTH.ui).setAlpha(0.25)
-      .setDisplaySize(this.radius * 2, this.radius * 2);
-    this.knob = scene.add.image(restX, restY, 'circle').setDepth(DEPTH.ui + 1).setAlpha(0.5).setTint(0xc9a3ff)
-      .setDisplaySize(56, 56);
+    const art = isArtTexture(scene, 'ui_joy_base');
+    this.base = scene.add.image(restX, restY, art ? 'ui_joy_base' : 'ring').setDepth(DEPTH.ui).setAlpha(0.6)
+      .setDisplaySize(this.radius * (art ? 2.3 : 2), this.radius * (art ? 2.3 : 2));
+    this.knob = art
+      ? scene.add.image(restX, restY, 'ui_joy_knob').setDepth(DEPTH.ui + 1).setAlpha(0.5).setDisplaySize(60, 60)
+      : scene.add.image(restX, restY, 'circle').setDepth(DEPTH.ui + 1).setAlpha(0.5).setTint(0xc9a3ff).setDisplaySize(56, 56);
 
     scene.input.on('pointerdown', this.onDown, this);
     scene.input.on('pointermove', this.onMove, this);
@@ -45,7 +48,7 @@ export class Joystick {
     this.pointerId = p.id;
     this.ox = p.x;
     this.oy = p.y;
-    this.base.setPosition(p.x, p.y).setAlpha(0.6);
+    this.base.setPosition(p.x, p.y).setAlpha(0.85);
     this.knob.setPosition(p.x, p.y).setAlpha(0.9);
   }
 
@@ -69,7 +72,7 @@ export class Joystick {
     if (p.id !== this.pointerId) return;
     this.pointerId = null;
     this.x = this.y = 0;
-    this.base.setPosition(this.restX, this.restY).setAlpha(0.35);
-    this.knob.setPosition(this.restX, this.restY).setAlpha(0.5);
+    this.base.setPosition(this.restX, this.restY).setAlpha(0.6);
+    this.knob.setPosition(this.restX, this.restY).setAlpha(0.75);
   }
 }

@@ -40,7 +40,9 @@ export abstract class Enemy {
   private knockVY = 0;
   private hitFlash = 0;
 
-  readonly sprite: Phaser.GameObjects.Image;
+  readonly sprite: Phaser.GameObjects.Sprite;
+  private atkKey?: string;
+  private runKey?: string;
   protected readonly shadow: Phaser.GameObjects.Image;
   private readonly eliteRing?: Phaser.GameObjects.Image;
   private readonly hpBar: Phaser.GameObjects.Graphics;
@@ -70,9 +72,17 @@ export abstract class Enemy {
         .setDisplaySize(this.radius * 2.6, this.radius * 2.6);
     }
     // 圖比碰撞範圍大一點，比較好辨認
-    this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
+    if (scene.anims.exists(`run_${texture}`)) this.runKey = `run_${texture}`;
+    if (scene.anims.exists(`atk_${texture}`)) this.atkKey = `atk_${texture}`;
+    this.sprite = scene.add.sprite(x, y, this.runKey ?? texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
       .setDisplaySize(this.radius * 3.4, this.radius * 3.4);
     this.hpBar = scene.add.graphics().setDepth(DEPTH.projectile - 1);
+    if (this.runKey) {
+      this.sprite.play({ key: this.runKey, startFrame: Math.floor(Math.random() * 6) });
+      this.sprite.on('animationcomplete', (a: Phaser.Animations.Animation) => {
+        if (a.key === this.atkKey && this.runKey) this.sprite.play(this.runKey);
+      });
+    }
 
     // 出場動畫
     this.sprite.setScale(0);
@@ -153,6 +163,11 @@ export abstract class Enemy {
     this.y += (dy / d) * step;
   }
 
+  /** Boss 出招時播攻擊動畫 */
+  playAttack(): void {
+    if (this.atkKey && this.alive) this.sprite.play(this.atkKey);
+  }
+
   takeDamage(amount: number, opts: DamageOptions = {}): void {
     if (!this.alive || amount <= 0) return;
     amount = this.absorb(amount, opts);
@@ -162,6 +177,7 @@ export abstract class Enemy {
     if (opts.flash !== false) {
       this.hitFlash = 0.08;
       this.game.fx.damageNumber(this.x, this.y - this.radius, amount, !!opts.crit);
+      this.game.fx.anim('vfx_hit', this.x + (Math.random() - 0.5) * this.radius, this.y - this.radius * 0.4, opts.crit ? 78 : 54);
     }
     if (this.hp <= 0) {
       this.hp = 0;
@@ -219,6 +235,7 @@ export abstract class Enemy {
     this.alive = false;
     this.game.telegraphs.cancelOwner(this);
     this.game.onEnemyKilled(this);
+    this.game.fx.anim('vfx_poof', this.x, this.y - this.radius * 0.3, this.radius * 3.4);
     this.destroy();
   }
 

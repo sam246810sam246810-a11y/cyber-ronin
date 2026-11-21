@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { COLORS, FONT, GAME_H, GAME_W } from '../config';
 import { hexToInt } from '../data';
 import { Sound } from '../systems/SoundSystem';
@@ -66,7 +67,10 @@ export class EventScene extends Phaser.Scene {
       const x = GAME_W / 2 + (i - (n - 1) / 2) * (cw + gap);
       const y = 400;
       const c = hexToInt(d.color);
-      const bg = this.add.rectangle(0, 0, cw, 260, COLORS.panel, 1).setStrokeStyle(4, c, o.enabled ? 1 : 0.25);
+      const art = isArtTexture(this, 'ui_dialog');
+      const frame = art ? this.add.nineslice(0, -28, 'ui_dialog', undefined, cw + 24, 360, 60, 60, 90, 40) : this.add.rectangle(0, 0, 1, 1, 0, 0);
+      const bg = this.add.rectangle(0, 8, art ? cw - 40 : cw, art ? 230 : 260, COLORS.panel, art ? 0 : 1)
+        .setStrokeStyle(art ? 3 : 4, c, o.enabled ? (art ? 0.8 : 1) : 0.25);
       const label = this.add.text(0, -70, o.label, {
         fontFamily: FONT, fontSize: '26px', color: '#ffffff', fontStyle: 'bold', align: 'center',
         wordWrap: { width: cw - 30, useAdvancedWrap: true },
@@ -74,7 +78,7 @@ export class EventScene extends Phaser.Scene {
       const desc = this.add.text(0, 30, o.desc, {
         fontFamily: FONT, fontSize: '19px', color: '#d8d0e6', align: 'center', wordWrap: { width: cw - 36, useAdvancedWrap: true },
       }).setOrigin(0.5);
-      const card = this.add.container(x, y, [bg, label, desc]).setSize(cw, 260).setAlpha(o.enabled ? 1 : 0.4);
+      const card = this.add.container(x, y, [frame, bg, label, desc]).setSize(cw, 260).setAlpha(o.enabled ? 1 : 0.4);
       cards.push({ card, bg });
       if (o.enabled) {
         card.setInteractive({ useHandCursor: true });

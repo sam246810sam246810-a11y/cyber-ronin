@@ -1,4 +1,4 @@
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT } from '../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH } from '../config';
 import { ELEMENT_IDS } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import type { GameScene } from '../scenes/GameScene';
@@ -50,7 +50,7 @@ export class SkillSystem {
         if (!g.crucible.canAccept && !g.crucible.canBrew) return false;
         while (g.crucible.canAccept) g.crucible.add({ el: pick(ELEMENT_IDS), r: 0 });
         g.brewAndDrink();
-        g.fx.burst(p.x, p.y, 120, 0xc9a3ff, 400);
+        if (!g.fx.anim('vfx_alchemy', p.x, p.y, 280, { depth: DEPTH.zone + 1 })) g.fx.burst(p.x, p.y, 120, 0xc9a3ff, 400);
         return true;
       }
       case 'frost_storm': {
@@ -61,7 +61,7 @@ export class SkillSystem {
             freezeChance: 0.5, critChance: g.buffs.stats.critChance, triggerPassives: false,
           });
         }
-        g.fx.burst(p.x, p.y, 140, 0x9fe3ff, 400);
+        if (!g.fx.anim('vfx_icestorm', p.x, p.y, 320)) g.fx.burst(p.x, p.y, 140, 0x9fe3ff, 400);
         Sound.play('zap');
         return true;
       }
@@ -121,7 +121,9 @@ export class SkillSystem {
         const near = g.effects.enemiesInRadius(p.x, p.y, 360);
         if (near.length) {
           const e = pick(near);
-          g.fx.line(e.x, ARENA.y, e.x, e.y, 0xffffff, 6);
+          const bolt = g.fx.anim('vfx_thunder', e.x, e.y, 240);
+          if (bolt) bolt.setOrigin(0.5, 0.9).setPosition(e.x, e.y + 10);
+          else g.fx.line(e.x, ARENA.y, e.x, e.y, 0xffffff, 6);
           g.effects.explode(e.x, e.y, 60, this.dmg(2.5), 0xffe14d);
           Sound.play('zap');
         }

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { COLORS, DEPTH, FONT, RARITY, RIGHT } from '../config';
 import { RECIPES, hexToInt, potionQuality, recipeKey } from '../data';
 import type { BuffSystem } from '../systems/BuffSystem';
@@ -9,6 +10,7 @@ import type { Material } from '../types';
 /** 右下小坩堝：3 格（框色＝稀有度，點擊丟棄），上方小字顯示品質 / 配方 / 裂變率 */
 export class CrucibleBar {
   private slotBgs: Phaser.GameObjects.Image[] = [];
+  private readonly art: boolean;
   private slotIcons: Phaser.GameObjects.Image[] = [];
   private hint: Phaser.GameObjects.Text;
   private panel: Phaser.GameObjects.Rectangle;
@@ -21,11 +23,12 @@ export class CrucibleBar {
     const gap = 6;
     this.cy = 386;
     this.cx = RIGHT - 150;
+    this.art = isArtTexture(scene, 'ui_slot');
     this.panel = scene.add.rectangle(this.cx, this.cy, 3 * size + 4 * gap, size + 2 * gap, 0x120d18, 0.55)
       .setStrokeStyle(2, COLORS.accent, 0.35).setDepth(DEPTH.ui - 1);
     [-1, 0, 1].forEach((k, i) => {
       const x = this.cx + k * (size + gap);
-      const bg = scene.add.image(x, this.cy, 'slot').setDepth(DEPTH.ui).setDisplaySize(size, size).setAlpha(0.8)
+      const bg = scene.add.image(x, this.cy, this.art ? 'ui_slot' : 'slot').setDepth(DEPTH.ui).setDisplaySize(size, size).setAlpha(0.8)
         .setInteractive({ useHandCursor: true });
       bg.on('pointerdown', () => {
         if (this.crucible.slots[i]) scene.tweens.add({ targets: this.slotIcons[i], alpha: 0, duration: 120, yoyo: true });
@@ -58,7 +61,8 @@ export class CrucibleBar {
       const icon = this.slotIcons[i];
       if (m) icon.setTexture(`ing_${m.el}`).setVisible(true).setAlpha(1).setDisplaySize(28 + m.r * 3, 28 + m.r * 3);
       else icon.setVisible(false);
-      this.slotBgs[i].setTint(m ? hexToInt(RARITY[m.r].color) : 0xffffff).setAlpha(m ? 1 : 0.6);
+      if (this.art) this.slotBgs[i].clearTint().setAlpha(m ? 1 : 0.8);
+      else this.slotBgs[i].setTint(m ? hexToInt(RARITY[m.r].color) : 0xffffff).setAlpha(m ? 1 : 0.6);
     });
     const fission = `裂變 ${Math.round(c.fissionChance * 100)}%`;
     if (c.filled === 3) {

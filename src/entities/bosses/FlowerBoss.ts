@@ -60,6 +60,7 @@ export class FlowerBoss extends Enemy {
   }
 
   private startAttack(): void {
+    this.playAttack();
     const attack = this.cycle[this.cycleIndex % this.cycle.length];
     this.cycleIndex++;
     this.busy = true;

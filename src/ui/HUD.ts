@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { ARENA, COLORS, DEPTH, FONT, GAME_W, RARITY, RIGHT, SAFE_X } from '../config';
 
 const RARITY_COLORS = RARITY.map((r) => r.color);
@@ -15,6 +16,7 @@ export class HUD {
   private coinIcon!: Phaser.GameObjects.Image;
   private sandText!: Phaser.GameObjects.Text;
   private hpPill!: Phaser.GameObjects.Graphics;
+  private hpPanel?: Phaser.GameObjects.NineSlice;
   private dangerText: Phaser.GameObjects.Text;
   private bossName: Phaser.GameObjects.Text;
   private banner: Phaser.GameObjects.Text;
@@ -26,12 +28,19 @@ export class HUD {
   constructor(private scene: Phaser.Scene, maxHp: number, onPause: () => void) {
     // 左上：血量＋金幣（半透明膠囊底，疊在地圖上）
     this.hpPill = scene.add.graphics().setDepth(DEPTH.ui - 1);
+    if (isArtTexture(scene, 'ui_panel')) {
+      // 黃銅木頭面板（九宮格拉伸，角落花紋不變形）
+      this.hpPanel = scene.add.nineslice(0, 0, 'ui_panel', undefined, 200, 90, 46, 46, 40, 40)
+        .setOrigin(0, 0).setDepth(DEPTH.ui - 1).setAlpha(0.92);
+    }
     // 右上：暫停
-    const pause = scene.add.container(RIGHT - 44, 44, [
-      scene.add.circle(0, 0, 28, 0x120d18, 0.6).setStrokeStyle(2, COLORS.accent, 0.6),
-      scene.add.rectangle(-7, 0, 6, 22, 0xffffff),
-      scene.add.rectangle(7, 0, 6, 22, 0xffffff),
-    ]).setDepth(DEPTH.ui).setSize(60, 60).setInteractive({ useHandCursor: true });
+    const pause = scene.add.container(RIGHT - 44, 44, isArtTexture(scene, 'ui_pause')
+      ? [scene.add.image(0, 0, 'ui_pause').setDisplaySize(62, 62)]
+      : [
+        scene.add.circle(0, 0, 28, 0x120d18, 0.6).setStrokeStyle(2, COLORS.accent, 0.6),
+        scene.add.rectangle(-7, 0, 6, 22, 0xffffff),
+        scene.add.rectangle(7, 0, 6, 22, 0xffffff),
+      ]).setDepth(DEPTH.ui).setSize(60, 60).setInteractive({ useHandCursor: true });
     pause.on('pointerdown', onPause);
 
     this.coinIcon = scene.add.image(0, 0, 'coin').setDisplaySize(22, 22).setDepth(DEPTH.ui);
@@ -122,7 +131,10 @@ export class HUD {
     const coinY = 28 + rows * 32;
     const relicRow = this.relicCount ? 30 : 0;
     this.hpPill.clear();
-    this.hpPill.fillStyle(0x120d18, 0.5).fillRoundedRect(x0 - 8, 8, Math.max(w, 30 * this.relicCount + 16, 150), coinY + 14 + relicRow, 14);
+    const pw = Math.max(w, 30 * this.relicCount + 16, 150);
+    const ph = coinY + 14 + relicRow;
+    if (this.hpPanel) this.hpPanel.setPosition(x0 - 16, 2).setSize(pw + 30, ph + 14);
+    else this.hpPill.fillStyle(0x120d18, 0.5).fillRoundedRect(x0 - 8, 8, pw, ph, 14);
     this.coinIcon.setPosition(x0 + 12, coinY - 6);
     this.coinText.setPosition(x0 + 28, coinY - 6);
     this.sandText?.setPosition(x0 + 86, coinY - 6);

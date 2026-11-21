@@ -24,7 +24,12 @@ export class Player {
   /** 由 BuffSystem 更新 */
   stats: Stats = baseStats();
 
-  readonly sprite: Phaser.GameObjects.Image;
+  readonly sprite: Phaser.GameObjects.Sprite;
+  /** 跑步 / 攻擊動畫 key（沒有美術動畫就是 undefined） */
+  private runKey?: string;
+  private atkKey?: string;
+  private attacking = false;
+  private atkFaceLeft = false;
   private readonly pointer: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Image;
 
@@ -32,9 +37,25 @@ export class Player {
     this.x = x;
     this.y = y;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.4).setScale(0.7, 0.35);
-    this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.player).setTint(color)
+    if (scene.anims.exists(`run_${texture}`)) this.runKey = `run_${texture}`;
+    if (scene.anims.exists(`atk_${texture}`)) this.atkKey = `atk_${texture}`;
+    this.sprite = scene.add.sprite(x, y, this.runKey ?? texture).setDepth(DEPTH.player).setTint(color)
       .setDisplaySize(this.radius * 4.3, this.radius * 4.3);
+    this.sprite.on('animationcomplete', (a: Phaser.Animations.Animation) => {
+      if (a.key === this.atkKey) {
+        this.attacking = false;
+        if (this.runKey) this.sprite.setTexture(this.runKey, 0);
+      }
+    });
     this.pointer = scene.add.image(x, y, 'triangle').setDepth(DEPTH.player + 1).setTint(0xffd166).setDisplaySize(12, 12);
+  }
+
+  /** 開火時播攻擊動畫（播完才會再播，不會每發子彈都重來） */
+  playAttack(targetX: number): void {
+    if (!this.atkKey || this.attacking || this.state === 'dash' || this.state === 'dead') return;
+    this.attacking = true;
+    this.atkFaceLeft = targetX < this.x;
+    this.sprite.play({ key: this.atkKey, frameRate: 18 });
   }
 
   get invulnerable(): boolean {
@@ -135,7 +156,17 @@ export class Player {
     this.sprite.setPosition(this.x, this.y).setDepth(ySortDepth(this.y + 0.5));
     this.shadow.setPosition(this.x, this.y + 16);
     this.pointer.setPosition(this.x + Math.cos(this.facing) * 42, this.y + Math.sin(this.facing) * 42);
-    this.sprite.setFlipX(Math.cos(this.facing) < -0.1);
+    this.sprite.setFlipX(this.attacking ? this.atkFaceLeft : Math.cos(this.facing) < -0.1);
+    if (this.runKey && !this.attacking) {
+      const moving = this.state === 'move' || this.state === 'dash';
+      if (moving) {
+        if (this.sprite.anims.currentAnim?.key !== this.runKey || !this.sprite.anims.isPlaying) this.sprite.play(this.runKey, true);
+        this.sprite.anims.timeScale = this.state === 'dash' ? 1.8 : 1;
+      } else if (this.sprite.anims.isPlaying) {
+        this.sprite.anims.stop();
+        this.sprite.setTexture(this.runKey, 0);
+      }
+    }
     this.pointer.setRotation(this.facing + Math.PI / 2);
     // 無敵時閃爍
     const blink = this.invulnTimer > 0 && this.state !== 'dash' && !this.godMode;

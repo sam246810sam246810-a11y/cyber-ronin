@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { generateSprites } from './sprites';
+import ANIMS from '../data/anims.json';
 
 /**
  * 第一階段：所有圖都用 Graphics 動態產生的幾何佔位圖。
@@ -14,6 +15,12 @@ export const ART_SPRITES = [
   'chest', 'stairs', 'box', 'fountain', 'merchant', 'altar', 'teaser', 'flower', 'mushroom', 'portal', 'proj_orb',
   'wpn_single', 'wpn_spread', 'wpn_melee', 'wpn_boomerang', 'wpn_lance', 'wpn_mortar', 'wpn_chain', 'wpn_orb',
 ];
+const ART_UI = [
+  'door_open', 'door_locked', 'ui_joy_base', 'ui_joy_knob', 'ui_btn', 'ui_ic_dash', 'ui_ic_skill', 'ui_ic_brew', 'ui_ic_swap',
+  'ui_pause', 'ui_slot', 'ui_panel', 'ui_card', 'ui_dialog',
+];
+/** 會循環播放的特效（其他特效播一次就消失） */
+const LOOP_VFX = new Set(['vfx_poison', 'vfx_lava']);
 const ART_ROOMS = ['room_greenhouse', 'room_lava', 'room_storm', 'room_lobby'];
 const ART_FLOORS = ['floor_greenhouse', 'floor_lava', 'floor_storm', 'floor_lobby'];
 
@@ -27,10 +34,24 @@ export class PreloadScene extends Phaser.Scene {
     for (const k of ART_SPRITES) this.load.image(k, `art/${k}.png`);
     for (const k of ART_FLOORS) this.load.image(k, `art/${k}.jpg`);
     for (const k of ART_ROOMS) this.load.image(k, `art/${k}.jpg`);
+    for (const k of ART_UI) this.load.image(k, `art/${k}.png`);
+    // 動畫：Higgsfield 產生的 GIF 轉成橫向 spritesheet
+    for (const [k, a] of Object.entries(ANIMS)) {
+      this.load.spritesheet(k, `art/anim/${k}.png`, { frameWidth: a.fw, frameHeight: a.fh });
+    }
     this.load.on('loaderror', (f: Phaser.Loader.File) => console.warn('art missing', f.key));
   }
 
   create(): void {
+    for (const [k, a] of Object.entries(ANIMS)) {
+      if (!this.textures.exists(k) || this.anims.exists(k)) continue;
+      this.anims.create({
+        key: k,
+        frames: this.anims.generateFrameNumbers(k, { start: 0, end: a.frames - 1 }),
+        frameRate: 1000 / a.ms,
+        repeat: k.startsWith('run_') || LOOP_VFX.has(k) ? -1 : 0,
+      });
+    }
     const g = this.make.graphics({ x: 0, y: 0 }, false);
     const gen = (key: string, w: number, h: number, draw: () => void) => {
       if (this.textures.exists(key)) return;

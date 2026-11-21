@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { COLORS, FONT, GAME_H, GAME_W, RARITY } from '../config';
 import { hexToInt } from '../data';
 import { Sound } from '../systems/SoundSystem';
@@ -58,19 +59,23 @@ export class CardSelectScene extends Phaser.Scene {
       const y = 400;
       const rar = RARITY[o.rarity];
       const rc = hexToInt(rar.color);
-      const bg = this.add.rectangle(0, 0, 370, 380, COLORS.panel, 1).setStrokeStyle(o.rarity >= 2 ? 6 : 4, rc, 1);
-      const band = this.add.rectangle(0, -182, 370, 16, rc, 1);
+      const art = isArtTexture(this, 'ui_dialog');
+      // 黃銅木框：九宮格拉伸，稀有度色線留在框內當選取提示
+      const frame = art ? this.add.nineslice(0, -22, 'ui_dialog', undefined, 384, 460, 70, 70, 80, 50) : this.add.rectangle(0, 0, 1, 1, 0, 0);
+      const bg = this.add.rectangle(0, art ? 10 : 0, art ? 300 : 370, art ? 330 : 380, COLORS.panel, art ? 0 : 1)
+        .setStrokeStyle(o.rarity >= 2 ? 5 : 3, rc, art ? 0.7 : 1);
+      const band = this.add.rectangle(0, -182, 370, 16, rc, art ? 0 : 1);
       const iconBg = this.add.circle(0, -90, 58, 0x3a2f45).setStrokeStyle(3, rc, 1);
       const icon = this.add.text(0, -90, o.def.icon, { fontFamily: FONT, fontSize: '56px', color: rar.color }).setOrigin(0.5);
-      const rarity = this.add.text(-160, -150, rar.name, { fontFamily: FONT, fontSize: '19px', color: rar.color, fontStyle: 'bold' }).setOrigin(0, 0.5);
-      const owned = this.add.text(160, -150, o.owned > 0 ? `已有 ${formatCardValue(o.def, o.owned)}` : 'NEW', {
+      const rarity = this.add.text(art ? -138 : -160, art ? -132 : -150, rar.name, { fontFamily: FONT, fontSize: '19px', color: rar.color, fontStyle: 'bold' }).setOrigin(0, 0.5);
+      const owned = this.add.text(art ? 138 : 160, art ? -132 : -150, o.owned > 0 ? `已有 ${formatCardValue(o.def, o.owned)}` : 'NEW', {
         fontFamily: FONT, fontSize: '17px', color: o.owned > 0 ? '#7ed4ff' : '#ffd166',
       }).setOrigin(1, 0.5);
       const name = this.add.text(0, 6, o.def.name, { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
       const desc = this.add.text(0, 90, cardDesc(o.def, o.value), {
         fontFamily: FONT, fontSize: '22px', color: '#e8e0f0', align: 'center', wordWrap: { width: 320, useAdvancedWrap: true }, lineSpacing: 6,
       }).setOrigin(0.5);
-      const card = this.add.container(x, y, [bg, band, iconBg, icon, rarity, owned, name, desc])
+      const card = this.add.container(x, y, [frame, bg, band, iconBg, icon, rarity, owned, name, desc])
         .setSize(370, 380).setInteractive({ useHandCursor: true });
       card.setScale(0.8).setAlpha(0);
       this.tweens.add({ targets: card, scale: 1, alpha: 1, delay: 120 * i, duration: 220, ease: 'Back.Out' });

@@ -93,6 +93,7 @@ export class WeaponSystem extends Phaser.Events.EventEmitter {
     const p = g.player;
     const st = g.buffs.stats;
     const dmg = st.damage * w.damageMul;
+    p.playAttack(target.x);
     const a = Math.atan2(target.y - p.y, target.x - p.x);
     const extraShots = Math.max(0, Math.round(st.shots) - 1);
     const fan = (n: number, step: number, fn: (ang: number) => void) => {

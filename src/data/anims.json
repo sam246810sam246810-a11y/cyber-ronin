@@ -1,0 +1,206 @@
+{
+ "atk_cat_apprentice": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 6,
+  "ms": 70
+ },
+ "atk_cat_frost_archer": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 6,
+  "ms": 70
+ },
+ "atk_cat_lava_knight": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 6,
+  "ms": 70
+ },
+ "atk_cat_storm_sage": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 6,
+  "ms": 70
+ },
+ "atk_doctor_rat": {
+  "fw": 224,
+  "fh": 224,
+  "frames": 6,
+  "ms": 90
+ },
+ "atk_rat_king": {
+  "fw": 224,
+  "fh": 224,
+  "frames": 6,
+  "ms": 90
+ },
+ "atk_snail": {
+  "fw": 224,
+  "fh": 224,
+  "frames": 6,
+  "ms": 90
+ },
+ "run_cat_apprentice": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "run_cat_frost_archer": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "run_cat_lava_knight": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "run_cat_storm_sage": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "run_clock_ghost": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "run_doctor_rat": {
+  "fw": 224,
+  "fh": 224,
+  "frames": 8,
+  "ms": 120
+ },
+ "run_frog": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 90
+ },
+ "run_mouse": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 90
+ },
+ "run_mouse_armor": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 110
+ },
+ "run_mouse_bomb": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 90
+ },
+ "run_mouse_dart": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "run_mouse_thief": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 90
+ },
+ "run_rat_king": {
+  "fw": 224,
+  "fh": 224,
+  "frames": 8,
+  "ms": 120
+ },
+ "run_snail": {
+  "fw": 224,
+  "fh": 224,
+  "frames": 8,
+  "ms": 130
+ },
+ "run_yarn": {
+  "fw": 160,
+  "fh": 160,
+  "frames": 8,
+  "ms": 100
+ },
+ "vfx_alchemy": {
+  "fw": 192,
+  "fh": 190,
+  "frames": 8,
+  "ms": 80
+ },
+ "vfx_aura": {
+  "fw": 149,
+  "fh": 192,
+  "frames": 8,
+  "ms": 80
+ },
+ "vfx_bolt": {
+  "fw": 192,
+  "fh": 105,
+  "frames": 6,
+  "ms": 60
+ },
+ "vfx_fire": {
+  "fw": 192,
+  "fh": 188,
+  "frames": 8,
+  "ms": 70
+ },
+ "vfx_frost": {
+  "fw": 192,
+  "fh": 184,
+  "frames": 8,
+  "ms": 70
+ },
+ "vfx_hit": {
+  "fw": 192,
+  "fh": 182,
+  "frames": 6,
+  "ms": 60
+ },
+ "vfx_icestorm": {
+  "fw": 192,
+  "fh": 183,
+  "frames": 8,
+  "ms": 70
+ },
+ "vfx_jelly": {
+  "fw": 192,
+  "fh": 166,
+  "frames": 6,
+  "ms": 70
+ },
+ "vfx_lava": {
+  "fw": 192,
+  "fh": 160,
+  "frames": 8,
+  "ms": 80
+ },
+ "vfx_poison": {
+  "fw": 192,
+  "fh": 181,
+  "frames": 8,
+  "ms": 90
+ },
+ "vfx_poof": {
+  "fw": 192,
+  "fh": 175,
+  "frames": 7,
+  "ms": 70
+ },
+ "vfx_thunder": {
+  "fw": 157,
+  "fh": 192,
+  "frames": 7,
+  "ms": 60
+ }
+}

@@ -3,6 +3,7 @@ import { DEPTH } from '../config';
 import type { Enemy } from '../entities/Enemy';
 import type { GameScene } from '../scenes/GameScene';
 import { Sound } from './SoundSystem';
+import { FxSystem } from './FxSystem';
 
 export interface ZoneOptions {
   x: number;
@@ -22,6 +23,8 @@ export interface Zone extends ZoneOptions {
   tickT: number;
   gfx: Phaser.GameObjects.Graphics;
   dead: boolean;
+  /** 地面循環特效（毒霧、熔岩） */
+  art?: Phaser.GameObjects.Sprite;
 }
 
 export interface ExplodeOptions {
@@ -66,7 +69,10 @@ export class EffectSystem {
     }
     if (this.zones.some((z) => z.dead)) {
       this.zones = this.zones.filter((z) => {
-        if (z.dead) z.gfx.destroy();
+        if (z.dead) {
+          z.gfx.destroy();
+          z.art?.destroy();
+        }
         return !z.dead;
       });
     }
@@ -78,6 +84,11 @@ export class EffectSystem {
     const remain = z.duration - z.t;
     const fade = remain < 0.5 ? Math.max(0, remain / 0.5) : 1;
     const pulse = 0.85 + 0.15 * Math.sin(z.t * 6);
+    if (z.art) {
+      z.art.setPosition(z.x, z.y).setAlpha(0.9 * fade);
+      g.lineStyle(2, z.color, 0.35 * fade).strokeCircle(z.x, z.y, z.radius);
+      return;
+    }
     g.fillStyle(z.color, (z.followPlayer ? 0.12 : 0.22) * fade);
     g.fillCircle(z.x, z.y, z.radius * pulse);
     g.lineStyle(3, z.color, (z.followPlayer ? 0.35 : 0.7) * fade);
@@ -87,7 +98,10 @@ export class EffectSystem {
   /** 換房時清掉地上的場地效果（跟隨玩家的光環保留） */
   clearRoomZones(): void {
     this.zones = this.zones.filter((z) => {
-      if (!z.followPlayer) z.gfx.destroy();
+      if (!z.followPlayer) {
+        z.gfx.destroy();
+        z.art?.destroy();
+      }
       return !!z.followPlayer;
     });
     this.timers = [];
@@ -132,6 +146,11 @@ export class EffectSystem {
   addZone(opts: ZoneOptions): Zone {
     const gfx = this.game.add.graphics().setDepth(DEPTH.zone);
     const z: Zone = { ...opts, t: 0, tickT: 0, gfx, dead: false };
+    if (!opts.followPlayer) {
+      const kind = FxSystem.vfxForColor(opts.color);
+      const key = kind === 'vfx_poison' ? 'vfx_poison' : kind === 'vfx_fire' ? 'vfx_lava' : undefined;
+      if (key) z.art = this.game.fx.anim(key, opts.x, opts.y, opts.radius * 2.3, { depth: DEPTH.zone + 1, loop: true });
+    }
     this.zones.push(z);
     return z;
   }
