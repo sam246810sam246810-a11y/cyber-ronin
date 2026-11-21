@@ -7,6 +7,7 @@ import type { Material, NpcKind, RarityIndex } from '../types';
 import { isArtTexture, pick } from '../utils';
 import { goldify } from '../ui/textStyle';
 import type { Room } from './DungeonSystem';
+import { WORLD, nearestFree } from './WorldSystem';
 import { Sound } from './SoundSystem';
 
 export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs' | 'npc' | 'portal'
@@ -96,6 +97,8 @@ export class EventSystem {
       }
       : base;
     const glow = this.game.add.image(x, y, 'circle').setTint(info.color).setAlpha(0.25).setDisplaySize(120, 120).setDepth(DEPTH.pickup);
+    // 大地圖：物件不能放在桌子、石柱、噴泉等擋路物上（找最近的空地）
+    if (WORLD.active) ({ x, y } = nearestFree(x, y, (ART_H[kind] ?? 70) * 0.45));
     let [sw, sh] = SIZES[kind] ?? [68, 68];
     const artH = ART_H[kind];
     if (artH && isArtTexture(this.game, info.texture)) {

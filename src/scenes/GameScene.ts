@@ -606,6 +606,7 @@ export class GameScene extends Phaser.Scene {
       });
       mat = { el: pick(ELEMENT_IDS), r: rollRarity(w) };
     }
+    if (WORLD.active) ({ x, y } = nearestFree(x, y, 26));
     this.pickups.push(new Pickup(this, mat, x, y));
   }
 
@@ -825,6 +826,7 @@ export class GameScene extends Phaser.Scene {
       room.layout = this.textures.exists(pick.def.key)
         ? buildSceneLayout(room, pick.def, pick.flip)
         : generateLayout(room, seed, GAME_W);
+      activateLayout(room.layout);
       this.remapDecor(room, room.layout);
     }
     const l = room.layout;
@@ -890,9 +892,9 @@ export class GameScene extends Phaser.Scene {
     const map = (x: number, y: number, r: number) => nearestFree(
       i.x + ((x - S.x) / S.w) * i.w, i.y + ((y - S.y) / S.h) * i.h, r,
     );
-    room.terrain?.forEach((t) => Object.assign(t, map(t.x, t.y, t.r)));
-    if (room.box) room.box = map(room.box.x, room.box.y, 60);
-    if (room.shelf) Object.assign(room.shelf, map(room.shelf.x, room.shelf.y, 60));
+    room.terrain?.forEach((t) => Object.assign(t, map(t.x, t.y, Math.min(t.r, 80))));
+    if (room.box) room.box = map(room.box.x, room.box.y, 80);
+    if (room.shelf) Object.assign(room.shelf, map(room.shelf.x, room.shelf.y, 90));
   }
 
   onRoomCleared(room: Room): void {
@@ -1065,6 +1067,7 @@ export class GameScene extends Phaser.Scene {
     }
     x = Math.max(ARENA.x + 40, Math.min(ARENA_RIGHT - 40, x));
     y = Math.max(ARENA.y + 60, Math.min(ARENA_BOTTOM - 40, y));
+    if (WORLD.active) ({ x, y } = nearestFree(x, y, 40));
     this.weaponPickups.push(new WeaponPickup(this, w, x, y));
     this.tutorial.notify('weapon');
   }
@@ -1263,6 +1266,7 @@ export class GameScene extends Phaser.Scene {
     }
     x = Math.max(ARENA.x + 40, Math.min(ARENA_RIGHT - 40, x));
     y = Math.max(ARENA.y + 60, Math.min(ARENA_BOTTOM - 40, y));
+    if (WORLD.active) ({ x, y } = nearestFree(x, y, 40));
     this.relicPickups.push(new RelicPickup(this, r, x, y));
   }
 

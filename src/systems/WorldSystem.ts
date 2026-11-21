@@ -276,13 +276,28 @@ export function isFree(x: number, y: number, r: number): boolean {
 /** 從某點附近找一個空位 */
 export function nearestFree(x: number, y: number, r: number): { x: number; y: number } {
   if (isFree(x, y, r)) return { x, y };
-  for (let ring = 1; ring < 14; ring++) {
-    for (let k = 0; k < 12; k++) {
-      const a = (Math.PI * 2 * k) / 12;
-      const px = x + Math.cos(a) * ring * 40;
-      const py = y + Math.sin(a) * ring * 40;
+  for (let ring = 1; ring < 30; ring++) {
+    const n = 12 + ring * 2;
+    for (let k = 0; k < n; k++) {
+      const a = (Math.PI * 2 * k) / n;
+      const px = x + Math.cos(a) * ring * 30;
+      const py = y + Math.sin(a) * ring * 30;
       if (isFree(px, py, r)) return { x: px, y: py };
     }
+  }
+  // 還找不到：整個房間掃一遍，挑離原點最近的空位
+  const l = WORLD.layout;
+  if (l) {
+    let best: { x: number; y: number } | undefined;
+    let bd = Infinity;
+    for (let py = l.interior.y + r; py <= l.interior.y + l.interior.h - r; py += 24) {
+      for (let px = l.interior.x + r; px <= l.interior.x + l.interior.w - r; px += 24) {
+        if (!isFree(px, py, r)) continue;
+        const d = (px - x) ** 2 + (py - y) ** 2;
+        if (d < bd) { bd = d; best = { x: px, y: py }; }
+      }
+    }
+    if (best) return best;
   }
   return resolveCircle(x, y, r, false);
 }
