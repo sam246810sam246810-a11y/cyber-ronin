@@ -80,8 +80,13 @@ export class Player {
     return this.godMode || this.invulnTimer > 0 || this.state === 'dash' || this.state === 'dead';
   }
 
+  /** 衝刺兩段（像黑帝斯一樣可以連續閃避）；dashCooldown 是補回下一段的計時 */
+  dashCharges = 2;
+  readonly maxDashCharges = 2;
+  private ghostT = 0;
+
   get dashCooldownRatio(): number {
-    return this.dashCooldown / this.stats.dashCooldown;
+    return this.dashCharges > 0 ? 0 : this.dashCooldown / this.stats.dashCooldown;
   }
 
   setPosition(x: number, y: number): void {
@@ -104,7 +109,7 @@ export class Player {
   }
 
   tryDash(dirX: number, dirY: number): boolean {
-    if (this.dashCooldown > 0 || this.state === 'dead' || this.state === 'dash') return false;
+    if (this.dashCharges <= 0 || this.state === 'dead' || this.state === 'dash') return false;
     let len = Math.hypot(dirX, dirY);
     if (len < 0.1) {
       dirX = Math.cos(this.facing);
@@ -116,12 +121,10 @@ export class Player {
     this.dashVY = (dirY / len) * speed;
     this.dashTimer = PLAYER.dashTime;
     this.invulnTimer = Math.max(this.invulnTimer, PLAYER.dashIframes);
-    this.dashCooldown = this.stats.dashCooldown;
+    this.dashCharges--;
+    if (this.dashCooldown <= 0) this.dashCooldown = this.stats.dashCooldown;
     this.state = 'dash';
-    // 衝刺殘影
-    const ghost = this.scene.add.image(this.x, this.y, 'circle').setTint(0x7ed4ff).setAlpha(0.5)
-      .setDisplaySize(this.radius * 2, this.radius * 2).setDepth(DEPTH.player - 1);
-    this.scene.tweens.add({ targets: ghost, alpha: 0, duration: 250, onComplete: () => ghost.destroy() });
+    this.ghostT = 0;
     return true;
   }
 
@@ -144,13 +147,29 @@ export class Player {
       this.sync();
       return;
     }
-    this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+    if (this.dashCharges < this.maxDashCharges) {
+      this.dashCooldown -= dt;
+      if (this.dashCooldown <= 0) {
+        this.dashCharges++;
+        this.dashCooldown = this.dashCharges < this.maxDashCharges ? this.stats.dashCooldown : 0;
+      }
+    }
     this.invulnTimer = Math.max(0, this.invulnTimer - dt);
     this.hurtTimer = Math.max(0, this.hurtTimer - dt);
 
     if (this.state === 'dash') {
       this.x += this.dashVX * dt;
       this.y += this.dashVY * dt;
+      // 殘影：用角色本身的剪影（青色、加法混合）沿路留下
+      this.ghostT -= dt;
+      if (this.ghostT <= 0) {
+        this.ghostT = 0.035;
+        const sp = this.sprite;
+        const g = this.scene.add.image(sp.x, sp.y, sp.texture.key, sp.frame.name).setOrigin(sp.originX, sp.originY)
+          .setScale(sp.scaleX, sp.scaleY).setFlipX(sp.flipX).setRotation(sp.rotation).setTintFill(0x7ed4ff)
+          .setAlpha(0.45).setBlendMode(Phaser.BlendModes.ADD).setDepth(sp.depth - 0.01);
+        this.scene.tweens.add({ targets: g, alpha: 0, duration: 220, onComplete: () => g.destroy() });
+      }
       this.dashTimer -= dt;
       if (this.dashTimer <= 0) this.state = 'idle';
     } else {

@@ -27,7 +27,7 @@ import { RelicSystem } from '../systems/RelicSystem';
 import { MetaStore } from '../systems/MetaStore';
 import { Dummy } from '../entities/enemies/Dummy';
 import { RoomRenderer } from '../systems/RoomRenderer';
-import { WORLD, activateLayout, corridorExit, entryPoint, generateLayout, inGrass, nearestFree, type RoomLayout } from '../systems/WorldSystem';
+import { WORLD, activateLayout, buildSceneLayout, corridorExit, entryPoint, generateLayout, pickScene, inGrass, nearestFree, type RoomLayout } from '../systems/WorldSystem';
 import { TerrainSystem } from '../systems/TerrainSystem';
 import { GuardianFlower } from '../entities/Ally';
 import { HazardSystem } from '../systems/HazardSystem';
@@ -111,6 +111,8 @@ export class GameScene extends Phaser.Scene {
   private uiPending: Phaser.GameObjects.GameObject[] = [];
   private layoutSeed = 0;
   private grassHidden = false;
+  private dashBuffer = 0;
+  private lastKillStop = 0;
   private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
@@ -358,9 +360,14 @@ export class GameScene extends Phaser.Scene {
 
     const actions = this.input2.consume();
     const move = this.input2.move;
-    if (actions.dash && this.player.tryDash(move.x, move.y)) {
-      Sound.play('dash');
-      this.effects.delay(0.16, () => this.relics.onDash(this.player.x, this.player.y));
+    // 輸入緩衝：衝刺鍵在還不能衝的時候按下，0.2 秒內一能衝就自動衝（不會覺得按了沒反應）
+    if (actions.dash) this.dashBuffer = 0.2;
+    if (this.dashBuffer > 0) {
+      if (this.player.tryDash(move.x, move.y)) {
+        this.dashBuffer = 0;
+        Sound.play('dash');
+        this.effects.delay(0.16, () => this.relics.onDash(this.player.x, this.player.y));
+      } else this.dashBuffer -= dt;
     }
     if (actions.brew) this.brewAndDrink();
     if (actions.skill && !this.skills.use() && this.skills.cooldown > 0) {
@@ -565,6 +572,11 @@ export class GameScene extends Phaser.Scene {
     this.fx.burst(e.x, e.y, e.radius * 1.6, color, 200);
     this.fx.shatter(e.x, e.y, color, e.radius, e.elite || e.def.boss ? 16 : 7);
     Sound.play('kill');
+    // 擊殺停頓：一般怪極短（連殺時不重複），精英／Boss 較長
+    if (!e.elite && !e.def.boss && this.time.now - this.lastKillStop > 250) {
+      this.lastKillStop = this.time.now;
+      this.hitStop(0.028);
+    }
     if (e.elite || e.def.boss) {
       this.hitStop(e.def.boss ? 0.3 : 0.07);
       this.cameras.main.shake(e.def.boss ? 400 : 120, e.def.boss ? 0.012 : 0.005);
@@ -789,7 +801,12 @@ export class GameScene extends Phaser.Scene {
   /** 建立／套用大房間：碰撞、可走範圍、積木畫面、鏡頭跟隨，玩家出現在剛走出的門口 */
   private enterWorldRoom(room: Room, fromDir?: Dir): void {
     if (!room.layout) {
-      room.layout = generateLayout(room, this.layoutSeed + this.dungeon.floor * 31 + this.dungeon.regionIndex * 977, GAME_W);
+      const seed = this.layoutSeed + this.dungeon.floor * 31 + this.dungeon.regionIndex * 977;
+      // 黑帝斯式：優先用手工場景（整張畫好的房間），沒載入才退回積木房間
+      const pick = pickScene(room, seed);
+      room.layout = this.textures.exists(pick.def.key)
+        ? buildSceneLayout(room, pick.def, pick.flip)
+        : generateLayout(room, seed, GAME_W);
       this.remapDecor(room, room.layout);
     }
     const l = room.layout;

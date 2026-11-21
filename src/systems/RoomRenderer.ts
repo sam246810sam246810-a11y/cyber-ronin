@@ -33,6 +33,10 @@ export class RoomRenderer {
   /** tint：還沒有專屬積木的區域，先用溫室積木染成該區的色調 */
   build(l: RoomLayout, theme: RegionTheme, kit: string, tint?: number): void {
     this.clear();
+    if (l.scene && this.has(l.scene.key)) {
+      this.buildScene(l, tint);
+      return;
+    }
     const s = this.scene;
     s.cameras.main.setBackgroundColor('#08060c');
     const i = l.interior;
@@ -173,6 +177,33 @@ export class RoomRenderer {
         const t = o as unknown as { setTint?: (c: number) => void };
         if (t.setTint) t.setTint(tint);
       });
+    }
+  }
+
+  /** 手工場景：整張圖就是房間；沒用到的出口放木箱堵住 */
+  private buildScene(l: RoomLayout, tint?: number): void {
+    const s = this.scene;
+    s.cameras.main.setBackgroundColor('#08060c');
+    const sc = l.scene!;
+    const img = this.add(s.add.image(l.world.x, l.world.y, sc.key).setOrigin(0, 0)
+      .setDisplaySize(l.world.w, l.world.h).setFlipX(sc.flip).setDepth(DEPTH.floor - 2));
+    if (tint !== undefined) img.setTint(tint);
+    for (const p of l.plugs ?? []) {
+      if (!this.has('gh_crates')) {
+        this.add(s.add.rectangle(p.x, p.y, p.w, p.h, 0x5a3a22).setOrigin(0, 0).setDepth(ySortDepth(p.y + p.h)));
+        continue;
+      }
+      // 門口堆兩三組木箱，看起來像被雜物擋住
+      const n = p.dir === 'n' || p.dir === 's' ? 2 : 1;
+      for (let k = 0; k < n; k++) {
+        const cx = p.dir === 'n' || p.dir === 's' ? p.x + (p.w * (k + 0.5)) / n : p.x + p.w / 2;
+        const box = s.add.image(cx, p.y + p.h + 6, 'gh_crates').setOrigin(0.5, 1);
+        box.setScale((p.dir === 'n' || p.dir === 's' ? p.w / n : p.w * 2.1) * 1.05 / box.width);
+        if (k % 2 === 1 || (p.dir === 'e')) box.setFlipX(true);
+        box.setDepth(ySortDepth(p.y + p.h));
+        if (tint !== undefined) box.setTint(tint);
+        this.add(box);
+      }
     }
   }
 

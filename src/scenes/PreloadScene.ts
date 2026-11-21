@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { generateSprites } from './sprites';
 import ANIMS from '../data/anims.json';
+import { SCENES } from '../data/scenes';
 
 /**
  * 第一階段：所有圖都用 Graphics 動態產生的幾何佔位圖。
@@ -50,6 +51,8 @@ export class PreloadScene extends Phaser.Scene {
     for (const k of ART_BGS) this.load.image(k, `art/${k}.jpg`);
     // 大地圖積木（溫室區 gh_*）：可平鋪的牆是 jpg，其餘透明 png
     for (const k of KIT_JPG) this.load.image(k, `art/${k}.jpg`);
+    // 手工房間場景（src/data/scenes.ts）
+    for (const k of SCENES.map((s) => s.key)) this.load.image(k, `art/${k}.jpg`);
     for (const k of KIT_PNG) this.load.image(k, `art/${k}.png`);
     // 圖示圖集：聖物、突變卡、坩堝升級、神話藥水、小地圖房間（frame 名稱見 icons.json）
     this.load.atlas('icons', 'art/icons.png', 'art/icons.json');

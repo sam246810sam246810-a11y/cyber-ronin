@@ -1,4 +1,5 @@
 import type { Dir, Room } from './DungeonSystem';
+import { SCENES, SCENE_SIZE, type NRect, type SceneDef } from '../data/scenes';
 
 /**
  * 大地圖（探索房間）：
@@ -33,6 +34,8 @@ export interface Prop {
 
 export interface Corridor extends Rect {
   dir: Dir;
+  /** 走過這條線就換房（n/s 是 y、w/e 是 x）；沒有就用積木房間的預設 */
+  exitAt?: number;
 }
 
 export interface RoomLayout {
@@ -45,6 +48,10 @@ export interface RoomLayout {
   props: Prop[];
   grass: Rect[];
   corridors: Corridor[];
+  /** 手工場景房間：整張圖就是這間房 */
+  scene?: { key: string; flip: boolean };
+  /** 沒用到的出口：畫木箱堵住 */
+  plugs?: (Rect & { dir: Dir })[];
 }
 
 /** 牆、走廊尺寸 */
@@ -293,6 +300,11 @@ export function corridorExit(x: number, y: number): Dir | undefined {
   const i = l.interior;
   for (const c of l.corridors) {
     if (!inside(c, x, y, 0)) continue;
+    if (c.exitAt !== undefined) {
+      if ((c.dir === 'n' && y < c.exitAt) || (c.dir === 's' && y > c.exitAt)
+        || (c.dir === 'w' && x < c.exitAt) || (c.dir === 'e' && x > c.exitAt)) return c.dir;
+      continue;
+    }
     if (c.dir === 'n' && y < i.y - WALL.back - 120) return 'n';
     if (c.dir === 's' && y > i.y + i.h + WALL.bottom + 120) return 's';
     if (c.dir === 'w' && x < i.x - WALL.side - 120) return 'w';
@@ -305,10 +317,71 @@ export function corridorExit(x: number, y: number): Dir | undefined {
 export function entryPoint(dir: Dir): { x: number; y: number } {
   const l = WORLD.layout!;
   const i = l.interior;
-  const cx = i.x + i.w / 2;
-  const cy = i.y + i.h / 2;
+  // 對準那個方向的出口（場景房間的側門不一定在正中間）
+  const c = l.corridors.find((k) => k.dir === dir);
+  const cx = c && (dir === 'n' || dir === 's') ? c.x + c.w / 2 : i.x + i.w / 2;
+  const cy = c && (dir === 'w' || dir === 'e') ? c.y + c.h / 2 : i.y + i.h / 2;
   if (dir === 'n') return { x: cx, y: i.y + 70 };
   if (dir === 's') return { x: cx, y: i.y + i.h - 70 };
   if (dir === 'w') return { x: i.x + 70, y: cy };
   return { x: i.x + i.w - 70, y: cy };
+}
+
+// ---------------- 手工場景房間 ----------------
+
+/**
+ * 依場景資料建立房間：可走範圍＝地板＋有門的出口走廊；擋路物照圖上的位置；
+ * 沒門的出口用擋路物封住（renderer 會在那裡畫木箱）。flip＝左右翻轉（西門東門互換）。
+ */
+export function buildSceneLayout(room: Room, def: SceneDef, flip: boolean): RoomLayout {
+  const W = SCENE_SIZE.w;
+  const H = SCENE_SIZE.h;
+  const toRect = (r: NRect): Rect => {
+    const x0 = flip ? 1 - r[2] : r[0];
+    const x1 = flip ? 1 - r[0] : r[2];
+    return { x: x0 * W, y: r[1] * H, w: (x1 - x0) * W, h: (r[3] - r[1]) * H };
+  };
+  const interior = toRect(def.floor);
+  const walls: Block[] = def.blocks.map((b) => ({ ...toRect(b.r), shots: b.shots, kind: b.shots ? 'wall' : 'pond' }));
+  const corridors: Corridor[] = [];
+  const plugs: (Rect & { dir: Dir })[] = [];
+  // 翻轉時，圖上的西門變成東門
+  const src: Record<Dir, NRect> = flip ? { ...def.exits, w: def.exits.e, e: def.exits.w } : def.exits;
+  for (const dir of ['n', 's', 'w', 'e'] as Dir[]) {
+    const r = toRect(src[dir]);
+    if (room.doors[dir]) {
+      const exitAt = dir === 'n' ? r.y + r.h * 0.35 : dir === 's' ? r.y + r.h * 0.75
+        : dir === 'w' ? r.x + r.w * 0.35 : r.x + r.w * 0.65;
+      corridors.push({ ...r, dir, exitAt });
+    } else {
+      // 封住：門口那一段放擋路物
+      const plug = dir === 'n' ? { x: r.x - 10, y: interior.y - 40, w: r.w + 20, h: 60 }
+        : dir === 's' ? { x: r.x - 10, y: interior.y + interior.h - 30, w: r.w + 20, h: 60 }
+          : dir === 'w' ? { x: interior.x - 30, y: r.y, w: 70, h: r.h }
+            : { x: interior.x + interior.w - 40, y: r.y, w: 70, h: r.h };
+      plugs.push({ ...plug, dir });
+      walls.push({ ...plug, shots: true, kind: 'crates' });
+    }
+  }
+  return {
+    interior,
+    world: { x: 0, y: 0, w: W, h: H },
+    shape: 'hall',
+    walls,
+    props: [],
+    grass: def.grass.map(toRect),
+    corridors,
+    scene: { key: def.key, flip },
+    plugs,
+  };
+}
+
+/** 依房型挑一張場景（同一間房固定、相鄰房盡量不同） */
+export function pickScene(room: Room, seed: number): { def: SceneDef; flip: boolean } {
+  const want = room.type === 'boss' ? 'boss' : room.type === 'start' ? 'start'
+    : room.type === 'combat' || room.type === 'elite' ? 'combat' : 'calm';
+  const pool = SCENES.filter((s) => s.tags.includes(want));
+  const list = pool.length ? pool : SCENES;
+  const h = Math.abs(Math.imul(room.gx * 73856093 ^ room.gy * 19349663, 2654435761) + seed) >>> 0;
+  return { def: list[h % list.length], flip: ((h >> 8) & 1) === 1 };
 }
