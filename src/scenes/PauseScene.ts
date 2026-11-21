@@ -3,6 +3,7 @@ import { COLORS, FONT, GAME_H, GAME_W, MYTHIC } from '../config';
 import { ELEMENTS, hexToInt } from '../data';
 import type { RunSummary } from './GameScene';
 import { textButton } from '../ui/widgets';
+import { Sound } from '../systems/SoundSystem';
 
 /** 暫停：顯示目前的強化狀態 */
 export class PauseScene extends Phaser.Scene {
@@ -13,7 +14,7 @@ export class PauseScene extends Phaser.Scene {
   create(d: RunSummary): void {
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.9).setInteractive();
     this.add.text(GAME_W / 2, 56, '暫停', { fontFamily: FONT, fontSize: '44px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, 100, `${d.character}　已喝 ${d.drinks} 瓶`, { fontFamily: FONT, fontSize: '22px', color: COLORS.textDim }).setOrigin(0.5);
+    this.add.text(GAME_W / 2, 100, `${d.character}・${d.region}　已喝 ${d.drinks} 瓶`, { fontFamily: FONT, fontSize: '22px', color: COLORS.textDim }).setOrigin(0.5);
     ELEMENTS.forEach((e, i) => {
       const x = 120 + i * 120;
       this.add.image(x - 18, 140, `ing_${e.id}`).setDisplaySize(28, 28);
@@ -53,6 +54,11 @@ export class PauseScene extends Phaser.Scene {
       this.scene.stop('Game');
       this.scene.start('MainMenu');
     }, 0x5a2a3a);
+    const mute = textButton(this, GAME_W - 80, 56, 120, 56, Sound.muted ? '🔇 靜音' : '🔊 音效', () => {
+      const m = Sound.toggleMute();
+      (mute.list[1] as Phaser.GameObjects.Text).setText(m ? '🔇 靜音' : '🔊 音效');
+    });
+    (mute.list[1] as Phaser.GameObjects.Text).setFontSize(20);
     this.input.keyboard?.on('keydown-ESC', () => this.resumeGame());
   }
 

@@ -29,7 +29,7 @@ export class ResultScene extends Phaser.Scene {
     this.add.text(GAME_W / 2, 110, d.victory ? '勝利！' : '倒下了…', {
       fontFamily: FONT, fontSize: '68px', color: d.victory ? '#ffd166' : '#ff6b6b', fontStyle: 'bold', stroke: '#000', strokeThickness: 8,
     }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, 180, `${d.character}・${d.victory ? '擊敗了食人巨花' : d.wave > 10 ? '倒在 Boss 戰' : `倒在第 ${d.wave} 波`}`, {
+    this.add.text(GAME_W / 2, 180, `${d.character}・${d.victory ? '征服了雷雲山頂！' : `倒在 ${d.region}`}`, {
       fontFamily: FONT, fontSize: '24px', color: COLORS.textDim,
     }).setOrigin(0.5);
 

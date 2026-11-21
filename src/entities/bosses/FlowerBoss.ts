@@ -8,7 +8,7 @@ import type { GameScene } from '../../scenes/GameScene';
 type BossAttack = 'charge' | 'fan' | 'slam';
 
 /** 食人巨花：輪流使用藤蔓衝刺 / 扇形彈幕 / 召喚＋砸地 */
-export class Boss extends Enemy {
+export class FlowerBoss extends Enemy {
   private attackTimer = 2;
   private busy = false;
   private cycle: BossAttack[] = ['charge', 'fan', 'slam'];

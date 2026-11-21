@@ -6,8 +6,9 @@ import type { GameScene } from '../scenes/GameScene';
 import { clamp } from '../utils';
 
 export interface DamageOptions {
-  /** 是否觸發受擊閃白（持續傷害不觸發） */
+  /** 是否觸發受擊閃白與傷害數字（持續傷害不觸發） */
   flash?: boolean;
+  crit?: boolean;
 }
 
 /**
@@ -55,7 +56,7 @@ export abstract class Enemy {
   ) {
     this.x = x;
     this.y = y;
-    this.maxHp = this.hp = def.hp * (elite ? ELITE.hpMul : 1);
+    this.maxHp = this.hp = def.hp * (elite ? ELITE.hpMul : 1) * (game.waves?.hpMul ?? 1);
     this.radius = def.radius * (elite ? ELITE.radiusMul : 1);
     this.speed = def.speed;
     this.baseTint = hexToInt(def.color);
@@ -152,12 +153,22 @@ export abstract class Enemy {
 
   takeDamage(amount: number, opts: DamageOptions = {}): void {
     if (!this.alive || amount <= 0) return;
+    amount = this.absorb(amount, opts);
+    if (amount <= 0) return;
     this.hp -= amount;
-    if (opts.flash !== false) this.hitFlash = 0.08;
+    if (opts.flash !== false) {
+      this.hitFlash = 0.08;
+      this.game.fx.damageNumber(this.x, this.y - this.radius, amount, !!opts.crit);
+    }
     if (this.hp <= 0) {
       this.hp = 0;
       this.die();
     }
+  }
+
+  /** 護盾等吸收傷害的鉤子，回傳實際扣血量 */
+  protected absorb(amount: number, _opts: DamageOptions): number {
+    return amount;
   }
 
   applySlow(factor: number, time: number): void {
@@ -208,7 +219,7 @@ export abstract class Enemy {
     this.eliteRing?.setPosition(this.x, this.y - this.liftOffset());
 
     this.hpBar.clear();
-    if (this.hp < this.maxHp && this.def.type !== 'boss') {
+    if (this.hp < this.maxHp && !this.def.boss) {
       const w = this.radius * 2;
       const bx = this.x - w / 2;
       const by = this.y - this.liftOffset() - this.radius - 10;

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { DEPTH } from '../config';
 import type { Enemy } from '../entities/Enemy';
 import type { GameScene } from '../scenes/GameScene';
+import { Sound } from './SoundSystem';
 
 export interface ZoneOptions {
   x: number;
@@ -103,6 +104,7 @@ export class EffectSystem {
 
   explode(x: number, y: number, r: number, damage: number, color: number, opts: ExplodeOptions = {}): Enemy[] {
     this.game.fx.burst(x, y, r, color);
+    if (damage > 0) Sound.play('explode');
     const hit = this.enemiesInRadius(x, y, r);
     for (const e of hit) {
       if (opts.freeze) e.applyFreeze(opts.freeze);
@@ -137,6 +139,7 @@ export class EffectSystem {
       if (!target) return;
       hit.add(target);
       this.game.fx.line(cx, cy, target.x, target.y, color);
+      Sound.play('zap');
       onHit?.(target);
       target.takeDamage(damage);
       this.game.fx.burst(target.x, target.y, 24, color);

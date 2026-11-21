@@ -85,11 +85,16 @@ export interface CharacterDef {
   unlock: { type: 'default' | 'bestWave' | 'fissions' | 'bossKills'; value: number; text: string };
 }
 
-export type EnemyType = 'crawler' | 'spitter' | 'hopper' | 'boss';
+export type EnemyType =
+  | 'crawler' | 'spitter' | 'hopper' | 'bomber' | 'beetle' | 'splitter' | 'wisp'
+  | 'boss_flower' | 'boss_snail' | 'boss_king';
+export type MinionType = Exclude<EnemyType, 'boss_flower' | 'boss_snail' | 'boss_king'>;
+export type BossType = Extract<EnemyType, 'boss_flower' | 'boss_snail' | 'boss_king'>;
 
 export interface EnemyDef {
   type: EnemyType;
   name: string;
+  boss?: boolean;
   hp: number;
   speed: number;
   radius: number;
@@ -101,7 +106,7 @@ export interface EnemyDef {
 }
 
 export interface WaveGroup {
-  type: Exclude<EnemyType, 'boss'>;
+  type: MinionType;
   count: number;
   elite?: boolean;
 }
@@ -109,6 +114,25 @@ export interface WaveGroup {
 export interface WaveDef {
   spawnWindow: number;
   groups: WaveGroup[];
+}
+
+export interface RegionTheme {
+  bg: string;
+  floor: string;
+  tile: string;
+  wall: string;
+  deco: string;
+  decoLight: string;
+}
+
+export interface RegionDef {
+  id: string;
+  name: string;
+  subtitle: string;
+  hpMul: number;
+  boss: BossType;
+  theme: RegionTheme;
+  waves: WaveDef[];
 }
 
 export interface MutationDef {

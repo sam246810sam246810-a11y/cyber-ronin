@@ -17,7 +17,11 @@ import { ProgressStore } from '../systems/ProgressStore';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { TelegraphSystem } from '../systems/TelegraphSystem';
 import { WaveSystem } from '../systems/WaveSystem';
-import type { Brew, CharacterDef, ElementId, Material } from '../types';
+import { HazardSystem } from '../systems/HazardSystem';
+import { EventSystem } from '../systems/EventSystem';
+import { TutorialSystem } from '../systems/TutorialSystem';
+import { Sound } from '../systems/SoundSystem';
+import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme } from '../types';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
@@ -26,6 +30,7 @@ import type { ResultData } from './ResultScene';
 
 export interface RunSummary {
   character: string;
+  region: string;
   drinks: number;
   elements: Record<ElementId, number>;
   passives: { name: string; stacks: number; color: string; mythic: boolean }[];
@@ -48,6 +53,14 @@ export class GameScene extends Phaser.Scene {
   waves!: WaveSystem;
   fx!: FxSystem;
   input2!: InputSystem;
+  hazards!: HazardSystem;
+  /** 關卡內事件（寶箱 / 祈願泉 / 商人）；Phaser 已佔用 events 這個名字 */
+  encounters!: EventSystem;
+  tutorial!: TutorialSystem;
+  private arenaGfx?: Phaser.GameObjects.Graphics;
+  /** 打擊停頓剩餘秒數 */
+  private stopTimer = 0;
+  private pendingEventWave = 0;
 
   private hud!: HUD;
   private dashBtn!: RoundButton;
@@ -73,7 +86,9 @@ export class GameScene extends Phaser.Scene {
     this.unlocks = [];
     this.character = ProgressStore.selected;
 
-    this.drawArena();
+    this.stopTimer = 0;
+    this.pendingEventWave = 0;
+    this.arenaGfx = undefined;
 
     this.fx = new FxSystem(this);
     this.telegraphs = new TelegraphSystem(this);
@@ -83,6 +98,9 @@ export class GameScene extends Phaser.Scene {
     this.crucible.bonusChance = this.character.fissionBonus ?? 0;
     this.effects = new EffectSystem(this);
     this.waves = new WaveSystem(this);
+    this.hazards = new HazardSystem(this);
+    this.encounters = new EventSystem(this);
+    this.crucible.qualityBonusProvider = () => this.encounters.takeQualityBonus();
     this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7, hexToInt(this.character.color));
     this.buffs = new BuffSystem(this, this.character);
     this.player.hp = this.player.maxHp = this.character.stats.hp;
@@ -104,43 +122,55 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.events.on('resume', () => this.input2.consume());
+    this.tutorial = new TutorialSystem(this);
+    this.events.on('telegraph-warning', () => this.tutorial.notify('telegraph'));
     this.waves.start();
 
     (window as unknown as { __game?: GameScene }).__game = this;
   }
 
-  private drawArena(): void {
-    this.cameras.main.setBackgroundColor(COLORS.bg);
-    const g = this.add.graphics().setDepth(DEPTH.floor);
-    g.fillStyle(COLORS.floor, 1).fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
+  private drawArena(theme: RegionTheme): void {
+    const col = (h: string) => hexToInt(h);
+    this.cameras.main.setBackgroundColor(theme.bg);
+    this.arenaGfx?.destroy();
+    const g = this.arenaGfx = this.add.graphics().setDepth(DEPTH.floor);
+    g.fillStyle(col(theme.floor), 1).fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
     const tile = 56;
     for (let y = ARENA.y; y < ARENA_BOTTOM; y += tile) {
       for (let x = ARENA.x; x < ARENA_RIGHT; x += tile) {
         if (((x - ARENA.x) / tile + (y - ARENA.y) / tile) % 2 === 0) {
-          g.fillStyle(COLORS.floorTile, 1).fillRect(x, y, Math.min(tile, ARENA_RIGHT - x), Math.min(tile, ARENA_BOTTOM - y));
+          g.fillStyle(col(theme.tile), 1).fillRect(x, y, Math.min(tile, ARENA_RIGHT - x), Math.min(tile, ARENA_BOTTOM - y));
         }
       }
     }
-    // 溫室邊框與花圃裝飾
-    g.lineStyle(8, COLORS.wall, 1).strokeRect(ARENA.x - 4, ARENA.y - 4, ARENA.w + 8, ARENA.h + 8);
-    g.lineStyle(2, 0x5a8a66, 0.4);
-    for (let x = ARENA.x + ARENA.w / 4; x < ARENA_RIGHT; x += ARENA.w / 4) g.lineBetween(x, ARENA.y, x, ARENA.y + 10);
-    const planters = [[ARENA.x + 20, ARENA.y + 20], [ARENA_RIGHT - 20, ARENA.y + 20], [ARENA.x + 20, ARENA_BOTTOM - 20], [ARENA_RIGHT - 20, ARENA_BOTTOM - 20]];
-    planters.forEach(([x, y]) => {
-      g.fillStyle(0x3a5a2a, 0.8).fillCircle(x, y, 26);
-      g.fillStyle(0x6aa84f, 0.8).fillCircle(x - 6, y - 6, 12);
+    g.lineStyle(8, col(theme.wall), 1).strokeRect(ARENA.x - 4, ARENA.y - 4, ARENA.w + 8, ARENA.h + 8);
+    const corners = [[ARENA.x + 20, ARENA.y + 20], [ARENA_RIGHT - 20, ARENA.y + 20], [ARENA.x + 20, ARENA_BOTTOM - 20], [ARENA_RIGHT - 20, ARENA_BOTTOM - 20]];
+    corners.forEach(([x, y]) => {
+      g.fillStyle(col(theme.deco), 0.8).fillCircle(x, y, 26);
+      g.fillStyle(col(theme.decoLight), 0.8).fillCircle(x - 6, y - 6, 12);
     });
+    // 場地裝飾點
+    for (let i = 0; i < 14; i++) {
+      const x = ARENA.x + 40 + ((i * 197) % (ARENA.w - 80));
+      const y = ARENA.y + 40 + ((i * 331) % (ARENA.h - 80));
+      g.fillStyle(col(theme.decoLight), 0.08).fillCircle(x, y, 10 + (i % 3) * 6);
+    }
   }
 
   update(_time: number, deltaMs: number): void {
     if (this.ended) return;
-    const dt = Math.min(deltaMs / 1000, 1 / 20);
+    const realDt = Math.min(deltaMs / 1000, 1 / 20);
+    if (this.stopTimer > 0) {
+      this.stopTimer -= realDt;
+      return;
+    }
+    const dt = realDt;
     const phase = this.waves.phase;
     if (phase !== 'cards') this.runTime += dt;
 
     const actions = this.input2.consume();
     const move = this.input2.move;
-    if (actions.dash) this.player.tryDash(move.x, move.y);
+    if (actions.dash && this.player.tryDash(move.x, move.y)) Sound.play('dash');
     if (actions.brew) this.brewAndDrink();
 
     this.player.update(dt, move.x, move.y);
@@ -157,6 +187,9 @@ export class GameScene extends Phaser.Scene {
     this.buffs.update(dt, phase === 'combat' || phase === 'boss');
     this.telegraphs.update(dt);
     this.updatePickups(dt);
+    this.hazards.update(dt);
+    this.encounters.update(dt);
+    this.tutorial.update(dt);
     this.waves.update(dt);
 
     this.dashBtn.setCooldown(this.player.dashCooldownRatio);
@@ -190,6 +223,22 @@ export class GameScene extends Phaser.Scene {
       });
     }
     this.buffs.onShot();
+    Sound.play('shoot');
+  }
+
+  /** 打擊停頓 */
+  hitStop(sec: number): void {
+    this.stopTimer = Math.max(this.stopTimer, sec);
+  }
+
+  heal(n: number): void {
+    const p = this.player;
+    const before = p.hp;
+    p.hp = Math.min(p.maxHp, p.hp + n);
+    if (p.hp > before) {
+      this.fx.floatText(p.x, p.y - 50, `+${p.hp - before} ♥`, '#ff6b8a', 24);
+      this.fx.burst(p.x, p.y, 60, 0xff6b8a);
+    }
   }
 
   /** 煉成並立刻喝下 */
@@ -201,7 +250,14 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     this.buffs.drink(brew);
-    if (brew.kind === 'mythic') this.unlocks.push(...ProgressStore.record({ fission: true }));
+    this.tutorial.notify('drink');
+    if (brew.kind === 'mythic') {
+      this.unlocks.push(...ProgressStore.record({ fission: true }));
+      Sound.play('fission');
+      this.hitStop(0.15);
+    } else {
+      Sound.play('brew');
+    }
     this.announceBrew(brew);
   }
 
@@ -271,6 +327,7 @@ export class GameScene extends Phaser.Scene {
       if (!pk.alive) continue;
       if (!blocked && (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2 <= (this.buffs.stats.pickupRadius + p.radius) ** 2) {
         if (this.crucible.add(pk.mat)) {
+          Sound.play('pickup', pk.mat.r);
           this.fx.sparks(pk.x, pk.y, hexToInt(RARITY[pk.mat.r].color), 4 + pk.mat.r * 3);
           pk.destroy();
         }
@@ -288,6 +345,8 @@ export class GameScene extends Phaser.Scene {
   hurtPlayer(amount: number): void {
     if (this.ended) return;
     if (!this.player.hurt(amount)) return;
+    Sound.play('hurt');
+    this.hitStop(0.08);
     this.cameras.main.shake(140, 0.01);
     this.cameras.main.flash(120, 120, 0, 0);
     if (navigator.vibrate) {
@@ -303,9 +362,16 @@ export class GameScene extends Phaser.Scene {
 
   onEnemyKilled(e: Enemy): void {
     this.kills++;
-    this.fx.burst(e.x, e.y, e.radius * 1.6, hexToInt(e.def.color), 200);
+    const color = hexToInt(e.def.color);
+    this.fx.burst(e.x, e.y, e.radius * 1.6, color, 200);
+    this.fx.shatter(e.x, e.y, color, e.radius, e.elite || e.def.boss ? 16 : 7);
+    Sound.play('kill');
+    if (e.elite || e.def.boss) {
+      this.hitStop(e.def.boss ? 0.3 : 0.07);
+      this.cameras.main.shake(e.def.boss ? 400 : 120, e.def.boss ? 0.012 : 0.005);
+    }
     this.buffs.onKill(e);
-    if (e.def.type === 'boss') return;
+    if (e.def.boss) return;
     if (e.elite || Math.random() < this.buffs.stats.dropChance) this.dropMaterial(e.x, e.y, undefined, e.elite);
   }
 
@@ -327,26 +393,52 @@ export class GameScene extends Phaser.Scene {
     this.hud.showBanner(text);
   }
 
-  onWaveCleared(wave: number): void {
+  onWaveCleared(globalWave: number, waveInRegion: number): void {
     this.projectiles.clearEnemyBullets();
-    this.unlocks.push(...ProgressStore.record({ wave: wave + 1 }));
-    this.time.delayedCall(700, () => this.openCardSelect(wave));
+    this.unlocks.push(...ProgressStore.record({ wave: globalWave + 1 }));
+    this.pendingEventWave = waveInRegion;
+    this.time.delayedCall(700, () => this.openCardSelect(waveInRegion));
   }
 
-  openCardSelect(wave?: number): void {
+  onBossCleared(region: RegionDef): void {
+    this.unlocks.push(...ProgressStore.record({ bossKill: true }));
+    this.projectiles.clearEnemyBullets();
+    this.hazards.clear();
+    this.showBanner(`${region.name} 突破！`);
+    for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2, undefined, true);
+    this.time.delayedCall(1800, () => this.openCardSelect(undefined, 1));
+  }
+
+  /** 進入新區域：換場景、回血 */
+  onRegionEnter(region: RegionDef, index: number): void {
+    this.drawArena(region.theme);
+    if (index > 0) {
+      this.hazards.clear();
+      this.encounters.clear();
+      this.heal(3);
+    }
+  }
+
+  openCardSelect(wave?: number, minRarity: RarityIndex = 0): void {
     if (this.ended) return;
-    const offers = this.mutations.roll(this.waves.wave);
+    const offers = this.mutations.roll(this.waves.globalWave, minRarity);
     this.scene.launch('CardSelect', {
       wave,
+      region: this.waves.region.name,
       offers: offers.map((o) => ({ ...o, owned: this.mutations.value(o.def.id) })),
       onPick: (index: number) => {
         const o = offers[index];
+        Sound.play('card');
         this.mutations.add(o.def.id, RARITY[o.rarity].mult);
         this.buffs.recompute();
         this.crucible.emit('changed');
         this.buffs.emit('changed', false);
         this.scene.resume();
-        if (this.waves.phase === 'cards') this.waves.next();
+        if (this.waves.phase === 'cards') {
+          this.waves.next();
+          if (this.pendingEventWave) this.encounters.maybeSpawn(this.pendingEventWave);
+          this.pendingEventWave = 0;
+        }
       },
     });
     this.scene.pause();
@@ -371,6 +463,7 @@ export class GameScene extends Phaser.Scene {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     return {
       character: this.character.name,
+      region: this.waves.label,
       drinks: this.buffs.drinks,
       elements: { ...this.buffs.elements },
       passives,
@@ -409,6 +502,7 @@ export class GameScene extends Phaser.Scene {
     if (this.ended) return;
     this.ended = true;
     this.telegraphs.clear();
+    this.tutorial.finish();
     const data: ResultData = {
       victory,
       time: this.runTime,

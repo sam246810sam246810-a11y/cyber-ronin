@@ -31,6 +31,7 @@ export class TelegraphSystem {
 
   add(opts: TelegraphOptions): void {
     const gfx = this.scene.add.graphics().setDepth(DEPTH.telegraph);
+    if (opts.owner && (opts.color ?? COLORS.telegraph) === COLORS.telegraph) this.scene.events.emit('telegraph-warning');
     this.list.push({ ...opts, elapsed: 0, gfx, color: opts.color ?? COLORS.telegraph });
   }
 

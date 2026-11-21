@@ -8,6 +8,7 @@ interface Progress {
   bossKills: number;
   selected: string;
   debugUnlockAll?: boolean;
+  tutorialDone?: boolean;
 }
 
 /** 跨局進度：角色解鎖條件用（存在 localStorage，失敗時只在本次開啟有效） */
@@ -23,7 +24,7 @@ class ProgressStoreImpl {
     }
   }
 
-  private save(): void {
+  save(): void {
     try {
       localStorage.setItem(STORAGE_KEYS.progress, JSON.stringify(this.data));
     } catch {
@@ -80,7 +81,7 @@ class ProgressStoreImpl {
   }
 
   reset(): void {
-    this.data = { bestWave: 0, fissions: 0, bossKills: 0, selected: 'apprentice' };
+    this.data = { bestWave: 0, fissions: 0, bossKills: 0, selected: 'apprentice', tutorialDone: false };
     this.save();
   }
 }

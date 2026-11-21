@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, PLAYER } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
+import { Sound } from './SoundSystem';
 
 export interface BulletOptions {
   radius?: number;
@@ -107,9 +108,10 @@ export class ProjectileSystem {
     if (o.freezeChance && Math.random() < o.freezeChance) e.applyFreeze(0.8);
     const crit = !!o.critChance && Math.random() < o.critChance;
     const dmg = crit ? b.damage * 2 : b.damage;
-    if (crit) this.game.fx.floatText(e.x, e.y - e.radius - 10, '暴擊', '#ffe14d', 16);
     if (o.triggerPassives) this.game.buffs.onHit(e, dmg);
-    e.takeDamage(dmg);
+    e.knockback(b.x - b.vx * 0.05, b.y - b.vy * 0.05, crit ? 14 : 6);
+    e.takeDamage(dmg, { crit });
+    Sound.play(crit ? 'crit' : 'hit');
     this.game.fx.sparks(b.x, b.y, o.color ?? COLORS.bullet, 3);
     if (o.splash) {
       this.game.effects.explode(b.x, b.y, o.splash, b.damage * 0.5, 0xe06bff);

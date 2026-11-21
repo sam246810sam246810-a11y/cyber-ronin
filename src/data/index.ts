@@ -3,12 +3,12 @@ import potionsJson from './potions.json';
 import mythicsJson from './mythics.json';
 import charactersJson from './characters.json';
 import enemiesJson from './enemies.json';
-import wavesJson from './waves.json';
+import regionsJson from './regions.json';
 import mutationsJson from './mutations.json';
 import { RARITY } from '../config';
 import type {
   CharacterDef, ElementDef, ElementId, EnemyDef, EnemyType, Material, MutationDef, MythicDef, RarityIndex,
-  RecipeDef, WaveDef,
+  RecipeDef, RegionDef,
 } from '../types';
 
 export const ELEMENTS = elementsJson as ElementDef[];
@@ -90,7 +90,9 @@ export const mythicKey = (id: string) => `M:${id}`;
 export const CHARACTERS = charactersJson as CharacterDef[];
 
 export const ENEMIES = enemiesJson as unknown as Record<EnemyType, EnemyDef>;
-export const WAVES = wavesJson as WaveDef[];
+export const REGIONS = regionsJson as RegionDef[];
+/** 全程波數（不含 Boss） */
+export const TOTAL_WAVES = REGIONS.reduce((s, r) => s + r.waves.length, 0);
 export const MUTATIONS = mutationsJson as MutationDef[];
 
 export function hexToInt(hex: string): number {

@@ -22,5 +22,5 @@
     "passiveName": "共振", "passiveDesc": "所有藥水被動層數 +25%，開局帶「雷暴之核」1 層",
     "stats": { "hp": 4, "speed": 215, "fireInterval": 0.45, "damage": 1, "dashCooldown": 1.2 },
     "elementBonus": { "T": 1.5 }, "moduleMul": 1.25, "startModules": [{ "id": "core_T", "n": 1 }],
-    "unlock": { "type": "bossKills", "value": 1, "text": "擊敗食人巨花" } }
+    "unlock": { "type": "bossKills", "value": 1, "text": "擊敗任一區域 Boss" } }
 ]

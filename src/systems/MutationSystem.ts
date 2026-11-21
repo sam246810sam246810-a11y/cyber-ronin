@@ -38,10 +38,10 @@ export class MutationSystem {
   }
 
   /** 三選一，不重複，每張擲稀有度 */
-  roll(wave: number, n = 3): CardOffer[] {
+  roll(wave: number, minRarity: RarityIndex = 0, n = 3): CardOffer[] {
     const w = CARD_RARITY.base.map((b, i) => Math.max(0.1, b + CARD_RARITY.perWave[i] * Math.max(0, wave - 1)));
     return shuffle([...MUTATIONS]).slice(0, n).map((def) => {
-      const rarity = rollRarity(w);
+      const rarity = Math.max(minRarity, rollRarity(w)) as RarityIndex;
       return { def, rarity, value: def.base * RARITY[rarity].mult };
     });
   }

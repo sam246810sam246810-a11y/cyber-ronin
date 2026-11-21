@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FISSION } from '../config';
 import { MYTHICS, RECIPES, mythicKey, potionQuality, recipeKey } from '../data';
-import type { Brew, Material } from '../types';
+import type { Brew, Material, RarityIndex } from '../types';
 import { pick } from '../utils';
 import { CodexStore } from './CodexStore';
 import type { MutationSystem } from './MutationSystem';
@@ -23,6 +23,8 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
   /** 角色帶來的裂變加成 */
   bonusChance = 0;
   forceFission = false;
+  /** 祈願泉祝福等額外品質（由 GameScene 提供，取用後歸零） */
+  qualityBonusProvider: () => number = () => 0;
 
   constructor(private mutations: MutationSystem) {
     super();
@@ -73,7 +75,7 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
     const mats = [...this.slots] as Material[];
     const key = recipeKey(mats.map((m) => m.el));
     const recipe = RECIPES[key];
-    const quality = potionQuality(mats);
+    const quality = Math.min(3, potionQuality(mats) + this.qualityBonusProvider()) as RarityIndex;
     const chance = this.fissionChance;
     this.slots = [null, null, null];
     this.brewTimer = CrucibleSystem.BREW_TIME;

@@ -62,6 +62,10 @@ export function installDebugPanel(game: Phaser.Game): void {
   });
   add('跳過本波', () => getGame()?.waves.debugSkip());
   add('直接到 Boss', () => getGame()?.waves.debugToBoss());
+  add('下一區', () => getGame()?.waves.debugNextRegion());
+  add('寶箱', () => getGame()?.encounters.spawn('chest'));
+  add('祈願泉', () => getGame()?.encounters.spawn('fountain'));
+  add('商人', () => getGame()?.encounters.spawn('merchant'));
   add('選突變卡', () => getGame()?.openCardSelect());
   add('無敵 開/關', () => {
     const g = getGame();
@@ -82,7 +86,7 @@ export function installDebugPanel(game: Phaser.Game): void {
   const refresh = () => {
     const g = getGame();
     status.textContent = g
-      ? `波:${g.waves.wave} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}% 角色:${g.character.name}`
+      ? `${g.waves.label} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}% 角色:${g.character.name}`
       : `圖鑑:${CodexStore.count}/${CodexStore.total}（在遊戲中才能用大部分按鈕）`;
   };
 

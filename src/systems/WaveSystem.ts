@@ -1,60 +1,92 @@
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, WAVE } from '../config';
-import { ENEMIES, WAVES } from '../data';
+import { ENEMIES, REGIONS } from '../data';
 import type { Enemy } from '../entities/Enemy';
-import { Boss } from '../entities/enemies/Boss';
+import { FlowerBoss } from '../entities/bosses/FlowerBoss';
+import { MagmaSnail } from '../entities/bosses/MagmaSnail';
+import { ThunderKing } from '../entities/bosses/ThunderKing';
+import { Beetle } from '../entities/enemies/Beetle';
+import { Bomber } from '../entities/enemies/Bomber';
 import { Crawler } from '../entities/enemies/Crawler';
 import { Hopper } from '../entities/enemies/Hopper';
 import { Spitter } from '../entities/enemies/Spitter';
+import { Splitter } from '../entities/enemies/Splitter';
+import { Wisp } from '../entities/enemies/Wisp';
 import type { GameScene } from '../scenes/GameScene';
-import type { EnemyType } from '../types';
+import type { MinionType, RegionDef } from '../types';
 import { dist, rand, shuffle } from '../utils';
+import { Sound } from './SoundSystem';
 
 export type WavePhase = 'intermission' | 'combat' | 'cards' | 'boss' | 'victory' | 'defeat';
 
 interface QueuedSpawn {
   at: number;
-  type: Exclude<EnemyType, 'boss'>;
+  type: MinionType;
   elite: boolean;
 }
 
 /**
- * 波次流程：
- * intermission(2s) → combat → [清完] cards → intermission → … → 第 10 波清完 → cards → intermission → boss → victory
+ * 區域 → 波次 → Boss 的流程：
+ * [區域 1] intermission → combat → cards → … → boss → cards（保底稀有）→ [區域 2] …
+ * 最後一區的 Boss 被打倒就勝利。
  */
 export class WaveSystem {
   phase: WavePhase = 'intermission';
-  /** 1-based；11 代表 Boss 戰 */
+  regionIndex = 0;
+  /** 區域內的波數，1-based；超過該區波數代表 Boss 戰 */
   wave = 1;
   phaseTime = 0;
   private queue: QueuedSpawn[] = [];
   private pendingSpawns = 0;
-  boss?: Boss;
+  boss?: Enemy;
+  private bossDone = false;
 
   constructor(private game: GameScene) {}
 
+  get region(): RegionDef {
+    return REGIONS[this.regionIndex];
+  }
+
+  get hpMul(): number {
+    return this.region.hpMul;
+  }
+
   get isBossWave(): boolean {
-    return this.wave > WAVE.total;
+    return this.wave > this.region.waves.length;
+  }
+
+  /** 全程第幾波（跨區域累計，Boss 算在該區最後一波之後） */
+  get globalWave(): number {
+    return REGIONS.slice(0, this.regionIndex).reduce((s, r) => s + r.waves.length, 0) + Math.min(this.wave, this.region.waves.length);
   }
 
   get label(): string {
-    return this.isBossWave ? 'BOSS' : `第 ${this.wave}/${WAVE.total} 波`;
+    return this.isBossWave ? `${this.region.name}・BOSS` : `${this.region.name} ${this.wave}/${this.region.waves.length}`;
   }
 
   start(): void {
+    this.game.onRegionEnter(this.region, this.regionIndex);
     this.enterIntermission();
   }
 
   private enterIntermission(): void {
     this.phase = 'intermission';
     this.phaseTime = 0;
-    this.game.showBanner(this.isBossWave ? '食人巨花 來襲！' : `第 ${this.wave} 波`);
+    if (this.isBossWave) {
+      this.game.showBanner(`${ENEMIES[this.region.boss].name} 來襲！`);
+      Sound.play('boss');
+    } else if (this.wave === 1) {
+      this.game.showBanner(`第 ${this.regionIndex + 1} 區　${this.region.name}`);
+    } else {
+      this.game.showBanner(`第 ${this.wave} 波`);
+    }
   }
 
   private startCombat(): void {
     this.phaseTime = 0;
     if (this.isBossWave) {
       this.phase = 'boss';
-      const def = ENEMIES.boss;
+      this.bossDone = false;
+      const def = ENEMIES[this.region.boss];
       const x = (ARENA.x + ARENA_RIGHT) / 2;
       const y = ARENA.y + 200;
       this.game.telegraphs.add({
@@ -62,20 +94,18 @@ export class WaveSystem {
         color: 0xb06bff,
         shape: { kind: 'circle', x, y, r: def.radius * 1.4 },
         onDone: () => {
-          this.boss = new Boss(this.game, def, x, y);
+          const B = this.region.boss === 'boss_snail' ? MagmaSnail : this.region.boss === 'boss_king' ? ThunderKing : FlowerBoss;
+          this.boss = new B(this.game, def, x, y);
           this.game.addEnemy(this.boss);
         },
       });
       return;
     }
     this.phase = 'combat';
-    const def = WAVES[this.wave - 1];
+    const def = this.region.waves[this.wave - 1];
     const list: QueuedSpawn[] = [];
-    for (const g of def.groups) {
-      for (let i = 0; i < g.count; i++) list.push({ at: 0, type: g.type, elite: !!g.elite });
-    }
+    for (const g of def.groups) for (let i = 0; i < g.count; i++) list.push({ at: 0, type: g.type, elite: !!g.elite });
     shuffle(list);
-    // 第一隻馬上出，其餘平均分佈在 spawnWindow 內
     list.forEach((s, i) => {
       s.at = (def.spawnWindow * i) / Math.max(1, list.length) + rand(-0.3, 0.3);
     });
@@ -97,14 +127,23 @@ export class WaveSystem {
         }
         if (!this.queue.length && this.pendingSpawns === 0 && this.game.enemies.length === 0) {
           this.phase = 'cards';
-          this.game.onWaveCleared(this.wave);
+          this.game.onWaveCleared(this.globalWave, this.wave);
         }
         break;
       }
       case 'boss':
         if (this.boss && !this.boss.alive) {
-          this.phase = 'victory';
-          this.game.onVictory();
+          this.boss = undefined;
+          this.bossDone = true;
+          // 清掉 Boss 召喚的小怪
+          this.killAll();
+          if (this.regionIndex >= REGIONS.length - 1) {
+            this.phase = 'victory';
+            this.game.onVictory();
+          } else {
+            this.phase = 'cards';
+            this.game.onBossCleared(this.region);
+          }
         }
         break;
       default:
@@ -114,16 +153,22 @@ export class WaveSystem {
 
   /** 突變卡選完後呼叫 */
   next(): void {
-    this.wave++;
+    if (this.bossDone) {
+      this.bossDone = false;
+      this.regionIndex++;
+      this.wave = 1;
+      this.game.onRegionEnter(this.region, this.regionIndex);
+    } else {
+      this.wave++;
+    }
     this.enterIntermission();
   }
 
-  /** 生成敵人（先出現紫色傳送預警） */
-  spawnEnemy(type: Exclude<EnemyType, 'boss'>, x?: number, y?: number, elite = false, portal = 0.6): void {
+  spawnEnemy(type: MinionType, x?: number, y?: number, elite = false, portal = 0.6): void {
     const def = ENEMIES[type];
     const r = def.radius * (elite ? 1.3 : 1);
     if (x === undefined || y === undefined) {
-      const pos = type === 'spitter' ? this.randomInnerPoint(320) : this.randomEdgePoint(260);
+      const pos = type === 'spitter' || type === 'wisp' ? this.randomInnerPoint(320) : this.randomEdgePoint(260);
       x = pos.x;
       y = pos.y;
     }
@@ -138,18 +183,22 @@ export class WaveSystem {
       shape: { kind: 'circle', x: sx, y: sy, r: r + 6 },
       onDone: () => {
         this.pendingSpawns--;
-        if (this.phase === 'victory' || this.phase === 'defeat') return;
+        if (this.phase === 'victory' || this.phase === 'defeat' || this.phase === 'cards') return;
         this.game.addEnemy(this.create(type, sx, sy, elite));
       },
     });
   }
 
-  private create(type: Exclude<EnemyType, 'boss'>, x: number, y: number, elite: boolean): Enemy {
+  private create(type: MinionType, x: number, y: number, elite: boolean): Enemy {
     const def = ENEMIES[type];
     switch (type) {
       case 'crawler': return new Crawler(this.game, def, x, y, elite, 'triangle');
       case 'spitter': return new Spitter(this.game, def, x, y, elite, 'flower');
       case 'hopper': return new Hopper(this.game, def, x, y, elite, 'mushroom');
+      case 'bomber': return new Bomber(this.game, def, x, y, elite, 'bomb');
+      case 'beetle': return new Beetle(this.game, def, x, y, elite, 'beetle');
+      case 'splitter': return new Splitter(this.game, def, x, y, elite, 'slime');
+      case 'wisp': return new Wisp(this.game, def, x, y, elite, 'wisp');
     }
   }
 
@@ -179,17 +228,31 @@ export class WaveSystem {
     return pt;
   }
 
-  /** debug：清除剩餘敵人並結束本波 */
-  debugSkip(): void {
-    this.queue = [];
-    this.game.enemies.forEach((e) => e.takeDamage(99999));
+  /** 清掉場上所有敵人（分裂史萊姆會再生出小隻，所以重複幾次） */
+  killAll(): void {
+    for (let i = 0; i < 5 && this.game.enemies.some((e) => e.alive); i++) {
+      [...this.game.enemies].forEach((e) => e.takeDamage(99999, { flash: false }));
+    }
   }
 
-  /** debug：直接跳到 Boss 前 */
+  debugSkip(): void {
+    this.queue = [];
+    this.killAll();
+  }
+
   debugToBoss(): void {
     this.queue = [];
-    this.game.enemies.forEach((e) => e.takeDamage(99999));
-    this.wave = WAVE.total + 1;
+    this.killAll();
+    this.wave = this.region.waves.length + 1;
     this.enterIntermission();
+  }
+
+  /** debug：跳到下一區 */
+  debugNextRegion(): void {
+    if (this.regionIndex >= REGIONS.length - 1) return;
+    this.queue = [];
+    this.killAll();
+    this.bossDone = true;
+    this.next();
   }
 }
