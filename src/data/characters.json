@@ -10,7 +10,7 @@
     "passiveName": "霜冷彈頭", "passiveDesc": "開局帶「冰封」1 層，冰晶素材屬性 +50%",
     "stats": { "hp": 4, "speed": 235, "fireInterval": 0.38, "damage": 0.9, "dashCooldown": 1.1 },
     "elementBonus": { "I": 1.5 }, "startModules": [{ "id": "rider_I", "n": 1 }],
-    "unlock": { "type": "bestWave", "value": 5, "text": "任一角色到達第 5 波" } },
+    "unlock": { "type": "bestFloor", "value": 3, "text": "任一角色到達第 3 層" } },
   { "id": "lava_knight", "name": "熔岩重裝", "rarity": 2, "color": "#ff8a3d",
     "desc": "血厚攻高但笨重，被打反而會爆發。",
     "passiveName": "熔岩護甲", "passiveDesc": "受傷時對周圍爆炸，火焰花素材屬性 +50%",

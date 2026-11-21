@@ -83,7 +83,7 @@ export class MagmaSnail extends Enemy {
       const n = this.enraged ? 4 : 3;
       for (let i = 0; i < n; i++) {
         const ang = (Math.PI * 2 * i) / n;
-        this.game.waves.spawnEnemy('bomber', this.x + Math.cos(ang) * 110, this.y + Math.sin(ang) * 110, false, 0.6);
+        this.game.dungeon.spawnEnemy('bomber', this.x + Math.cos(ang) * 110, this.y + Math.sin(ang) * 110, false, 0.6);
       }
       this.busy = false;
     }

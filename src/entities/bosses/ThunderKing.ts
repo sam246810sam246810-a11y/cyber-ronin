@@ -95,9 +95,9 @@ export class ThunderKing extends Enemy {
       }
       this.game.cameras.main.shake(100, 0.004);
     } else {
-      this.game.waves.spawnEnemy('splitter', this.x - 120, this.y + 60, false, 0.6);
-      this.game.waves.spawnEnemy('splitter', this.x + 120, this.y + 60, false, 0.6);
-      if (this.enraged) this.game.waves.spawnEnemy('wisp', this.x, this.y + 160, false, 0.6);
+      this.game.dungeon.spawnEnemy('splitter', this.x - 120, this.y + 60, false, 0.6);
+      this.game.dungeon.spawnEnemy('splitter', this.x + 120, this.y + 60, false, 0.6);
+      if (this.enraged) this.game.dungeon.spawnEnemy('wisp', this.x, this.y + 160, false, 0.6);
       this.busy = false;
     }
   }

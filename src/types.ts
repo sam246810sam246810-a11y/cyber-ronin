@@ -82,7 +82,7 @@ export interface CharacterDef {
   hurtBlast?: { radius: number; damage: number };
   /** 所有藥水被動層數倍率 */
   moduleMul?: number;
-  unlock: { type: 'default' | 'bestWave' | 'fissions' | 'bossKills'; value: number; text: string };
+  unlock: { type: 'default' | 'bestFloor' | 'fissions' | 'bossKills'; value: number; text: string };
 }
 
 export type EnemyType =
@@ -105,15 +105,13 @@ export interface EnemyDef {
   [key: string]: unknown;
 }
 
-export interface WaveGroup {
+export interface RegionEnemy {
   type: MinionType;
-  count: number;
-  elite?: boolean;
-}
-
-export interface WaveDef {
-  spawnWindow: number;
-  groups: WaveGroup[];
+  weight: number;
+  /** 佔用戰鬥預算 */
+  cost: number;
+  /** 從該區第幾層開始出現 */
+  minFloor: number;
 }
 
 export interface RegionTheme {
@@ -132,8 +130,12 @@ export interface RegionDef {
   hpMul: number;
   boss: BossType;
   theme: RegionTheme;
-  waves: WaveDef[];
+  enemies: RegionEnemy[];
+  /** 每層戰鬥房的敵人預算（兩波合計） */
+  roomBudget: number[];
 }
+
+export type RoomType = 'start' | 'combat' | 'elite' | 'treasure' | 'shop' | 'event' | 'exit' | 'boss';
 
 export interface MutationDef {
   id: string;

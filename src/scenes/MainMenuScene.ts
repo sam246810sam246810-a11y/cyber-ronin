@@ -42,7 +42,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.add.text(GAME_W / 2, 1060, '左下：搖桿移動　右下：衝刺 / 煉成\n鍵盤：WASD 移動　空白鍵 衝刺　J 或 K 煉成', {
       fontFamily: FONT, fontSize: '20px', color: COLORS.textDim, align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, GAME_H - 40, 'v0.4 三大區域版', {
+    this.add.text(GAME_W / 2, GAME_H - 40, 'v0.5 地下城爬塔版', {
       fontFamily: FONT, fontSize: '16px', color: '#4a4458',
     }).setOrigin(0.5);
   }

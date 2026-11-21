@@ -3,7 +3,7 @@ import { ARENA_BOTTOM, COLORS, DEPTH, FONT, GAME_W } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import { ProgressStore } from './ProgressStore';
 
-type Step = 'move' | 'pickup' | 'brew' | 'drink' | 'telegraph' | 'event';
+type Step = 'move' | 'pickup' | 'brew' | 'drink' | 'telegraph' | 'door' | 'stairs' | 'shop';
 
 const TEXT: Record<Step, string> = {
   move: '拖曳左下方移動，角色會自動射擊最近的敵人',
@@ -11,7 +11,9 @@ const TEXT: Record<Step, string> = {
   brew: '坩堝滿了！按「煉成」把藥水喝下去',
   drink: '藥水效果整局有效。光暈顏色＝稀有度，越稀有越容易「裂變」！',
   telegraph: '紅色區域是攻擊預警，按「衝刺」可以無敵閃過',
-  event: '場上出現了事件，走過去碰它看看！',
+  door: '房間清空，門打開了！走進門探索下一間（右上角是小地圖）',
+  stairs: '找到樓梯了！走上去前往下一層，會先拿到一張突變卡',
+  shop: '商店：用打怪掉的金幣買素材、回血或突變卡',
 };
 
 /**
@@ -74,7 +76,7 @@ export class TutorialSystem {
       (c.step === 'move' && (c.t > 6 || Math.abs(g.player.x - GAME_W / 2) > 80)) ||
       (c.step === 'pickup' && (g.crucible.filled > 0 || c.t > 10)) ||
       (c.step === 'brew' && (g.crucible.filled < 3 || c.t > 15)) ||
-      (['drink', 'telegraph', 'event'].includes(c.step) && c.t > 5);
+      (['drink', 'telegraph', 'door', 'stairs', 'shop'].includes(c.step) && c.t > 5);
     if (done) {
       this.current = undefined;
       this.arrow.setVisible(false);

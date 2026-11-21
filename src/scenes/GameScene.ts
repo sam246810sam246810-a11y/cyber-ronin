@@ -16,7 +16,8 @@ import { MutationSystem, rollRarity } from '../systems/MutationSystem';
 import { ProgressStore } from '../systems/ProgressStore';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { TelegraphSystem } from '../systems/TelegraphSystem';
-import { WaveSystem } from '../systems/WaveSystem';
+import { DungeonSystem, DIRS, type Dir, type Room } from '../systems/DungeonSystem';
+import { Minimap } from '../ui/Minimap';
 import { HazardSystem } from '../systems/HazardSystem';
 import { EventSystem } from '../systems/EventSystem';
 import { TutorialSystem } from '../systems/TutorialSystem';
@@ -50,7 +51,7 @@ export class GameScene extends Phaser.Scene {
   buffs!: BuffSystem;
   crucible!: CrucibleSystem;
   mutations!: MutationSystem;
-  waves!: WaveSystem;
+  dungeon!: DungeonSystem;
   fx!: FxSystem;
   input2!: InputSystem;
   hazards!: HazardSystem;
@@ -60,7 +61,12 @@ export class GameScene extends Phaser.Scene {
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
   private stopTimer = 0;
-  private pendingEventWave = 0;
+  coins = 0;
+  private coinItems: { x: number; y: number; vx: number; vy: number; t: number; sprite: Phaser.GameObjects.Image }[] = [];
+  private doorGfx!: Phaser.GameObjects.Graphics;
+  private doorsLocked = false;
+  private minimap!: Minimap;
+  private transitioning = false;
 
   private hud!: HUD;
   private dashBtn!: RoundButton;
@@ -87,8 +93,11 @@ export class GameScene extends Phaser.Scene {
     this.character = ProgressStore.selected;
 
     this.stopTimer = 0;
-    this.pendingEventWave = 0;
     this.arenaGfx = undefined;
+    this.coins = 0;
+    this.coinItems = [];
+    this.doorsLocked = false;
+    this.transitioning = false;
 
     this.fx = new FxSystem(this);
     this.telegraphs = new TelegraphSystem(this);
@@ -97,7 +106,8 @@ export class GameScene extends Phaser.Scene {
     this.crucible = new CrucibleSystem(this.mutations);
     this.crucible.bonusChance = this.character.fissionBonus ?? 0;
     this.effects = new EffectSystem(this);
-    this.waves = new WaveSystem(this);
+    this.dungeon = new DungeonSystem(this);
+    this.doorGfx = this.add.graphics().setDepth(DEPTH.floor + 1);
     this.hazards = new HazardSystem(this);
     this.encounters = new EventSystem(this);
     this.crucible.qualityBonusProvider = () => this.encounters.takeQualityBonus();
@@ -110,6 +120,7 @@ export class GameScene extends Phaser.Scene {
     // UI
     this.add.rectangle(GAME_W / 2, (CONTROLS_Y + GAME_H) / 2, GAME_W, GAME_H - CONTROLS_Y, 0x0b0910).setDepth(DEPTH.ui - 2);
     this.hud = new HUD(this, this.player.maxHp, () => this.openPause());
+    this.minimap = new Minimap(this, this.dungeon);
     new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
     this.input2 = new InputSystem(this);
     this.dashBtn = createRoundButton(this, 622, 1098, 68, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
@@ -124,7 +135,7 @@ export class GameScene extends Phaser.Scene {
     this.events.on('resume', () => this.input2.consume());
     this.tutorial = new TutorialSystem(this);
     this.events.on('telegraph-warning', () => this.tutorial.notify('telegraph'));
-    this.waves.start();
+    this.dungeon.start();
 
     (window as unknown as { __game?: GameScene }).__game = this;
   }
@@ -165,8 +176,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     const dt = realDt;
-    const phase = this.waves.phase;
-    if (phase !== 'cards') this.runTime += dt;
+    if (this.dungeon.phase !== 'cards') this.runTime += dt;
 
     const actions = this.input2.consume();
     const move = this.input2.move;
@@ -174,6 +184,7 @@ export class GameScene extends Phaser.Scene {
     if (actions.brew) this.brewAndDrink();
 
     this.player.update(dt, move.x, move.y);
+    this.checkDoors();
     this.crucible.update(dt);
     this.autoFire(dt);
 
@@ -184,18 +195,20 @@ export class GameScene extends Phaser.Scene {
 
     this.projectiles.update(dt, this.enemies);
     this.effects.update(dt);
-    this.buffs.update(dt, phase === 'combat' || phase === 'boss');
+    this.buffs.update(dt, this.dungeon.combatActive);
     this.telegraphs.update(dt);
     this.updatePickups(dt);
     this.hazards.update(dt);
     this.encounters.update(dt);
     this.tutorial.update(dt);
-    this.waves.update(dt);
+    this.updateCoins(dt);
+    this.dungeon.update(dt);
 
     this.dashBtn.setCooldown(this.player.dashCooldownRatio);
     this.brewBtn.setEnabled(this.crucible.canBrew);
-    const boss = this.waves.boss;
-    this.hud.update(this.player, this.waves.label, this.runTime,
+    const boss = this.dungeon.boss;
+    this.hud.setCoins(this.coins);
+    this.hud.update(this.player, this.dungeon.label, this.runTime,
       boss ? { hp: boss.hp, maxHp: boss.maxHp, name: boss.def.name, alive: boss.alive } : undefined);
   }
 
@@ -371,7 +384,12 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.shake(e.def.boss ? 400 : 120, e.def.boss ? 0.012 : 0.005);
     }
     this.buffs.onKill(e);
-    if (e.def.boss) return;
+    if (e.def.boss) {
+      this.dropCoins(e.x, e.y, 25);
+      return;
+    }
+    if (e.elite) this.dropCoins(e.x, e.y, 5);
+    else if (Math.random() < 0.35) this.dropCoins(e.x, e.y, 1);
     if (e.elite || Math.random() < this.buffs.stats.dropChance) this.dropMaterial(e.x, e.y, undefined, e.elite);
   }
 
@@ -380,7 +398,7 @@ export class GameScene extends Phaser.Scene {
     if (!mat) {
       const base = elite ? DROP_RARITY.elite : DROP_RARITY.normal;
       const w = base.map((b, i) => {
-        let v = b + (elite ? 0 : DROP_RARITY.perWave[i] * Math.max(0, this.waves.wave - 1));
+        let v = b + (elite ? 0 : DROP_RARITY.perWave[i] * this.dungeon.depthIndex);
         if (i > 0) v *= this.buffs.stats.fortune;
         return Math.max(0.1, v);
       });
@@ -393,11 +411,128 @@ export class GameScene extends Phaser.Scene {
     this.hud.showBanner(text);
   }
 
-  onWaveCleared(globalWave: number, waveInRegion: number): void {
+  // ---- 地下城 ----
+
+  private drawDoors(): void {
+    const g = this.doorGfx;
+    g.clear();
+    const room = this.dungeon.current;
+    if (!room) return;
+    const theme = this.dungeon.region.theme;
+    const W = 130;
+    const cx = (ARENA.x + ARENA_RIGHT) / 2;
+    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
+    const rects: Record<Dir, [number, number, number, number]> = {
+      n: [cx - W / 2, ARENA.y - 12, W, 16],
+      s: [cx - W / 2, ARENA_BOTTOM - 4, W, 16],
+      w: [ARENA.x - 12, cy - W / 2, 16, W],
+      e: [ARENA_RIGHT - 4, cy - W / 2, 16, W],
+    };
+    for (const dir of Object.keys(DIRS) as Dir[]) {
+      if (!room.doors[dir]) continue;
+      const [x, y, w, h] = rects[dir];
+      g.fillStyle(hexToInt(theme.floor), 1).fillRect(x, y, w, h);
+      if (this.doorsLocked) {
+        g.fillStyle(0xff3b3b, 0.9);
+        const horiz = w > h;
+        for (let i = 0; i < 5; i++) {
+          if (horiz) g.fillRect(x + 8 + i * ((w - 16) / 4) - 3, y - 4, 6, h + 8);
+          else g.fillRect(x - 4, y + 8 + i * ((h - 16) / 4) - 3, w + 8, 6);
+        }
+      } else {
+        g.fillStyle(0xffd166, 0.35).fillRect(x, y, w, h);
+      }
+    }
+  }
+
+  setDoorsLocked(locked: boolean): void {
+    this.doorsLocked = locked;
+    this.drawDoors();
+  }
+
+  /** 玩家貼到開著的門就換房 */
+  private checkDoors(): void {
+    if (this.transitioning || this.dungeon.phase !== 'explore' || this.doorsLocked) return;
+    const p = this.player;
+    const room = this.dungeon.current;
+    const half = 60;
+    const cx = (ARENA.x + ARENA_RIGHT) / 2;
+    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
+    const edge = p.radius + 2;
+    if (room.doors.n && p.y <= ARENA.y + edge && Math.abs(p.x - cx) < half) this.dungeon.go('n');
+    else if (room.doors.s && p.y >= ARENA_BOTTOM - edge && Math.abs(p.x - cx) < half) this.dungeon.go('s');
+    else if (room.doors.w && p.x <= ARENA.x + edge && Math.abs(p.y - cy) < half) this.dungeon.go('w');
+    else if (room.doors.e && p.x >= ARENA_RIGHT - edge && Math.abs(p.y - cy) < half) this.dungeon.go('e');
+  }
+
+  /** 換房淡出淡入 */
+  transition(fn: () => void): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    this.cameras.main.fadeOut(120, 0, 0, 0);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      fn();
+      this.cameras.main.fadeIn(160, 0, 0, 0);
+      this.transitioning = false;
+    });
+  }
+
+  onRoomEnter(room: Room, prev: Room | undefined, fromDir?: Dir): void {
+    // 把上一間的素材收起來，金幣直接入袋
+    if (prev && prev !== room) {
+      prev.stash = this.pickups.filter((pk) => pk.alive).map((pk) => ({ mat: pk.mat, x: pk.x, y: pk.y, life: pk.life }));
+    }
+    this.pickups.forEach((pk) => pk.destroy());
+    this.pickups = [];
+    this.coinItems.forEach((c) => {
+      this.coins++;
+      c.sprite.destroy();
+    });
+    this.coinItems = [];
+    this.projectiles.clearAll();
+    this.telegraphs.clear();
+    this.effects.clearRoomZones();
+    this.hazards.clear();
+    for (const st of room.stash) {
+      const pk = new Pickup(this, st.mat, st.x, st.y);
+      pk.life = st.life;
+      this.pickups.push(pk);
+    }
+    room.stash = [];
+
+    const cx = (ARENA.x + ARENA_RIGHT) / 2;
+    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
+    const inset = 70;
+    const p = this.player;
+    if (fromDir === 'n') p.setPosition(cx, ARENA.y + inset);
+    else if (fromDir === 's') p.setPosition(cx, ARENA_BOTTOM - inset);
+    else if (fromDir === 'w') p.setPosition(ARENA.x + inset, cy);
+    else if (fromDir === 'e') p.setPosition(ARENA_RIGHT - inset, cy);
+    else p.setPosition(cx, ARENA.y + ARENA.h * 0.7);
+
+    this.doorsLocked = false;
+    this.drawDoors();
+    this.encounters.setupRoom(room);
+    this.minimap.draw();
+    if (room.type === 'exit') this.tutorial.notify('stairs');
+    if (room.type === 'shop') this.tutorial.notify('shop');
+  }
+
+  onRoomCleared(room: Room): void {
     this.projectiles.clearEnemyBullets();
-    this.unlocks.push(...ProgressStore.record({ wave: globalWave + 1 }));
-    this.pendingEventWave = waveInRegion;
-    this.time.delayedCall(700, () => this.openCardSelect(waveInRegion));
+    const cx = (ARENA.x + ARENA_RIGHT) / 2;
+    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
+    this.dropCoins(cx, cy, 3 + this.dungeon.floor + this.dungeon.regionIndex * 2);
+    if (Math.random() < 0.5) this.dropMaterial(cx, cy + 40);
+    Sound.play('card');
+    this.showBanner(room.type === 'elite' ? '挑戰成功！' : '房間清空');
+    this.minimap.draw();
+    this.tutorial.notify('door');
+    if (room.type === 'elite') {
+      this.dropMaterial(cx - 60, cy, undefined, true);
+      this.dropMaterial(cx + 60, cy, undefined, true);
+      this.time.delayedCall(900, () => this.openCardSelect('精英挑戰獎勵', 1));
+    }
   }
 
   onBossCleared(region: RegionDef): void {
@@ -405,26 +540,78 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.clearEnemyBullets();
     this.hazards.clear();
     this.showBanner(`${region.name} 突破！`);
-    for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2, undefined, true);
-    this.time.delayedCall(1800, () => this.openCardSelect(undefined, 1));
+    for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2 + 80, undefined, true);
+    this.minimap.draw();
+    this.time.delayedCall(1800, () => this.openCardSelect('Boss 獎勵', 1, () => {
+      this.dungeon.afterCards();
+      this.encounters.setupRoom(this.dungeon.current);
+    }));
   }
 
-  /** 進入新區域：換場景、回血 */
+  /** 走上樓梯：一般層先拿樓層獎勵卡 */
+  onStairs(): void {
+    if (this.dungeon.combatActive) return;
+    const go = () => this.transition(() => this.dungeon.nextFloor());
+    if (this.dungeon.isBossFloor) go();
+    else this.openCardSelect(`${this.dungeon.label} 通過！`, 0, go);
+  }
+
+  onFloorEnter(globalFloor: number): void {
+    this.unlocks.push(...ProgressStore.record({ floor: globalFloor }));
+  }
+
+  /** 進入新區域：換場景配色、回血 */
   onRegionEnter(region: RegionDef, index: number): void {
     this.drawArena(region.theme);
-    if (index > 0) {
-      this.hazards.clear();
-      this.encounters.clear();
-      this.heal(3);
+    if (index > 0) this.heal(3);
+  }
+
+  // ---- 金幣 ----
+
+  dropCoins(x: number, y: number, n: number): void {
+    n = Math.round(n * (1 + this.mutations.value('greed') / 100));
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 120 + Math.random() * 160;
+      const sprite = this.add.image(x, y, 'coin').setDisplaySize(16, 16).setDepth(DEPTH.pickup + 2);
+      this.coinItems.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, sprite });
     }
   }
 
-  openCardSelect(wave?: number, minRarity: RarityIndex = 0): void {
+  private updateCoins(dt: number): void {
+    if (!this.coinItems.length) return;
+    const p = this.player;
+    this.coinItems = this.coinItems.filter((c) => {
+      c.t += dt;
+      const dx = p.x - c.x;
+      const dy = p.y - c.y;
+      const d = Math.hypot(dx, dy);
+      if (c.t > 0.35 && d < 170) {
+        const sp = 650;
+        c.vx = (dx / d) * sp;
+        c.vy = (dy / d) * sp;
+      } else {
+        c.vx *= Math.pow(0.02, dt);
+        c.vy *= Math.pow(0.02, dt);
+      }
+      c.x = Math.max(ARENA.x + 8, Math.min(ARENA_RIGHT - 8, c.x + c.vx * dt));
+      c.y = Math.max(ARENA.y + 8, Math.min(ARENA_BOTTOM - 8, c.y + c.vy * dt));
+      c.sprite.setPosition(c.x, c.y).setScale(c.sprite.scaleX, Math.abs(Math.cos(c.t * 8)) * (16 / 32) + 0.05);
+      if (d < p.radius + 8 && c.t > 0.2) {
+        this.coins++;
+        Sound.play('pickup', 0);
+        c.sprite.destroy();
+        return false;
+      }
+      return true;
+    });
+  }
+
+  openCardSelect(title?: string, minRarity: RarityIndex = 0, after?: () => void): void {
     if (this.ended) return;
-    const offers = this.mutations.roll(this.waves.globalWave, minRarity);
+    const offers = this.mutations.roll(this.dungeon.depthIndex + 1, minRarity);
     this.scene.launch('CardSelect', {
-      wave,
-      region: this.waves.region.name,
+      title,
       offers: offers.map((o) => ({ ...o, owned: this.mutations.value(o.def.id) })),
       onPick: (index: number) => {
         const o = offers[index];
@@ -434,11 +621,7 @@ export class GameScene extends Phaser.Scene {
         this.crucible.emit('changed');
         this.buffs.emit('changed', false);
         this.scene.resume();
-        if (this.waves.phase === 'cards') {
-          this.waves.next();
-          if (this.pendingEventWave) this.encounters.maybeSpawn(this.pendingEventWave);
-          this.pendingEventWave = 0;
-        }
+        after?.();
       },
     });
     this.scene.pause();
@@ -463,7 +646,7 @@ export class GameScene extends Phaser.Scene {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     return {
       character: this.character.name,
-      region: this.waves.label,
+      region: this.dungeon.label,
       drinks: this.buffs.drinks,
       elements: { ...this.buffs.elements },
       passives,
@@ -488,8 +671,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onDefeat(): void {
-    this.waves.phase = 'defeat';
-    this.unlocks.push(...ProgressStore.record({ wave: this.waves.wave }));
+    this.dungeon.phase = 'defeat';
     this.endRun(false);
   }
 
@@ -507,7 +689,7 @@ export class GameScene extends Phaser.Scene {
       victory,
       time: this.runTime,
       kills: this.kills,
-      wave: this.waves.wave,
+      wave: this.dungeon.globalFloor,
       discoveries: [...this.crucible.discoveredThisRun],
       fissions: this.crucible.fissions,
       unlocks: this.unlocks.map((c) => c.name),

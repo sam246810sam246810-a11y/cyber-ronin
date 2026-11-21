@@ -84,6 +84,15 @@ export class EffectSystem {
     g.strokeCircle(z.x, z.y, z.radius);
   }
 
+  /** 換房時清掉地上的場地效果（跟隨玩家的光環保留） */
+  clearRoomZones(): void {
+    this.zones = this.zones.filter((z) => {
+      if (!z.followPlayer) z.gfx.destroy();
+      return !!z.followPlayer;
+    });
+    this.timers = [];
+  }
+
   enemiesInRadius(x: number, y: number, r: number): Enemy[] {
     return this.game.enemies.filter((e) => e.alive && (e.x - x) ** 2 + (e.y - y) ** 2 <= (r + e.radius) ** 2);
   }

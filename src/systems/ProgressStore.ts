@@ -3,7 +3,7 @@ import { CHARACTERS } from '../data';
 import type { CharacterDef } from '../types';
 
 interface Progress {
-  bestWave: number;
+  bestFloor: number;
   fissions: number;
   bossKills: number;
   selected: string;
@@ -13,7 +13,7 @@ interface Progress {
 
 /** 跨局進度：角色解鎖條件用（存在 localStorage，失敗時只在本次開啟有效） */
 class ProgressStoreImpl {
-  data: Progress = { bestWave: 0, fissions: 0, bossKills: 0, selected: 'apprentice' };
+  data: Progress = { bestFloor: 0, fissions: 0, bossKills: 0, selected: 'apprentice' };
 
   constructor() {
     try {
@@ -36,7 +36,7 @@ class ProgressStoreImpl {
     if (this.data.debugUnlockAll) return true;
     switch (c.unlock.type) {
       case 'default': return true;
-      case 'bestWave': return this.data.bestWave >= c.unlock.value;
+      case 'bestFloor': return this.data.bestFloor >= c.unlock.value;
       case 'fissions': return this.data.fissions >= c.unlock.value;
       case 'bossKills': return this.data.bossKills >= c.unlock.value;
     }
@@ -45,7 +45,7 @@ class ProgressStoreImpl {
   progressText(c: CharacterDef): string {
     switch (c.unlock.type) {
       case 'default': return '';
-      case 'bestWave': return `${Math.min(this.data.bestWave, c.unlock.value)}/${c.unlock.value}`;
+      case 'bestFloor': return `${Math.min(this.data.bestFloor, c.unlock.value)}/${c.unlock.value}`;
       case 'fissions': return `${Math.min(this.data.fissions, c.unlock.value)}/${c.unlock.value}`;
       case 'bossKills': return `${Math.min(this.data.bossKills, c.unlock.value)}/${c.unlock.value}`;
     }
@@ -56,9 +56,9 @@ class ProgressStoreImpl {
   }
 
   /** 更新進度並回傳新解鎖的角色 */
-  record(patch: { wave?: number; fission?: boolean; bossKill?: boolean }): CharacterDef[] {
+  record(patch: { floor?: number; fission?: boolean; bossKill?: boolean }): CharacterDef[] {
     const before = new Set(this.unlockedIds());
-    if (patch.wave !== undefined) this.data.bestWave = Math.max(this.data.bestWave, patch.wave);
+    if (patch.floor !== undefined) this.data.bestFloor = Math.max(this.data.bestFloor, patch.floor);
     if (patch.fission) this.data.fissions++;
     if (patch.bossKill) this.data.bossKills++;
     this.save();
@@ -81,7 +81,7 @@ class ProgressStoreImpl {
   }
 
   reset(): void {
-    this.data = { bestWave: 0, fissions: 0, bossKills: 0, selected: 'apprentice', tutorialDone: false };
+    this.data = { bestFloor: 0, fissions: 0, bossKills: 0, selected: 'apprentice', tutorialDone: false };
     this.save();
   }
 }

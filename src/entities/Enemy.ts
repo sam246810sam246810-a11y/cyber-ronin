@@ -56,7 +56,7 @@ export abstract class Enemy {
   ) {
     this.x = x;
     this.y = y;
-    this.maxHp = this.hp = def.hp * (elite ? ELITE.hpMul : 1) * (game.waves?.hpMul ?? 1);
+    this.maxHp = this.hp = def.hp * (elite ? ELITE.hpMul : 1) * (game.dungeon?.hpMul ?? 1);
     this.radius = def.radius * (elite ? ELITE.radiusMul : 1);
     this.speed = def.speed;
     this.baseTint = hexToInt(def.color);

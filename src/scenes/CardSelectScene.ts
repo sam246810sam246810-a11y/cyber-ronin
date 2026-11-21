@@ -4,8 +4,7 @@ import { hexToInt } from '../data';
 import { cardDesc, formatCardValue, type CardOffer } from '../systems/MutationSystem';
 
 export interface CardSelectData {
-  wave?: number;
-  region?: string;
+  title?: string;
   offers: (CardOffer & { owned: number })[];
   onPick: (index: number) => void;
 }
@@ -21,7 +20,7 @@ export class CardSelectScene extends Phaser.Scene {
   create(data: CardSelectData): void {
     this.picked = false;
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.8).setInteractive();
-    this.add.text(GAME_W / 2, 170, data.wave ? `${data.region ?? ''} 第 ${data.wave} 波 清除！` : '突變！', {
+    this.add.text(GAME_W / 2, 170, data.title ?? '突變！', {
       fontFamily: FONT, fontSize: '44px', color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 6,
     }).setOrigin(0.5);
     this.add.text(GAME_W / 2, 235, '選擇一張突變卡', { fontFamily: FONT, fontSize: '24px', color: COLORS.text }).setOrigin(0.5);

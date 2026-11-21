@@ -2,37 +2,36 @@
   {
     "id": "greenhouse", "name": "溫室", "subtitle": "失控的植物溫室", "hpMul": 1, "boss": "boss_flower",
     "theme": { "bg": "#0f1a14", "floor": "#16261c", "tile": "#1b2e22", "wall": "#2c4a36", "deco": "#3a5a2a", "decoLight": "#6aa84f" },
-    "waves": [
-      { "spawnWindow": 26, "groups": [{ "type": "crawler", "count": 10 }] },
-      { "spawnWindow": 30, "groups": [{ "type": "crawler", "count": 13 }, { "type": "crawler", "count": 1, "elite": true }] },
-      { "spawnWindow": 32, "groups": [{ "type": "crawler", "count": 12 }, { "type": "spitter", "count": 2 }] },
-      { "spawnWindow": 34, "groups": [{ "type": "crawler", "count": 14 }, { "type": "spitter", "count": 3 }, { "type": "spitter", "count": 1, "elite": true }] },
-      { "spawnWindow": 36, "groups": [{ "type": "crawler", "count": 12 }, { "type": "spitter", "count": 2 }, { "type": "hopper", "count": 3 }] },
-      { "spawnWindow": 38, "groups": [{ "type": "crawler", "count": 16 }, { "type": "spitter", "count": 3 }, { "type": "hopper", "count": 3 }, { "type": "hopper", "count": 1, "elite": true }] }
-    ]
+    "enemies": [
+      { "type": "crawler", "weight": 6, "cost": 1, "minFloor": 1 },
+      { "type": "spitter", "weight": 2, "cost": 3, "minFloor": 1 },
+      { "type": "hopper", "weight": 2, "cost": 3, "minFloor": 2 }
+    ],
+    "roomBudget": [9, 13, 16]
   },
   {
     "id": "lava", "name": "熔岩花園", "subtitle": "沸騰的火焰花田", "hpMul": 1.7, "boss": "boss_snail",
     "theme": { "bg": "#1a0f0c", "floor": "#2a1612", "tile": "#341b14", "wall": "#6a2a1a", "deco": "#7a2a10", "decoLight": "#ff8a3d" },
-    "waves": [
-      { "spawnWindow": 30, "groups": [{ "type": "crawler", "count": 10 }, { "type": "bomber", "count": 4 }] },
-      { "spawnWindow": 32, "groups": [{ "type": "crawler", "count": 8 }, { "type": "bomber", "count": 5 }, { "type": "beetle", "count": 2 }] },
-      { "spawnWindow": 34, "groups": [{ "type": "bomber", "count": 6 }, { "type": "beetle", "count": 3 }, { "type": "spitter", "count": 2 }, { "type": "beetle", "count": 1, "elite": true }] },
-      { "spawnWindow": 36, "groups": [{ "type": "crawler", "count": 10 }, { "type": "bomber", "count": 6 }, { "type": "hopper", "count": 3 }, { "type": "beetle", "count": 2 }] },
-      { "spawnWindow": 38, "groups": [{ "type": "bomber", "count": 8 }, { "type": "beetle", "count": 4 }, { "type": "spitter", "count": 3 }, { "type": "bomber", "count": 1, "elite": true }] },
-      { "spawnWindow": 40, "groups": [{ "type": "crawler", "count": 12 }, { "type": "bomber", "count": 8 }, { "type": "beetle", "count": 4 }, { "type": "hopper", "count": 3 }, { "type": "beetle", "count": 1, "elite": true }] }
-    ]
+    "enemies": [
+      { "type": "crawler", "weight": 4, "cost": 1, "minFloor": 1 },
+      { "type": "bomber", "weight": 4, "cost": 2, "minFloor": 1 },
+      { "type": "beetle", "weight": 2, "cost": 3, "minFloor": 1 },
+      { "type": "spitter", "weight": 1, "cost": 3, "minFloor": 2 },
+      { "type": "hopper", "weight": 1, "cost": 3, "minFloor": 2 }
+    ],
+    "roomBudget": [14, 17, 20]
   },
   {
     "id": "storm", "name": "雷雲山頂", "subtitle": "雷鳴不止的菇林高原", "hpMul": 2.6, "boss": "boss_king",
     "theme": { "bg": "#0e0f1c", "floor": "#171a2e", "tile": "#1d2138", "wall": "#3a3a6a", "deco": "#3a2a6a", "decoLight": "#ffe14d" },
-    "waves": [
-      { "spawnWindow": 30, "groups": [{ "type": "splitter", "count": 5 }, { "type": "crawler", "count": 8 }] },
-      { "spawnWindow": 32, "groups": [{ "type": "splitter", "count": 5 }, { "type": "wisp", "count": 2 }, { "type": "bomber", "count": 4 }] },
-      { "spawnWindow": 34, "groups": [{ "type": "splitter", "count": 6 }, { "type": "wisp", "count": 3 }, { "type": "beetle", "count": 2 }, { "type": "wisp", "count": 1, "elite": true }] },
-      { "spawnWindow": 36, "groups": [{ "type": "splitter", "count": 6 }, { "type": "wisp", "count": 3 }, { "type": "hopper", "count": 3 }, { "type": "bomber", "count": 5 }] },
-      { "spawnWindow": 38, "groups": [{ "type": "splitter", "count": 7 }, { "type": "wisp", "count": 4 }, { "type": "spitter", "count": 3 }, { "type": "splitter", "count": 1, "elite": true }] },
-      { "spawnWindow": 40, "groups": [{ "type": "splitter", "count": 8 }, { "type": "wisp", "count": 4 }, { "type": "beetle", "count": 3 }, { "type": "bomber", "count": 6 }, { "type": "wisp", "count": 1, "elite": true }] }
-    ]
+    "enemies": [
+      { "type": "splitter", "weight": 4, "cost": 3, "minFloor": 1 },
+      { "type": "crawler", "weight": 3, "cost": 1, "minFloor": 1 },
+      { "type": "wisp", "weight": 2, "cost": 3, "minFloor": 1 },
+      { "type": "bomber", "weight": 2, "cost": 2, "minFloor": 2 },
+      { "type": "beetle", "weight": 1, "cost": 3, "minFloor": 2 },
+      { "type": "hopper", "weight": 1, "cost": 3, "minFloor": 3 }
+    ],
+    "roomBudget": [17, 20, 23]
   }
 ]

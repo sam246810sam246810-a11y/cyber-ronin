@@ -8,5 +8,6 @@
   { "id": "rejuvenate", "name": "回春", "desc": "每喝一瓶藥水 {v} 機率回復 1 點血", "icon": "♥", "base": 20, "unit": "%" },
   { "id": "harvest", "name": "豐收", "desc": "素材掉落率 +{v}", "icon": "✿", "base": 8, "unit": "%" },
   { "id": "fortune", "name": "鑑寶", "desc": "掉落高稀有度素材的機率提高 {v}", "icon": "◆", "base": 20, "unit": "%" },
+  { "id": "greed", "name": "貪婪", "desc": "金幣掉落 +{v}", "icon": "¤", "base": 30, "unit": "%" },
   { "id": "magnet", "name": "磁吸", "desc": "素材拾取範圍 +{v}", "icon": "⊛", "base": 30, "unit": "%" }
 ]

@@ -133,6 +133,21 @@ export class PreloadScene extends Phaser.Scene {
       g.fillStyle(0xf4d8b0).fillCircle(32, 26, 10);
       g.fillStyle(0xffd166).fillCircle(46, 48, 8);
     });
+    gen('altar', 64, 64, () => {
+      g.fillStyle(0x5a4a6a).fillRect(10, 40, 44, 20);
+      g.fillStyle(0x7a6a8a).fillRect(18, 20, 28, 22);
+      g.fillStyle(0xb36bff).fillCircle(32, 14, 10);
+    });
+    gen('stairs', 64, 64, () => {
+      g.fillStyle(0x1a1420).fillRoundedRect(4, 4, 56, 56, 10);
+      for (let i = 0; i < 4; i++) g.fillStyle(0xffd166, 0.4 + i * 0.15).fillRect(10 + i * 6, 14 + i * 11, 44 - i * 12, 8);
+      g.lineStyle(3, 0xffd166).strokeRoundedRect(4, 4, 56, 56, 10);
+    });
+    gen('coin', 32, 32, () => {
+      g.fillStyle(0xffc43d).fillCircle(16, 16, 14);
+      g.fillStyle(0xffe58a).fillCircle(13, 13, 6);
+      g.lineStyle(2, 0xb07a10).strokeCircle(16, 16, 14);
+    });
     // 角色佔位圖（白色可上色）
     gen('hero', 64, 64, () => {
       g.fillStyle(0xffffff).fillCircle(32, 36, 24);

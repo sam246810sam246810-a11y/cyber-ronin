@@ -1,6 +1,6 @@
 # 坩堝花園（MVP 試作）
 
-9:16 直向 2D 俯視角煉金肉鴿手遊原型：撿 5 種元素、4 種稀有度的素材，三格坩堝煉藥並喝下，本局永久變強；煉成時有機率裂變成神話藥水。4 名角色各有能力值與被動，達成條件解鎖。共 3 個區域（溫室 → 熔岩花園 → 雷雲山頂），每區 6 波加 Boss，途中有寶箱、祈願泉、流浪商人事件。規格見 [`docs/PRD.md`](docs/PRD.md)。
+9:16 直向 2D 俯視角煉金肉鴿手遊原型：撿 5 種元素、4 種稀有度的素材，三格坩堝煉藥並喝下，本局永久變強；煉成時有機率裂變成神話藥水。4 名角色各有能力值與被動，達成條件解鎖。地下城爬塔：3 區（溫室 → 熔岩花園 → 雷雲山頂）× 3 層，每層隨機生成房間地圖，有戰鬥、精英挑戰、寶箱、商店、事件、樓梯與 Boss 房。規格見 [`docs/PRD.md`](docs/PRD.md)。
 
 ## 本地啟動
 
@@ -35,7 +35,7 @@ npm run dev
 ## Debug 面板
 
 `npm run dev` 時左下角會出現 🐞 按鈕（正式版網址加 `?debug` 也能打開）：
-切換素材稀有度並給素材、下次必裂變、跳過本波、下一區、生成事件、直接到 Boss、開突變卡、無敵、補血、解鎖全圖鑑、解鎖全角色、重置圖鑑與進度。
+切換素材稀有度並給素材、下次必裂變、清空房間、下一層、Boss 房、+50 金幣、生成寶箱或商店、直接到 Boss、開突變卡、無敵、補血、解鎖全圖鑑、解鎖全角色、重置圖鑑與進度。
 
 ## 專案結構
 
@@ -44,12 +44,12 @@ src/
   main.ts / config.ts      進入點、全域數值（移速、冷卻、掉落率…）
   scenes/                  Boot, Preload, MainMenu, CharacterSelect, Game, CardSelect, Event, Pause, Result, Codex
   entities/                Player, Enemy（基底：減速/冰凍/中毒/擊退/護盾鉤子）, enemies/*, bosses/*, Pickup
-  systems/                 Input, Crucible（品質/裂變）, Buff（喝藥強化與數值）, Effect, Projectile, Wave（區域/波次/Boss）,
-                           Mutation（卡片稀有度）, Telegraph, Hazard（熔岩地面）, Event（關卡事件）, Tutorial, Sound,
+  systems/                 Input, Crucible（品質/裂變）, Buff（喝藥強化與數值）, Effect, Projectile, Dungeon（樓層生成/房間/戰鬥/Boss）,
+                           Mutation（卡片稀有度）, Telegraph, Hazard（熔岩地面）, Event（房間物件：寶箱/泉水/商店/祭壇/樓梯）, Tutorial, Sound,
                            Fx, CodexStore, ProgressStore（角色解鎖）
   potions/passives.ts      元素核心 / 附加 / 神話藥水的被動
   data/*.json              元素與素材、三色藥水名稱、神話藥水、角色、敵人、區域與波次、突變卡
-  ui/                      搖桿、按鈕、坩堝列、HUD
+  ui/                      搖桿、按鈕、坩堝列、HUD、小地圖
   debug/DebugPanel.ts      開發用面板
 ```
 
@@ -61,8 +61,9 @@ src/
 - **新增神話藥水**：`data/mythics.json` 加一筆，`passives.ts` 註冊同 id。
 - **新增角色**：`data/characters.json` 加一筆（能力值、被動欄位、解鎖條件）。
 - **新增突變卡**：`data/mutations.json` 加一筆，再到 `BuffSystem` 或 `CrucibleSystem` 用 `mutations.value(id)` 讀取。
-- **新增敵人**：繼承 `Enemy` 實作 `act(dt)`，在 `data/enemies.json` 加數值，並在 `WaveSystem.create()` 對應。
-- **新增區域**：在 `data/regions.json` 加一筆（配色、血量倍率、6 波內容、Boss 類型）。
+- **新增敵人**：繼承 `Enemy` 實作 `act(dt)`，在 `data/enemies.json` 加數值，並在 `DungeonSystem.create()` 對應。
+- **新增區域**：在 `data/regions.json` 加一筆（配色、血量倍率、敵人池與花費、每層戰鬥預算、Boss 類型）。
+- **調整地圖**：房間數量、特殊房比例與商店商品在 `src/systems/DungeonSystem.ts` 的 `generateFloor()`、`rollShop()`。
 - **換美術**：`PreloadScene` 目前用 Graphics 產生佔位圖，之後用 `this.load.image()` 載入同名 key 即可替換。
 
 ## 存檔

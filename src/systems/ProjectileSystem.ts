@@ -134,6 +134,11 @@ export class ProjectileSystem {
     b.dead = true;
   }
 
+  clearAll(): void {
+    this.bullets.forEach((b) => b.sprite.destroy());
+    this.bullets = [];
+  }
+
   clearEnemyBullets(): void {
     this.bullets = this.bullets.filter((b) => {
       if (!b.friendly) b.sprite.destroy();

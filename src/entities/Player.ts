@@ -45,6 +45,14 @@ export class Player {
     return this.dashCooldown / this.stats.dashCooldown;
   }
 
+  setPosition(x: number, y: number): void {
+    this.x = x;
+    this.y = y;
+    this.dashTimer = 0;
+    if (this.state === 'dash') this.state = 'idle';
+    this.sync();
+  }
+
   tryDash(dirX: number, dirY: number): boolean {
     if (this.dashCooldown > 0 || this.state === 'dead' || this.state === 'dash') return false;
     let len = Math.hypot(dirX, dirY);

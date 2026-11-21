@@ -60,12 +60,15 @@ export function installDebugPanel(game: Phaser.Game): void {
     const g = getGame();
     if (g) g.crucible.forceFission = true;
   });
-  add('跳過本波', () => getGame()?.waves.debugSkip());
-  add('直接到 Boss', () => getGame()?.waves.debugToBoss());
-  add('下一區', () => getGame()?.waves.debugNextRegion());
+  add('清空房間', () => getGame()?.dungeon.debugSkip());
+  add('下一層', () => getGame()?.dungeon.debugNextFloor());
+  add('Boss 房', () => getGame()?.dungeon.debugToBoss());
+  add('+50 金幣', () => {
+    const g = getGame();
+    if (g) g.coins += 50;
+  });
   add('寶箱', () => getGame()?.encounters.spawn('chest'));
-  add('祈願泉', () => getGame()?.encounters.spawn('fountain'));
-  add('商人', () => getGame()?.encounters.spawn('merchant'));
+  add('商店', () => getGame()?.encounters.spawn('shop'));
   add('選突變卡', () => getGame()?.openCardSelect());
   add('無敵 開/關', () => {
     const g = getGame();
@@ -86,7 +89,7 @@ export function installDebugPanel(game: Phaser.Game): void {
   const refresh = () => {
     const g = getGame();
     status.textContent = g
-      ? `${g.waves.label} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}% 角色:${g.character.name}`
+      ? `${g.dungeon.label} ${g.dungeon.phase} 房:${g.dungeon.current.type} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}% 角色:${g.character.name}`
       : `圖鑑:${CodexStore.count}/${CodexStore.total}（在遊戲中才能用大部分按鈕）`;
   };
 

@@ -9,6 +9,7 @@ export class HUD {
   private waveText: Phaser.GameObjects.Text;
   private timeText: Phaser.GameObjects.Text;
   private bossBar: Phaser.GameObjects.Graphics;
+  private coinText: Phaser.GameObjects.Text;
   private bossName: Phaser.GameObjects.Text;
   private banner: Phaser.GameObjects.Text;
   private toast: Phaser.GameObjects.Container;
@@ -33,6 +34,10 @@ export class HUD {
     ]).setDepth(DEPTH.ui).setSize(64, 64).setInteractive({ useHandCursor: true });
     pause.on('pointerdown', onPause);
 
+    scene.add.image(530, 30, 'coin').setDisplaySize(24, 24).setDepth(DEPTH.ui);
+    this.coinText = scene.add.text(548, 30, '0', {
+      fontFamily: FONT, fontSize: '24px', color: '#ffd166', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
     this.bossBar = scene.add.graphics().setDepth(DEPTH.ui);
     this.bossName = scene.add.text(GAME_W / 2, 104, '', {
       fontFamily: FONT, fontSize: '18px', color: '#ffd1ec', stroke: '#000', strokeThickness: 3,
@@ -79,6 +84,10 @@ export class HUD {
     } else {
       this.bossName.setText('');
     }
+  }
+
+  setCoins(n: number): void {
+    this.coinText.setText(String(n));
   }
 
   showBanner(text: string): void {

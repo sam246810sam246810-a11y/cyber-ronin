@@ -125,7 +125,7 @@ export class FlowerBoss extends Enemy {
       const summon = this.enraged ? 4 : 3;
       for (let i = 0; i < summon; i++) {
         const a = (Math.PI * 2 * i) / summon;
-        this.game.waves.spawnEnemy('crawler', this.x + Math.cos(a) * 90, this.y + Math.sin(a) * 90, false, 0.6);
+        this.game.dungeon.spawnEnemy('crawler', this.x + Math.cos(a) * 90, this.y + Math.sin(a) * 90, false, 0.6);
       }
       this.game.cameras.main.shake(100, 0.004);
     }

@@ -91,8 +91,9 @@ export const CHARACTERS = charactersJson as CharacterDef[];
 
 export const ENEMIES = enemiesJson as unknown as Record<EnemyType, EnemyDef>;
 export const REGIONS = regionsJson as RegionDef[];
-/** 全程波數（不含 Boss） */
-export const TOTAL_WAVES = REGIONS.reduce((s, r) => s + r.waves.length, 0);
+/** 每區層數（最後一層有 Boss） */
+export const FLOORS_PER_REGION = 3;
+export const TOTAL_FLOORS = REGIONS.length * FLOORS_PER_REGION;
 export const MUTATIONS = mutationsJson as MutationDef[];
 
 export function hexToInt(hex: string): number {
