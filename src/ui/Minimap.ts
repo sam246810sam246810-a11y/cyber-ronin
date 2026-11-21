@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, ARENA_RIGHT, DEPTH } from '../config';
+import { DEPTH, RIGHT } from '../config';
 import { DIRS, type Dir, type DungeonSystem, type Room } from '../systems/DungeonSystem';
 import type { RoomType } from '../types';
 
@@ -15,6 +15,8 @@ const TYPE_COLOR: Partial<Record<RoomType, number>> = {
 /** 右上角小地圖：走過的房間實心、相鄰的房間空心，特殊房間顯示顏色點 */
 export class Minimap {
   private gfx: Phaser.GameObjects.Graphics;
+  /** 小地圖底部 y（樓層字放在下面） */
+  bottom = 120;
   private readonly cell = 26;
   private readonly gap = 7;
 
@@ -43,9 +45,10 @@ export class Minimap {
     const minY = Math.min(...ys);
     const step = this.cell + this.gap;
     const w = (maxX - minX + 1) * step + this.gap;
-    const ox = ARENA_RIGHT - 10 - w;
-    const oy = ARENA.y + 10;
+    const ox = RIGHT - 12 - w;
+    const oy = 84;
     const h = (Math.max(...ys) - minY + 1) * step + this.gap;
+    this.bottom = oy + h;
     g.fillStyle(0x000000, 0.45).fillRoundedRect(ox, oy, w, h, 6);
     const pos = (r: Room) => ({ x: ox + this.gap + (r.gx - minX) * step, y: oy + this.gap + (r.gy - minY) * step });
 

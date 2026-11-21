@@ -37,11 +37,8 @@ export let CENTER_DX = 0;
 /** 把 1280 寬設計的 x 座標轉成置中的座標 */
 export const cx = (x: number) => x + CENTER_DX;
 
-/** 上方資訊列（血量 / 坩堝 / 樓層 / 金幣 / 暫停） */
-export const TOP_H = 92;
-
-/** 戰鬥區：資訊列以下整片，操作按鈕半透明疊在角落 */
-export const ARENA = { x: 12, y: 98, w: 1256, h: 612 };
+/** 戰鬥區：鋪滿整個螢幕（含瀏海側），介面都半透明疊在上面 */
+export const ARENA = { x: 14, y: 14, w: 1252, h: 692 };
 export let ARENA_RIGHT = ARENA.x + ARENA.w;
 export let ARENA_BOTTOM = ARENA.y + ARENA.h;
 /** 右側錨點：右下按鈕與右上資訊以此為基準 */
@@ -53,8 +50,8 @@ export function relayout(): number {
   GAME_W = l.gameW;
   SAFE_X = l.safeX;
   CENTER_DX = (GAME_W - 1280) / 2;
-  ARENA.x = 12 + SAFE_X;
-  ARENA.w = GAME_W - 2 * (12 + SAFE_X);
+  ARENA.x = 14;
+  ARENA.w = GAME_W - 28;
   ARENA_RIGHT = ARENA.x + ARENA.w;
   ARENA_BOTTOM = ARENA.y + ARENA.h;
   RIGHT = GAME_W - SAFE_X;

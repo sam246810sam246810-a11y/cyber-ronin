@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, COLORS, DEPTH, FONT, GAME_W, RIGHT, SAFE_X, TOP_H } from '../config';
+import { ARENA, COLORS, DEPTH, FONT, GAME_W, RIGHT, SAFE_X } from '../config';
 import type { Player } from '../entities/Player';
 import { formatTime } from '../utils';
 
@@ -10,6 +10,8 @@ export class HUD {
   private timeText: Phaser.GameObjects.Text;
   private bossBar: Phaser.GameObjects.Graphics;
   private coinText: Phaser.GameObjects.Text;
+  private coinIcon!: Phaser.GameObjects.Image;
+  private hpPill!: Phaser.GameObjects.Graphics;
   private dangerText: Phaser.GameObjects.Text;
   private bossName: Phaser.GameObjects.Text;
   private banner: Phaser.GameObjects.Text;
@@ -19,32 +21,31 @@ export class HUD {
   private toastBg: Phaser.GameObjects.Rectangle;
 
   constructor(private scene: Phaser.Scene, maxHp: number, onPause: () => void) {
-    scene.add.rectangle(GAME_W / 2, TOP_H / 2, GAME_W, TOP_H, COLORS.bar, 0.96).setDepth(DEPTH.ui - 2);
-    scene.add.rectangle(GAME_W / 2, TOP_H, GAME_W, 3, COLORS.accent, 0.5).setDepth(DEPTH.ui - 1);
-    this.ensureHearts(maxHp);
-    this.waveText = scene.add.text(RIGHT - 290, 26, '', {
-      fontFamily: FONT, fontSize: '24px', color: COLORS.text, fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(DEPTH.ui);
-    this.dangerText = scene.add.text(RIGHT - 230, 60, '', {
-      fontFamily: FONT, fontSize: '16px', color: '#c9c9c9', fontStyle: 'bold',
-    }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
-    this.timeText = scene.add.text(RIGHT - 320, 60, '00:00', {
-      fontFamily: FONT, fontSize: '17px', color: COLORS.textDim,
-    }).setOrigin(0.5).setDepth(DEPTH.ui);
-
-    const pause = scene.add.container(RIGHT - 42, 44, [
-      scene.add.rectangle(0, 0, 58, 58, COLORS.panelLight, 0.9).setStrokeStyle(2, COLORS.accent, 0.6),
-      scene.add.rectangle(-8, 0, 7, 24, 0xffffff),
-      scene.add.rectangle(8, 0, 7, 24, 0xffffff),
-    ]).setDepth(DEPTH.ui).setSize(58, 58).setInteractive({ useHandCursor: true });
+    // 左上：血量＋金幣（半透明膠囊底，疊在地圖上）
+    this.hpPill = scene.add.graphics().setDepth(DEPTH.ui - 1);
+    // 右上：暫停
+    const pause = scene.add.container(RIGHT - 44, 44, [
+      scene.add.circle(0, 0, 28, 0x120d18, 0.6).setStrokeStyle(2, COLORS.accent, 0.6),
+      scene.add.rectangle(-7, 0, 6, 22, 0xffffff),
+      scene.add.rectangle(7, 0, 6, 22, 0xffffff),
+    ]).setDepth(DEPTH.ui).setSize(60, 60).setInteractive({ useHandCursor: true });
     pause.on('pointerdown', onPause);
 
-    scene.add.image(RIGHT - 168, 44, 'coin').setDisplaySize(24, 24).setDepth(DEPTH.ui);
-    this.coinText = scene.add.text(RIGHT - 150, 44, '0', {
-      fontFamily: FONT, fontSize: '22px', color: '#ffd166', fontStyle: 'bold',
+    this.coinIcon = scene.add.image(0, 0, 'coin').setDisplaySize(22, 22).setDepth(DEPTH.ui);
+    this.coinText = scene.add.text(0, 0, '0', {
+      fontFamily: FONT, fontSize: '21px', color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
+    this.ensureHearts(maxHp);
+    // 小地圖下方的小字：樓層＋危險度
+    this.waveText = scene.add.text(RIGHT - 12, 0, '', {
+      fontFamily: FONT, fontSize: '15px', color: '#e8e0f0', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(1, 0).setDepth(DEPTH.ui);
+    this.timeText = scene.add.text(0, 0, '').setVisible(false);
+    this.dangerText = scene.add.text(RIGHT - 12, 0, '', {
+      fontFamily: FONT, fontSize: '14px', color: '#c9c9c9', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(1, 0).setDepth(DEPTH.ui);
     this.bossBar = scene.add.graphics().setDepth(DEPTH.ui);
-    this.bossName = scene.add.text(GAME_W / 2, ARENA.y + 16, '', {
+    this.bossName = scene.add.text(GAME_W / 2, 30, '', {
       fontFamily: FONT, fontSize: '16px', color: '#ffd1ec', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(DEPTH.ui + 1);
 
@@ -60,17 +61,37 @@ export class HUD {
       fontFamily: FONT, fontSize: '16px', color: '#ffffff', align: 'center',
       wordWrap: { width: 680, useAdvancedWrap: true }, lineSpacing: 2,
     }).setOrigin(0.5);
-    this.toast = scene.add.container(GAME_W / 2, ARENA.y + 90, [toastBg, this.toastText, this.toastSub])
+    this.toast = scene.add.container(GAME_W / 2, 120, [toastBg, this.toastText, this.toastSub])
       .setDepth(DEPTH.overlay).setAlpha(0);
+  }
+
+  /** 小地圖底部的 y，樓層字跟在下面 */
+  setInfoY(y: number): void {
+    this.waveText.setY(y + 4);
+    this.dangerText.setY(y + 24);
+  }
+
+  private layoutTopLeft(maxHp: number): void {
+    const perRow = 7;
+    const rows = Math.ceil(maxHp / perRow);
+    const w = Math.min(maxHp, perRow) * 29 + 16;
+    const x0 = SAFE_X + 18;
+    const coinY = 28 + rows * 32;
+    this.hpPill.clear();
+    this.hpPill.fillStyle(0x120d18, 0.5).fillRoundedRect(x0 - 8, 8, Math.max(w, 110), coinY + 14, 14);
+    this.coinIcon.setPosition(x0 + 12, coinY - 6);
+    this.coinText.setPosition(x0 + 28, coinY - 6);
   }
 
   /** 最大血量會成長，最多 14 顆，每排 7 顆 */
   private ensureHearts(n: number): void {
+    if (this.hearts.length >= n) return;
     while (this.hearts.length < n) {
       const i = this.hearts.length;
-      this.hearts.push(this.scene.add.image(26 + SAFE_X + (i % 7) * 29, 26 + Math.floor(i / 7) * 34, 'heart')
+      this.hearts.push(this.scene.add.image(SAFE_X + 30 + (i % 7) * 29, 30 + Math.floor(i / 7) * 32, 'heart')
         .setDepth(DEPTH.ui).setDisplaySize(25, 23));
     }
+    this.layoutTopLeft(n);
   }
 
   update(player: Player, label: string, time: number, boss?: { hp: number; maxHp: number; name: string; alive: boolean }): void {
@@ -83,7 +104,7 @@ export class HUD {
     if (boss && boss.alive) {
       const w = 640;
       const x = (GAME_W - w) / 2;
-      const y = ARENA.y + 6;
+      const y = 44;
       this.bossBar.fillStyle(0x000000, 0.7).fillRect(x - 2, y, w + 4, 22);
       this.bossBar.fillStyle(0xd03a8a, 1).fillRect(x, y + 2, w * (boss.hp / boss.maxHp), 18);
       this.bossName.setText(`${boss.name}  ${Math.ceil(boss.hp)}/${boss.maxHp}`);
@@ -125,9 +146,9 @@ export class HUD {
     this.toastText.setText(title);
     this.toastSub.setText(sub);
     this.scene.tweens.killTweensOf(this.toast);
-    this.toast.setAlpha(0).setY(ARENA.y + 70);
+    this.toast.setAlpha(0).setY(100);
     this.scene.tweens.add({
-      targets: this.toast, alpha: 1, y: ARENA.y + 96, duration: 250, ease: 'Back.Out',
+      targets: this.toast, alpha: 1, y: 124, duration: 250, ease: 'Back.Out',
       onComplete: () => this.scene.tweens.add({ targets: this.toast, alpha: 0, delay: legendary ? 2400 : 1400, duration: 300 }),
     });
   }

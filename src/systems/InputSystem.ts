@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, GAME_H, GAME_W, SAFE_X } from '../config';
+import { GAME_H, GAME_W, SAFE_X } from '../config';
 import { Joystick } from '../ui/Joystick';
 
 /** 合併觸控搖桿與鍵盤（WASD/方向鍵、空白鍵衝刺、J 或 K 煉成、E 技能、Q 換武器） */
@@ -14,7 +14,7 @@ export class InputSystem {
   constructor(scene: Phaser.Scene) {
     scene.input.addPointer(3);
     // 左半邊戰場任意處按下就出現搖桿
-    this.joystick = new Joystick(scene, new Phaser.Geom.Rectangle(0, ARENA.y, GAME_W / 2, GAME_H - ARENA.y), 160 + SAFE_X, 600);
+    this.joystick = new Joystick(scene, new Phaser.Geom.Rectangle(0, 130, GAME_W / 2, GAME_H - 130), 170 + SAFE_X, 590);
     const kb = scene.input.keyboard;
     if (kb) {
       this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,J,K,E,Q') as Record<string, Phaser.Input.Keyboard.Key>;

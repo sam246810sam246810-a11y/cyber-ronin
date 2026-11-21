@@ -1,56 +1,42 @@
 import Phaser from 'phaser';
-import { COLORS, DEPTH, FONT, RARITY, SAFE_X, TOP_H } from '../config';
-import { ELEMENT_IDS, RECIPES, hexToInt, potionQuality, recipeKey } from '../data';
+import { COLORS, DEPTH, FONT, RARITY, RIGHT } from '../config';
+import { RECIPES, hexToInt, potionQuality, recipeKey } from '../data';
 import type { BuffSystem } from '../systems/BuffSystem';
 import { CodexStore } from '../systems/CodexStore';
 import type { CrucibleSystem } from '../systems/CrucibleSystem';
-import type { ElementId, Material } from '../types';
+import type { Material } from '../types';
 
-/** 上方資訊列中央：3 個槽位（框色＝稀有度，點擊丟棄）＋ 煉成鍵 ＋ 5 元素累積與裂變率 */
+/** 右下小坩堝：3 格（框色＝稀有度，點擊丟棄），上方小字顯示品質 / 配方 / 裂變率 */
 export class CrucibleBar {
   private slotBgs: Phaser.GameObjects.Image[] = [];
   private slotIcons: Phaser.GameObjects.Image[] = [];
-  private brewBtn: Phaser.GameObjects.Container;
-  private brewBg: Phaser.GameObjects.Rectangle;
-  private brewText: Phaser.GameObjects.Text;
   private hint: Phaser.GameObjects.Text;
-  private elemTexts = {} as Record<ElementId, Phaser.GameObjects.Text>;
-  private fissionText: Phaser.GameObjects.Text;
-  private cauldron: Phaser.GameObjects.Image;
+  private panel: Phaser.GameObjects.Rectangle;
+  /** 煉成按鈕會用到的位置（爆光特效） */
+  readonly cx: number;
+  readonly cy: number;
 
-  constructor(
-    private scene: Phaser.Scene, private crucible: CrucibleSystem, private buffs: BuffSystem, onBrew: () => void,
-  ) {
-    const cy = 40;
-    const DX = SAFE_X;
-    this.cauldron = scene.add.image(DX + 370, cy + 4, 'cauldron').setDepth(DEPTH.ui - 1).setDisplaySize(236, 76).setAlpha(0.45);
-    [300, 370, 440].map((x) => x + DX).forEach((x, i) => {
-      const bg = scene.add.image(x, cy, 'slot').setDepth(DEPTH.ui).setDisplaySize(60, 60).setInteractive({ useHandCursor: true });
+  constructor(scene: Phaser.Scene, private crucible: CrucibleSystem, buffs: BuffSystem) {
+    const size = 50;
+    const gap = 6;
+    this.cy = 386;
+    this.cx = RIGHT - 150;
+    this.panel = scene.add.rectangle(this.cx, this.cy, 3 * size + 4 * gap, size + 2 * gap, 0x120d18, 0.55)
+      .setStrokeStyle(2, COLORS.accent, 0.35).setDepth(DEPTH.ui - 1);
+    [-1, 0, 1].forEach((k, i) => {
+      const x = this.cx + k * (size + gap);
+      const bg = scene.add.image(x, this.cy, 'slot').setDepth(DEPTH.ui).setDisplaySize(size, size).setAlpha(0.8)
+        .setInteractive({ useHandCursor: true });
       bg.on('pointerdown', () => {
         if (this.crucible.slots[i]) scene.tweens.add({ targets: this.slotIcons[i], alpha: 0, duration: 120, yoyo: true });
         this.crucible.discard(i);
       });
       this.slotBgs.push(bg);
-      this.slotIcons.push(scene.add.image(x, cy, 'ing_J').setDepth(DEPTH.ui + 1).setDisplaySize(38, 38).setVisible(false));
+      this.slotIcons.push(scene.add.image(x, this.cy, 'ing_J').setDepth(DEPTH.ui + 1).setDisplaySize(32, 32).setVisible(false));
     });
-    this.hint = scene.add.text(DX + 370, TOP_H - 10, '', { fontFamily: FONT, fontSize: '13px', color: COLORS.textDim })
-      .setOrigin(0.5).setDepth(DEPTH.ui);
-
-    this.brewBg = scene.add.rectangle(0, 0, 104, 58, COLORS.panelLight).setStrokeStyle(3, COLORS.accent, 0.4);
-    this.brewText = scene.add.text(0, 0, '煉成', { fontFamily: FONT, fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    this.brewBtn = scene.add.container(DX + 540, cy, [this.brewBg, this.brewText]).setDepth(DEPTH.ui)
-      .setSize(104, 58).setInteractive({ useHandCursor: true });
-    this.brewBtn.on('pointerdown', onBrew);
-
-    scene.add.rectangle(DX + 745, cy + 2, 270, 78, 0x000000, 0.25).setStrokeStyle(2, COLORS.accent, 0.3).setDepth(DEPTH.ui - 1);
-    ELEMENT_IDS.forEach((id, i) => {
-      const x = DX + 640 + i * 52;
-      scene.add.image(x, cy - 12, `ing_${id}`).setDisplaySize(24, 24).setDepth(DEPTH.ui);
-      this.elemTexts[id] = scene.add.text(x, cy + 13, '0', { fontFamily: FONT, fontSize: '16px', color: '#ffffff', fontStyle: 'bold' })
-        .setOrigin(0.5).setDepth(DEPTH.ui);
-    });
-    this.fissionText = scene.add.text(DX + 745, cy + 33, '', { fontFamily: FONT, fontSize: '13px', color: '#ff8aa0' })
-      .setOrigin(0.5).setDepth(DEPTH.ui);
+    this.hint = scene.add.text(this.cx, this.cy - size / 2 - 16, '', {
+      fontFamily: FONT, fontSize: '14px', color: COLORS.textDim, stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(DEPTH.ui);
 
     crucible.on('changed', this.refresh, this);
     buffs.on('changed', this.refresh, this);
@@ -65,27 +51,20 @@ export class CrucibleBar {
     const c = this.crucible;
     c.slots.forEach((m, i) => {
       const icon = this.slotIcons[i];
-      if (m) icon.setTexture(`ing_${m.el}`).setVisible(true).setAlpha(1).setDisplaySize(34 + m.r * 3, 34 + m.r * 3);
+      if (m) icon.setTexture(`ing_${m.el}`).setVisible(true).setAlpha(1).setDisplaySize(28 + m.r * 3, 28 + m.r * 3);
       else icon.setVisible(false);
-      this.slotBgs[i].setTint(m ? hexToInt(RARITY[m.r].color) : 0xffffff).setAlpha(m ? 1 : 0.5);
+      this.slotBgs[i].setTint(m ? hexToInt(RARITY[m.r].color) : 0xffffff).setAlpha(m ? 1 : 0.6);
     });
-    const can = c.canBrew;
-    this.brewBg.setFillStyle(can ? 0x7a4fc0 : COLORS.panelLight, can ? 1 : 0.6);
-    this.brewBg.setStrokeStyle(3, can ? 0xffffff : COLORS.accent, can ? 0.9 : 0.3);
-    this.brewText.setText(c.state === 'brewing' ? '煉成中' : '煉成').setAlpha(can ? 1 : 0.5);
-    this.scene.tweens.killTweensOf(this.brewBtn);
-    this.brewBtn.setScale(1);
-    if (can) this.scene.tweens.add({ targets: this.brewBtn, scale: 1.06, duration: 400, yoyo: true, repeat: -1 });
+    const fission = `裂變 ${Math.round(c.fissionChance * 100)}%`;
     if (c.filled === 3) {
       const mats = c.slots as Material[];
       const key = recipeKey(mats.map((m) => m.el));
       const q = RARITY[potionQuality(mats)];
-      this.hint.setText(`${q.name}品質・${CodexStore.has(key) ? RECIPES[key].name : '未知配方'}`).setColor(q.color);
+      this.hint.setText(`${q.name}・${CodexStore.has(key) ? RECIPES[key].name : '未知配方'}　${fission}`).setColor(q.color);
+      this.panel.setStrokeStyle(3, hexToInt(q.color), 0.9);
     } else {
-      this.hint.setText('點槽位可丟棄').setColor(COLORS.textDim);
+      this.hint.setText(c.filled ? fission : '').setColor('#ff9ab0');
+      this.panel.setStrokeStyle(2, COLORS.accent, 0.35);
     }
-    ELEMENT_IDS.forEach((id) => this.elemTexts[id].setText(String(Math.round(this.buffs.elements[id]))));
-    this.fissionText.setText(`裂變率 ${Math.round(c.fissionChance * 100)}%`);
-    this.cauldron.setTint(c.filled === 3 ? 0xc9a3ff : 0x6a5a7a);
   }
 }

@@ -29,7 +29,7 @@ import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, R
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
-import { pick } from '../utils';
+import { formatTime, pick } from '../utils';
 import type { ResultData } from './ResultScene';
 
 export interface RunSummary {
@@ -69,6 +69,7 @@ export class GameScene extends Phaser.Scene {
   private swapBtn!: RoundButton;
   private skillBtn!: RoundButton;
   private weaponText!: Phaser.GameObjects.Text;
+  private crucibleBar!: CrucibleBar;
   /** 迷路的煉金師的委託 */
   quest?: { left: number };
   private modText!: Phaser.GameObjects.Text;
@@ -142,7 +143,7 @@ export class GameScene extends Phaser.Scene {
     // UI
     this.hud = new HUD(this, this.player.maxHp, () => this.openPause());
     this.minimap = new Minimap(this, this.dungeon);
-    new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
+    this.crucibleBar = new CrucibleBar(this, this.crucible, this.buffs);
     this.input2 = new InputSystem(this);
     // 右下按鈕弧形排列（半透明疊在戰場上）
     this.dashBtn = createRoundButton(this, RIGHT - 100, 612, 60, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
@@ -153,7 +154,7 @@ export class GameScene extends Phaser.Scene {
     this.weaponText = this.add.text(RIGHT - 202, 480, '', {
       fontFamily: FONT, fontSize: '16px', color: '#ffffff', align: 'center', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(DEPTH.ui);
-    this.modText = this.add.text(ARENA.x + 14, ARENA.y + 10, '', {
+    this.modText = this.add.text(SAFE_X + 18, 136, '', {
       fontFamily: FONT, fontSize: '18px', color: '#ffffff', stroke: '#000', strokeThickness: 4,
     }).setDepth(DEPTH.ui);
     this.weapons.on('changed', () => this.refreshWeaponUI());
@@ -318,7 +319,7 @@ export class GameScene extends Phaser.Scene {
       const M = brew.mythic;
       const color = hexToInt(M.color);
       this.fx.burst(p.x, p.y, 160, color, 500);
-      this.fx.burst(SAFE_X + 370, 40, 120, color, 500);
+      this.fx.burst(this.crucibleBar.cx, this.crucibleBar.cy, 120, color, 500);
       this.cameras.main.flash(250, 255, 120, 140);
       this.cameras.main.shake(200, 0.006);
       this.hud.showToast(`裂變！【${MYTHIC.name}】${M.name}`, M.desc, MYTHIC.color);
@@ -326,7 +327,7 @@ export class GameScene extends Phaser.Scene {
       const r = brew.recipe;
       const q = RARITY[brew.quality];
       this.fx.burst(p.x, p.y, 70 + brew.quality * 25, hexToInt(q.color), 350);
-      this.fx.burst(SAFE_X + 370, 40, 90, hexToInt(r.color));
+      this.fx.burst(this.crucibleBar.cx, this.crucibleBar.cy, 90, hexToInt(r.color));
       if (brew.quality >= 2) this.cameras.main.flash(150, 180, 140, 255);
       this.hud.showToast(`【${q.name}】${r.name}`, r.desc.replace('\n', '　'), brew.quality > 0 ? q.color : undefined);
     }
@@ -562,6 +563,7 @@ export class GameScene extends Phaser.Scene {
     this.drawDoors();
     this.encounters.setupRoom(room);
     this.minimap.draw();
+    this.hud.setInfoY(this.minimap.bottom);
     if (room.type === 'exit') this.tutorial.notify('stairs');
     if (room.type === 'shop') this.tutorial.notify('shop');
   }
@@ -577,6 +579,7 @@ export class GameScene extends Phaser.Scene {
     Sound.play('card');
     this.showBanner(room.type === 'elite' ? '挑戰成功！' : '房間清空');
     this.minimap.draw();
+    this.hud.setInfoY(this.minimap.bottom);
     this.tutorial.notify('door');
     const mod = room.mod ? FUN.mods.find((m) => m.id === room.mod) : undefined;
     if (mod?.curse) {
@@ -619,6 +622,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2 + 80, undefined, true);
     this.dropWeapon(GAME_W / 2, ARENA.y + ARENA.h / 2 - 140, undefined, 2);
     this.minimap.draw();
+    this.hud.setInfoY(this.minimap.bottom);
     this.time.delayedCall(1800, () => this.openCardSelect('Boss 獎勵', 1, () => {
       this.dungeon.afterCards();
       this.encounters.setupRoom(this.dungeon.current);
@@ -826,7 +830,7 @@ export class GameScene extends Phaser.Scene {
       character: this.character.name,
       weapons: this.weapons.slots.filter(Boolean).map((w) => ({ name: w!.name, color: RARITY[w!.rarity].color })),
       skill: `${this.character.skill.name}（冷卻 ${this.character.skill.cooldown} 秒）`,
-      region: this.dungeon.label,
+      region: `${this.dungeon.label}　${formatTime(this.runTime)}`,
       drinks: this.buffs.drinks,
       elements: { ...this.buffs.elements },
       passives,
