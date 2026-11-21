@@ -10,6 +10,11 @@ const PALETTES = {
   crit: ['#fff3c0', '#ffb347', '#ff6a2a', '#c0301a'],
   purple: ['#fbe8ff', '#e0b0ff', '#b46bf0', '#7a3ab8'],
   red: ['#ffe0e0', '#ff8a8a', '#e0404a', '#9a1a2a'],
+  fire: ['#fffbe0', '#ffe066', '#ffa030', '#e0501a'],
+  ice: ['#ffffff', '#d8f6ff', '#7fd8ff', '#2a8ae0'],
+  poison: ['#f4ffe0', '#c8ff8a', '#6ae04a', '#2a8a2a'],
+  jelly: ['#fff0f8', '#ffb0dc', '#ff6ab4', '#c02a7a'],
+  shock: ['#ffffff', '#fff6a0', '#ffe14d', '#c0a020'],
 } as const;
 export type TextPalette = keyof typeof PALETTES;
 

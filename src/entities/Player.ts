@@ -30,6 +30,13 @@ export class Player {
   private atkKey?: string;
   private attacking = false;
   private atkFaceLeft = false;
+  /** 2.5D 生動化 */
+  private readonly hd: boolean;
+  private readonly displayH: number;
+  private animT = 0;
+  private lastDt = 0;
+  private recoil = 0;
+  private recoilLeft = false;
   private readonly pointer: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Image;
 
@@ -37,10 +44,14 @@ export class Player {
     this.x = x;
     this.y = y;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.4).setScale(0.7, 0.35);
-    if (scene.anims.exists(`run_${texture}`)) this.runKey = `run_${texture}`;
-    if (scene.anims.exists(`atk_${texture}`)) this.atkKey = `atk_${texture}`;
-    this.sprite = scene.add.sprite(x, y, this.runKey ?? texture).setDepth(DEPTH.player).setTint(color)
-      .setDisplaySize(this.radius * 4.3, this.radius * 4.3);
+    // 高細節手繪版（hd_*）：靜態圖＋程式呼吸／走路擺動／開火後座；否則用 GIF 動畫
+    this.hd = scene.textures.exists(`hd_${texture}`);
+    if (!this.hd && scene.anims.exists(`run_${texture}`)) this.runKey = `run_${texture}`;
+    if (!this.hd && scene.anims.exists(`atk_${texture}`)) this.atkKey = `atk_${texture}`;
+    // 顯示高度約為畫面高度 19%
+    this.displayH = Math.round(720 * 0.19);
+    this.sprite = scene.add.sprite(x, y, this.hd ? `hd_${texture}` : this.runKey ?? texture).setDepth(DEPTH.player).setTint(color)
+      .setOrigin(0.5, 0.9).setDisplaySize(this.displayH, this.displayH);
     this.sprite.on('animationcomplete', (a: Phaser.Animations.Animation) => {
       if (a.key === this.atkKey) {
         this.attacking = false;
@@ -52,6 +63,12 @@ export class Player {
 
   /** 開火時播攻擊動畫（播完才會再播，不會每發子彈都重來） */
   playAttack(targetX: number): void {
+    if (this.hd) {
+      // 手繪靜態圖：用後座力（往後仰＋放大一下）代替攻擊動畫
+      this.recoil = 1;
+      this.recoilLeft = targetX < this.x;
+      return;
+    }
     if (!this.atkKey || this.attacking || this.state === 'dash' || this.state === 'dead') return;
     this.attacking = true;
     this.atkFaceLeft = targetX < this.x;
@@ -149,14 +166,32 @@ export class Player {
 
     this.x = clamp(this.x, ARENA.x + this.radius, ARENA_RIGHT - this.radius);
     this.y = clamp(this.y, ARENA.y + this.radius, ARENA_BOTTOM - this.radius);
+    this.lastDt = dt;
     this.sync();
   }
 
   private sync(): void {
-    this.sprite.setPosition(this.x, this.y).setDepth(ySortDepth(this.y + 0.5));
-    this.shadow.setPosition(this.x, this.y + 16);
-    this.pointer.setPosition(this.x + Math.cos(this.facing) * 42, this.y + Math.sin(this.facing) * 42);
-    this.sprite.setFlipX(this.attacking ? this.atkFaceLeft : Math.cos(this.facing) < -0.1);
+    // 2.5D：呼吸（待機）、走路上下跳＋左右傾斜、衝刺前傾、開火後座；陰影跟著縮放
+    const dt = this.lastDt;
+    const moving = this.state === 'move' || this.state === 'dash';
+    this.animT += dt * (this.state === 'dash' ? 20 : moving ? 12 : 3);
+    this.recoil = Math.max(0, this.recoil - dt * 8);
+    const H = this.displayH;
+    const base = H / this.sprite.frame.height;
+    const breath = moving ? 0 : Math.sin(this.animT) * 0.03;
+    const bob = moving ? Math.abs(Math.sin(this.animT)) * H * (this.hd ? 0.06 : 0.025) : 0;
+    const punch = this.recoil * 0.06;
+    this.sprite.setScale(base * (1 - breath * 0.5 + punch), base * (1 + breath + punch * 0.5));
+    const faceLeft = this.recoil > 0 ? this.recoilLeft : this.attacking ? this.atkFaceLeft : Math.cos(this.facing) < -0.1;
+    const dir = faceLeft ? -1 : 1;
+    const tilt = this.state === 'dash' ? 0.18 * dir : moving ? Math.sin(this.animT) * 0.07 * dir : 0;
+    this.sprite.setRotation(tilt - this.recoil * 0.12 * dir);
+    const feetY = this.y + 16;
+    this.sprite.setPosition(this.x - this.recoil * 5 * dir, feetY - bob).setDepth(ySortDepth(this.y + 0.5));
+    const shrink = Math.max(0.6, 1 - bob / (H * 0.5));
+    this.shadow.setPosition(this.x, feetY).setDisplaySize(H * 0.46 * shrink, H * 0.14 * shrink).setAlpha(0.45 * shrink);
+    this.pointer.setPosition(this.x + Math.cos(this.facing) * 46, this.y - H * 0.25 + Math.sin(this.facing) * 46);
+    this.sprite.setFlipX(faceLeft);
     if (this.runKey && !this.attacking) {
       const moving = this.state === 'move' || this.state === 'dash';
       if (moving) {

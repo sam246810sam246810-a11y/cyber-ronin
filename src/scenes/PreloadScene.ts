@@ -21,12 +21,14 @@ const ART_UI = [
   'ui_hud_plaque', 'ui_nameplate', 'ui_title_banner', 'ui_minimap', 'ui_boss_frame', 'ui_notice', 'ui_gold_btn', 'ui_tile', 'logo',
   'ter_grass', 'ter_burning', 'ter_toxic', 'ter_water', 'ter_frozen', 'ter_electric', 'ter_oil', 'ter_sun',
   'proj_dart', 'proj_bomb', 'proj_spore',
+  // 高細節手繪角色（綠幕去背，tools/sprite_pipeline.py）
+  'hd_cat_apprentice', 'hd_mouse',
 ];
 /** 選單畫面背景（jpg） */
 const ART_BGS = ['bg_menu', 'bg_meta', 'bg_relic', 'bg_codex', 'bg_win', 'bg_lose'];
 /** 會循環播放的特效（其他特效播一次就消失） */
 const LOOP_VFX = new Set(['vfx_poison', 'vfx_lava', 'vfx_petal', 'vfx_lavabomb', 'vfx_flask', 'vfx_clock']);
-const ART_ROOMS = ['room_greenhouse', 'room_lava', 'room_storm', 'room_lobby'];
+const ART_ROOMS = ['room_courtyard', 'room_greenhouse', 'room_lava', 'room_storm', 'room_lobby'];
 const ART_FLOORS = ['floor_greenhouse', 'floor_lava', 'floor_storm', 'floor_lobby'];
 
 export class PreloadScene extends Phaser.Scene {

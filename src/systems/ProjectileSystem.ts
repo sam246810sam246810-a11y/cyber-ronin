@@ -55,6 +55,11 @@ interface Bullet {
 }
 
 /** 直線投射物（玩家武器、敵人尖刺、冰毒針…） */
+/** 敵人美術子彈的拖尾顏色 */
+const TRAIL_COLOR: Record<string, number> = {
+  vfx_lavabomb: 0xff7a2a, vfx_petal: 0xff8ad8, vfx_flask: 0xc77bff, proj_dart: 0xb46bff, proj_spore: 0x8aff6a,
+};
+
 export class ProjectileSystem {
   private bullets: Bullet[] = [];
 
@@ -90,7 +95,7 @@ export class ProjectileSystem {
       if (opts.texture === 'proj_dart') sprite.setRotation(angle).setScale((r * 5) / f.width);
       else sprite.setRotation(0).setScale((r * 3.6) / Math.max(f.width, f.height));
     } else if (opts.long || opts.texture === 'thorn') sprite.setDisplaySize(r * 1.6, r * 3.2);
-    else sprite.setDisplaySize(r * (glowArt ? 4.2 : 2), r * (glowArt ? 4.2 : 2));
+    else sprite.setDisplaySize(r * (glowArt ? 3.4 : 2), r * (glowArt ? 3.4 : 2));
     this.bullets.push({
       x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r, damage, friendly, sprite, opts, dead: false,
       pierceLeft: opts.pierce ?? 0, bouncesLeft: opts.bounces ?? 0, hit: new Set(), speed, traveled: 0, returning: false,
@@ -118,6 +123,9 @@ export class ProjectileSystem {
       b.y += b.vy * dt;
       b.traveled += b.speed * dt;
       b.sprite.setPosition(b.x, b.y);
+      // 飛行拖尾：每幀在子彈位置放一顆加法發光微粒（顏色跟元素走）
+      const tc = b.friendly ? b.opts.color ?? COLORS.bullet : TRAIL_COLOR[b.opts.texture ?? ''];
+      if (tc !== undefined) this.game.fx.trail(b.x, b.y, tc);
       if (b.opts.spin) b.sprite.setRotation(b.sprite.rotation + b.opts.spin * dt);
       if (b.opts.maxDist && !b.returning && b.traveled >= b.opts.maxDist) {
         if (b.opts.boomerang) {
@@ -179,8 +187,8 @@ export class ProjectileSystem {
     const crit = !!o.critChance && Math.random() < o.critChance;
     const dmg = crit ? damage * 2 : damage;
     if (o.triggerPassives) this.game.buffs.onHit(e, dmg);
-    e.knockback(fromX, fromY, (o.knockback ?? 6) * (crit ? 2 : 1));
-    e.takeDamage(dmg, { crit });
+    e.knockback(fromX, fromY, (o.knockback ?? 11) * (crit ? 2 : 1));
+    e.takeDamage(dmg, { crit, color: (o as BulletOptions).color });
     Sound.play(crit ? 'crit' : 'hit');
     if (o.splash) this.game.effects.explode(e.x, e.y, o.splash, dmg * 0.5, 0xe06bff);
     if (o.triggerPassives !== undefined) this.game.terrain?.onHit(e.x, e.y);

@@ -9,6 +9,8 @@ export interface DamageOptions {
   /** 是否觸發受擊閃白與傷害數字（持續傷害不觸發） */
   flash?: boolean;
   crit?: boolean;
+  /** 命中的元素顏色（傷害跳字與粒子用） */
+  color?: number;
 }
 
 /**
@@ -43,6 +45,14 @@ export abstract class Enemy {
   readonly sprite: Phaser.GameObjects.Sprite;
   private atkKey?: string;
   private runKey?: string;
+  /** 2.5D 生動化：顯示高度、出場、呼吸／走路擺動、受擊壓扁 */
+  private displayH = 0;
+  private spawnT = 0;
+  private walkT = Math.random() * 10;
+  private lastX = 0;
+  private lastY = 0;
+  private hitSquash = 0;
+  private readonly hd: boolean;
   protected readonly shadow: Phaser.GameObjects.Image;
   private readonly eliteRing?: Phaser.GameObjects.Image;
   private readonly hpBar: Phaser.GameObjects.Graphics;
@@ -72,10 +82,16 @@ export abstract class Enemy {
         .setDisplaySize(this.radius * 2.6, this.radius * 2.6);
     }
     // 圖比碰撞範圍大一點，比較好辨認
-    if (scene.anims.exists(`run_${texture}`)) this.runKey = `run_${texture}`;
-    if (scene.anims.exists(`atk_${texture}`)) this.atkKey = `atk_${texture}`;
-    this.sprite = scene.add.sprite(x, y, this.runKey ?? texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
-      .setDisplaySize(this.radius * 3.4, this.radius * 3.4);
+    // 高細節手繪版（hd_*）優先：靜態圖＋程式做呼吸與走路擺動；否則用 GIF 跑步動畫
+    this.hd = scene.textures.exists(`hd_${texture}`);
+    if (!this.hd && scene.anims.exists(`run_${texture}`)) this.runKey = `run_${texture}`;
+    if (!this.hd && scene.anims.exists(`atk_${texture}`)) this.atkKey = `atk_${texture}`;
+    // 顯示高度：小怪約畫面高度 14～19%（依碰撞半徑），Boss 維持原本大小
+    this.displayH = def.boss ? this.radius * 3.4 : this.radius * 5.6;
+    this.sprite = scene.add.sprite(x, y, this.hd ? `hd_${texture}` : this.runKey ?? texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
+      .setOrigin(0.5, 0.9).setDisplaySize(this.displayH, this.displayH);
+    this.lastX = x;
+    this.lastY = y;
     this.hpBar = scene.add.graphics().setDepth(DEPTH.projectile - 1);
     if (this.runKey) {
       this.sprite.play({ key: this.runKey, startFrame: Math.floor(Math.random() * 6) });
@@ -84,15 +100,9 @@ export abstract class Enemy {
       });
     }
 
-    // 出場動畫
+    // 出場動畫改在 sync 裡用 spawnT 做（才不會跟呼吸縮放打架）
     this.sprite.setScale(0);
-    scene.tweens.add({
-      targets: this.sprite,
-      scaleX: (this.radius * 3.4) / this.sprite.width,
-      scaleY: (this.radius * 3.4) / this.sprite.height,
-      duration: 200,
-      ease: 'Back.Out',
-    });
+    this.shadow.setDisplaySize(this.displayH * 0.5, this.displayH * 0.16);
   }
 
   get frozen(): boolean {
@@ -175,8 +185,10 @@ export abstract class Enemy {
     this.game.buffs?.recordDamage(Math.min(amount, this.hp));
     this.hp -= amount;
     if (opts.flash !== false) {
-      this.hitFlash = 0.08;
-      this.game.fx.damageNumber(this.x, this.y - this.radius, amount, !!opts.crit);
+      this.hitFlash = 0.075;
+      this.hitSquash = 1;
+      this.game.fx.hitBurst(this.x, this.y - this.displayH * 0.35, opts.color, !!opts.crit);
+      this.game.fx.damageNumber(this.x, this.y - this.displayH * 0.7, amount, !!opts.crit, opts.color);
       this.game.fx.anim('vfx_hit', this.x + (Math.random() - 0.5) * this.radius, this.y - this.radius * 0.4, opts.crit ? 78 : 54);
     }
     if (this.hp <= 0) {
@@ -243,21 +255,45 @@ export abstract class Enemy {
     this.hitFlash = Math.max(0, this.hitFlash - dt);
     let tint = this.baseTint;
     if (this.frozen) tint = 0xbfefff;
-    else if (this.hitFlash > 0) tint = 0xffffff;
     else if (this.poisonTimer > 0 && Math.floor(this.poisonTimer * 6) % 2 === 0) tint = 0x9cff7e;
     else if (this.slowTimer > 0) tint = 0xc9a3ff;
-    this.sprite.setTint(tint);
-    this.sprite.setAlpha(this.slowTimer > 0 && !this.frozen ? 0.8 : 1);
-    this.sprite.setPosition(this.x, this.y - this.liftOffset()).setDepth(ySortDepth(this.y));
+    // 受擊：真正的白閃（tintFill），不是乘法染色
+    if (this.hitFlash > 0 && !this.frozen) this.sprite.setTintFill(0xffffff);
+    else this.sprite.setTint(tint);
+    this.sprite.setAlpha(this.slowTimer > 0 && !this.frozen ? 0.85 : 1);
+
+    // 2.5D 生動化：出場彈出、呼吸、走路上下擺動與傾斜、受擊壓扁
+    this.spawnT = Math.min(1, this.spawnT + dt / 0.22);
+    const pop = Phaser.Math.Easing.Back.Out(this.spawnT);
+    const moved = Math.hypot(this.x - this.lastX, this.y - this.lastY);
+    this.lastX = this.x;
+    this.lastY = this.y;
+    const moving = moved > 0.4 && !this.frozen;
+    this.walkT += dt * (moving ? 13 : 3);
+    this.hitSquash = Math.max(0, this.hitSquash - dt * 7);
+    const breath = moving ? 0 : Math.sin(this.walkT) * 0.025;
+    const bob = moving && this.hd ? Math.abs(Math.sin(this.walkT)) * this.displayH * 0.05 : 0;
+    const base = this.displayH / this.sprite.frame.height;
+    const sq = this.hitSquash * 0.14;
+    this.sprite.setScale(base * pop * (1 - breath * 0.5 + sq), base * pop * (1 + breath - sq));
+    const dir = this.sprite.flipX ? -1 : 1;
+    this.sprite.setRotation(moving ? Math.sin(this.walkT) * 0.06 * dir : 0);
+    const feetY = this.y + this.radius * 0.7;
+    this.sprite.setPosition(this.x, feetY - this.liftOffset() - bob).setDepth(ySortDepth(this.y));
     this.eliteRing?.setDepth(this.sprite.depth - 0.001);
-    this.shadow.setPosition(this.x, this.y + this.radius * 0.8);
-    this.eliteRing?.setPosition(this.x, this.y - this.liftOffset());
+    // 陰影：跳起來（bob／liftOffset）時縮小變淡
+    const lift = bob + this.liftOffset();
+    const shrink = Math.max(0.55, 1 - lift / (this.displayH * 0.8));
+    this.shadow.setPosition(this.x, feetY).setDisplaySize(this.displayH * 0.5 * shrink * pop, this.displayH * 0.16 * shrink * pop)
+      .setAlpha(0.42 * shrink);
+    // 精英：腳下的金色光環（貼地的橢圓）
+    this.eliteRing?.setPosition(this.x, feetY).setDisplaySize(this.displayH * 0.72, this.displayH * 0.24).setDepth(DEPTH.shadow + 0.5);
 
     this.hpBar.clear();
     if (this.hp < this.maxHp && !this.def.boss) {
       const w = this.radius * 2;
       const bx = this.x - w / 2;
-      const by = this.y - this.liftOffset() - this.radius - 10;
+      const by = this.y + this.radius * 0.7 - this.liftOffset() - this.displayH * 0.95;
       this.hpBar.fillStyle(0x000000, 0.6).fillRect(bx, by, w, 5);
       this.hpBar.fillStyle(this.elite ? COLORS.gold : 0xff6b6b, 1).fillRect(bx, by, w * (this.hp / this.maxHp), 5);
     }

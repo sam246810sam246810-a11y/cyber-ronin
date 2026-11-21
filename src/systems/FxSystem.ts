@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT } from '../config';
-import { goldify } from '../ui/textStyle';
+import { goldify, type TextPalette } from '../ui/textStyle';
+
+/** 不用加法混合的特效（實體的煙、液體、地面） */
+const SOLID_VFX = new Set(['vfx_poof', 'vfx_poison', 'vfx_lava', 'vfx_magma', 'vfx_vines', 'vfx_shatter']);
 
 /** 佔位用的簡單特效 */
 export class FxSystem {
@@ -10,7 +13,7 @@ export class FxSystem {
   constructor(private scene: Phaser.Scene) {}
 
   /** 傷害數字（物件池，同時最多 40 個） */
-  damageNumber(x: number, y: number, amount: number, crit: boolean): void {
+  damageNumber(x: number, y: number, amount: number, crit: boolean, color?: number): void {
     if (this.activeNumbers >= 40) return;
     let t = this.numberPool.pop();
     if (!t) {
@@ -24,10 +27,11 @@ export class FxSystem {
       .setFontSize(crit ? 30 : 20)
       .setPosition(x + (Math.random() - 0.5) * 20, y)
       .setAlpha(1).setScale(crit ? 1.4 : 1).setVisible(true);
-    // 文字風格 A：一般傷害金色、暴擊橘紅漸層
-    goldify(t, crit ? 'crit' : 'gold', crit ? 6 : 4);
+    // 依元素上色：火＝暖橘黃、冰＝亮藍、毒＝綠、果凍＝粉、雷＝亮黃；暴擊一律橘紅加大
+    goldify(t, crit ? 'crit' : FxSystem.paletteForColor(color), crit ? 6 : 4);
+    // 往上飄＋小彈跳（Back.Out 會先超過一點再回來），之後淡出
     this.scene.tweens.add({
-      targets: t, y: y - 36, scale: 1, duration: 420, ease: 'Quad.Out',
+      targets: t, y: y - 44, scale: crit ? 1.15 : 1, duration: 460, ease: 'Back.Out',
       onComplete: () => {
         this.scene.tweens.add({
           targets: t, alpha: 0, duration: 160,
@@ -56,11 +60,74 @@ export class FxSystem {
     }
   }
 
+  /** 傷害跳字的漸層色 */
+  static paletteForColor(color?: number): TextPalette {
+    if (color === undefined) return 'gold';
+    const k = FxSystem.vfxForColor(color);
+    if (k === 'vfx_fire') return 'fire';
+    if (k === 'vfx_frost') return 'ice';
+    if (k === 'vfx_poison') return 'poison';
+    if (k === 'vfx_jelly') return 'jelly';
+    if (k === 'vfx_hit') return 'shock';
+    return 'gold';
+  }
+
+  // ---- 粒子（全部 Additive）----
+  private emitters = new Map<string, Phaser.GameObjects.Particles.ParticleEmitter>();
+  private comboHits: number[] = [];
+  private lastShake = 0;
+
+  private emitter(color: number, kind: 'burst' | 'trail'): Phaser.GameObjects.Particles.ParticleEmitter | undefined {
+    if (!this.scene.textures.exists('proj_orb')) return undefined;
+    const key = `${kind}:${color}`;
+    let e = this.emitters.get(key);
+    if (e && e.scene) return e;
+    const burst = kind === 'burst';
+    e = this.scene.add.particles(0, 0, 'proj_orb', {
+      emitting: false,
+      blendMode: Phaser.BlendModes.ADD,
+      tint: color,
+      speed: burst ? { min: 90, max: 260 } : { min: 8, max: 40 },
+      angle: { min: 0, max: 360 },
+      lifespan: burst ? { min: 180, max: 380 } : { min: 180, max: 300 },
+      scale: burst ? { start: 0.17, end: 0 } : { start: 0.1, end: 0 },
+      alpha: { start: burst ? 1 : 0.75, end: 0 },
+      gravityY: burst ? 260 : 0,
+    }).setDepth(DEPTH.fx + 1);
+    this.emitters.set(key, e);
+    return e;
+  }
+
+  /** 命中：元素粒子噴發＋白色核心閃光；連續命中時極輕微鏡頭震動 */
+  hitBurst(x: number, y: number, color = 0xfff0c0, crit = false): void {
+    this.emitter(color, 'burst')?.explode(crit ? 16 : 9, x, y);
+    this.emitter(0xffffff, 'burst')?.explode(crit ? 5 : 2, x, y);
+    const now = this.scene.time.now;
+    this.comboHits.push(now);
+    while (this.comboHits.length && now - this.comboHits[0] > 350) this.comboHits.shift();
+    if ((crit || this.comboHits.length >= 7) && now - this.lastShake > 420) {
+      this.lastShake = now;
+      this.shake(crit ? 60 : 70, crit ? 0.0016 : 0.0019);
+    }
+  }
+
+  /** 投射物拖尾微粒（每幀呼叫） */
+  trail(x: number, y: number, color: number): void {
+    this.emitter(color, 'trail')?.emitParticleAt(x, y, 1);
+  }
+
+  /** 克制的鏡頭震動（強力技能用 0.004 左右） */
+  shake(ms: number, intensity: number): void {
+    this.scene.cameras.main.shake(ms, intensity);
+  }
+
   /** 播一次美術特效動畫（沒載入就什麼都不做，回傳 undefined） */
   anim(key: string, x: number, y: number, size: number, opts: { depth?: number; tint?: number; loop?: boolean } = {}):
     Phaser.GameObjects.Sprite | undefined {
     if (!this.scene.anims.exists(key)) return undefined;
     const s = this.scene.add.sprite(x, y, key).setDepth(opts.depth ?? DEPTH.fx);
+    // 光暈、火花、冰晶、閃電一律加法混合；煙霧、毒霧、熔岩等有實體感的保持一般混合
+    if (!SOLID_VFX.has(key)) s.setBlendMode(Phaser.BlendModes.ADD);
     const f = s.frame;
     s.setScale(size / Math.max(f.width, f.height));
     if (opts.tint !== undefined) s.setTint(opts.tint);

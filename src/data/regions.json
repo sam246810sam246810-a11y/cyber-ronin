@@ -13,7 +13,7 @@
       "deco": "#3a5a2a",
       "decoLight": "#6aa84f",
       "floorTex": "floor_greenhouse",
-      "roomTex": "room_greenhouse"
+      "roomTex": "room_courtyard"
     },
     "enemies": [
       {

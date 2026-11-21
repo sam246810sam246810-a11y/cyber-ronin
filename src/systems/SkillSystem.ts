@@ -50,6 +50,7 @@ export class SkillSystem {
         if (!g.crucible.canAccept && !g.crucible.canBrew) return false;
         while (g.crucible.canAccept) g.crucible.add({ el: pick(ELEMENT_IDS), r: 0 });
         g.brewAndDrink();
+        g.fx.shake(140, 0.0035);
         if (!g.fx.anim('vfx_alchemy', p.x, p.y, 280, { depth: DEPTH.zone + 1 })) g.fx.burst(p.x, p.y, 120, 0xc9a3ff, 400);
         return true;
       }
@@ -63,6 +64,7 @@ export class SkillSystem {
         }
         if (!g.fx.anim('vfx_icestorm', p.x, p.y, 320)) g.fx.burst(p.x, p.y, 140, 0x9fe3ff, 400);
         Sound.play('zap');
+        g.fx.shake(150, 0.004);
         return true;
       }
       case 'lava_charge': {
@@ -91,6 +93,7 @@ export class SkillSystem {
       case 'thunder_field': {
         this.fieldTime = 5;
         this.fieldTick = 0;
+        g.fx.shake(160, 0.004);
         g.fx.burst(p.x, p.y, 200, 0xffe14d, 500);
         return true;
       }
