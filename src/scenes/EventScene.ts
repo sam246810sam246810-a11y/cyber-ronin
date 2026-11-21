@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, FONT, GAME_H, GAME_W } from '../config';
 import { hexToInt } from '../data';
 import { Sound } from '../systems/SoundSystem';
-import { textButton } from '../ui/widgets';
+import { ConfirmPicker, guardInput, textButton } from '../ui/widgets';
 
 export interface EventOption {
   label: string;
@@ -43,7 +43,23 @@ export class EventScene extends Phaser.Scene {
       wordWrap: { width: 1000, useAdvancedWrap: true },
     }).setOrigin(0.5, 0);
 
+    guardInput(this);
     const n = d.options.length;
+    const cards: { card: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Rectangle }[] = [];
+    const baseColor = hexToInt(d.color);
+    const hint = this.add.text(GAME_W / 2, 560, '點選項查看，再點一次確認', {
+      fontFamily: FONT, fontSize: '19px', color: '#c9c9c9',
+    }).setOrigin(0.5);
+    const picker = new ConfirmPicker((i, prev) => {
+      if (prev >= 0) {
+        cards[prev].bg.setStrokeStyle(4, baseColor, 1);
+        this.tweens.add({ targets: cards[prev].card, scale: 1, duration: 120 });
+      }
+      cards[i].bg.setStrokeStyle(7, 0xffffff, 1);
+      this.tweens.add({ targets: cards[i].card, scale: 1.06, duration: 140, ease: 'Back.Out' });
+      hint.setText(`再點一次「${d.options[i].label}」確認`).setColor('#ffd166');
+      Sound.play('card');
+    });
     const gap = n > 4 ? 12 : 20;
     const cw = Math.min(n > 3 ? 270 : 330, (GAME_W - 40) / n - gap);
     d.options.forEach((o, i) => {
@@ -59,12 +75,13 @@ export class EventScene extends Phaser.Scene {
         fontFamily: FONT, fontSize: '19px', color: '#d8d0e6', align: 'center', wordWrap: { width: cw - 36, useAdvancedWrap: true },
       }).setOrigin(0.5);
       const card = this.add.container(x, y, [bg, label, desc]).setSize(cw, 260).setAlpha(o.enabled ? 1 : 0.4);
+      cards.push({ card, bg });
       if (o.enabled) {
         card.setInteractive({ useHandCursor: true });
-        card.on('pointerup', () => {
+        card.on('pointerup', () => picker.tap(i, () => {
           Sound.play('card');
           close(o.onPick);
-        });
+        }, this));
       }
     });
     textButton(this, GAME_W / 2, 630, 260, 70, '離開', () => close());

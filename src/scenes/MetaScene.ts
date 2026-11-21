@@ -3,7 +3,7 @@ import { COLORS, FONT, GAME_H, GAME_W, cx } from '../config';
 import { META_UPGRADES } from '../data';
 import { MetaStore } from '../systems/MetaStore';
 import { Sound } from '../systems/SoundSystem';
-import { textButton } from '../ui/widgets';
+import { ConfirmPicker, guardInput, textButton } from '../ui/widgets';
 
 /** 大坩堝：用時之砂購買永久升級 */
 export class MetaScene extends Phaser.Scene {
@@ -18,6 +18,21 @@ export class MetaScene extends Phaser.Scene {
       fontFamily: FONT, fontSize: '19px', color: '#9fe3ff',
     }).setOrigin(0.5);
 
+    guardInput(this);
+    const cards: { card: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Rectangle; price: Phaser.GameObjects.Text; text: string }[] = [];
+    const hint = this.add.text(GAME_W / 2, 620, '點升級查看，再點一次購買', { fontFamily: FONT, fontSize: '18px', color: '#c9c9c9' }).setOrigin(0.5);
+    const picker = new ConfirmPicker((i, prev) => {
+      if (prev >= 0) {
+        cards[prev].bg.setStrokeStyle(3, 0xc9a3ff, 1);
+        cards[prev].price.setText(cards[prev].text);
+        this.tweens.add({ targets: cards[prev].card, scale: 1, duration: 120 });
+      }
+      cards[i].bg.setStrokeStyle(6, 0xffffff, 1);
+      cards[i].price.setText('再點一次購買');
+      this.tweens.add({ targets: cards[i].card, scale: 1.04, duration: 140, ease: 'Back.Out' });
+      hint.setText(`再點一次購買「${META_UPGRADES[i].name}」`).setColor('#ffd166');
+      Sound.play('card');
+    });
     META_UPGRADES.forEach((u, i) => {
       const col = i % 2;
       const row = Math.floor(i / 2);
@@ -38,14 +53,15 @@ export class MetaScene extends Phaser.Scene {
         fontFamily: FONT, fontSize: '22px', color: cost === undefined ? '#7eff8a' : can ? '#9fe3ff' : '#6a6070', fontStyle: 'bold',
       }).setOrigin(1, 0.5);
       const card = this.add.container(x, y, [bg, icon, name, desc, pips, price]).setSize(570, 84);
+      cards[i] = { card, bg, price, text: price.text };
       if (can) {
         card.setInteractive({ useHandCursor: true });
-        card.on('pointerup', () => {
+        card.on('pointerup', () => picker.tap(i, () => {
           if (MetaStore.buy(u.id)) {
             Sound.play('fission');
             this.scene.restart();
           }
-        });
+        }, this));
       }
     });
     textButton(this, GAME_W / 2, 664, 260, 64, '關閉', () => {

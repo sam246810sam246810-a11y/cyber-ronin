@@ -33,3 +33,44 @@ export async function toggleFullscreen(): Promise<void> {
     /* 不支援就算了 */
   }
 }
+
+/**
+ * 兩段式確認：第一次點只選中（呼叫 onSelect 顯示「再點一次確認」），
+ * 同一個選項再點一次才執行。避免沒看清楚就選了。
+ */
+export class ConfirmPicker {
+  private selected = -1;
+
+  constructor(private onSelect: (index: number, prev: number) => void) {}
+
+  tap(index: number, confirm: () => void, scene?: Phaser.Scene): void {
+    if (scene && guarded(scene)) return;
+    if (this.selected === index) {
+      confirm();
+      return;
+    }
+    const prev = this.selected;
+    this.selected = index;
+    this.onSelect(index, prev);
+  }
+
+  get current(): number {
+    return this.selected;
+  }
+}
+
+/** 選單剛打開的一小段時間不接受點擊（避免沿用打開選單的那一下） */
+export function guardInput(scene: Phaser.Scene, ms = 350): void {
+  const until = performance.now() + ms;
+  // 在輸入外掛最前面攔截：保護期內的點擊直接丟掉
+  const block = (pointer: Phaser.Input.Pointer) => {
+    if (performance.now() < until) pointer.event?.stopImmediatePropagation?.();
+  };
+  scene.input.on('pointerdown', block);
+  (scene as unknown as { __guardUntil: number }).__guardUntil = until;
+}
+
+/** 檢查目前是否仍在輸入保護期（給互動處理器用） */
+export function guarded(scene: Phaser.Scene): boolean {
+  return performance.now() < ((scene as unknown as { __guardUntil?: number }).__guardUntil ?? 0);
+}

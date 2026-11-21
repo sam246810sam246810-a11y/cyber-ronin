@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { COLORS, FONT, GAME_H, GAME_W, RARITY } from '../config';
 import { hexToInt } from '../data';
-import { textButton } from '../ui/widgets';
+import { Sound } from '../systems/SoundSystem';
+import { ConfirmPicker, guardInput, textButton } from '../ui/widgets';
 import { cardDesc, formatCardValue, type CardOffer } from '../systems/MutationSystem';
 
 export interface CardSelectData {
@@ -28,12 +29,29 @@ export class CardSelectScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.add.text(GAME_W / 2, 145, '選擇一張突變卡', { fontFamily: FONT, fontSize: '24px', color: COLORS.text }).setOrigin(0.5);
 
+    guardInput(this);
     const pickIt = (i: number) => {
       if (this.picked) return;
       this.picked = true;
       this.scene.stop();
       data.onPick(i);
     };
+    const cards: { card: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Rectangle; rc: number; rarity: number }[] = [];
+    const hint = this.add.text(GAME_W / 2, 624, '點卡片查看，再點一次確認選擇', {
+      fontFamily: FONT, fontSize: '20px', color: '#c9c9c9',
+    }).setOrigin(0.5);
+    const picker = new ConfirmPicker((i, prev) => {
+      if (prev >= 0) {
+        const p = cards[prev];
+        p.bg.setStrokeStyle(p.rarity >= 2 ? 6 : 4, p.rc, 1);
+        this.tweens.add({ targets: p.card, scale: 1, duration: 120 });
+      }
+      const c = cards[i];
+      c.bg.setStrokeStyle(8, 0xffffff, 1);
+      this.tweens.add({ targets: c.card, scale: 1.08, duration: 140, ease: 'Back.Out' });
+      hint.setText(`再點一次「${data.offers[i].def.name}」確認`).setColor('#ffd166');
+      Sound.play('card');
+    });
 
     data.offers.forEach((o, i) => {
       const x = GAME_W / 2 + (i - 1) * 400;
@@ -57,11 +75,12 @@ export class CardSelectScene extends Phaser.Scene {
       card.setScale(0.8).setAlpha(0);
       this.tweens.add({ targets: card, scale: 1, alpha: 1, delay: 120 * i, duration: 220, ease: 'Back.Out' });
       if (o.rarity >= 2) this.tweens.add({ targets: bg, alpha: 0.85, duration: 500, yoyo: true, repeat: -1 });
-      card.on('pointerup', () => pickIt(i));
+      card.on('pointerup', () => picker.tap(i, () => pickIt(i), this));
+      cards.push({ card, bg, rc, rarity: o.rarity });
     });
 
     if (data.rerolls && data.onReroll) {
-      textButton(this, GAME_W / 2, 650, 260, 60, `🎲 重抽（剩 ${data.rerolls}）`, () => {
+      textButton(this, GAME_W / 2, 668, 260, 56, `🎲 重抽（剩 ${data.rerolls}）`, () => {
         if (!this.picked) {
           this.picked = true;
           data.onReroll!();
@@ -70,7 +89,7 @@ export class CardSelectScene extends Phaser.Scene {
     }
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
       const n = Number(e.key);
-      if (n >= 1 && n <= data.offers.length) pickIt(n - 1);
+      if (n >= 1 && n <= data.offers.length) picker.tap(n - 1, () => pickIt(n - 1), this);
     });
   }
 }
