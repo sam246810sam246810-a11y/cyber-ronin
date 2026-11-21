@@ -43,7 +43,7 @@ export class MagmaSnail extends Enemy {
   private attack(): void {
     const a = this.cycle[this.idx++ % this.cycle.length];
     const tele = Number(this.def.telegraph ?? 0.9) * (this.enraged ? 0.85 : 1);
-    this.attackTimer = Number(this.def.attackInterval ?? 2.8) * (this.enraged ? 0.7 : 1);
+    this.attackTimer = (Number(this.def.attackInterval ?? 2.8) * this.game.dungeon.attackMul) * (this.enraged ? 0.7 : 1);
     this.busy = true;
     const p = this.game.player;
     if (a === 'ring') {

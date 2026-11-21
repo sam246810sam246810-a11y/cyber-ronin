@@ -21,7 +21,7 @@ export class Beetle extends Enemy {
   protected act(dt: number): void {
     const p = this.game.player;
     this.moveToward(p.x, p.y, dt);
-    this.sprite.setRotation(Math.atan2(p.y - this.y, p.x - this.x) + Math.PI / 2);
+    this.sprite.setFlipX(p.x < this.x);
     this.sinceHit += dt;
     if (this.sinceHit > Number(this.def.shieldRegen ?? 4) && this.shield < this.maxShield) {
       this.shield = Math.min(this.maxShield, this.shield + this.maxShield * 0.5 * dt);

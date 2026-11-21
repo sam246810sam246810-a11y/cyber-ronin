@@ -66,6 +66,8 @@ export type Brew =
 export interface CharacterDef {
   id: string;
   name: string;
+  /** 稱號，例如「見習煉金貓」 */
+  title: string;
   rarity: RarityIndex;
   color: string;
   desc: string;

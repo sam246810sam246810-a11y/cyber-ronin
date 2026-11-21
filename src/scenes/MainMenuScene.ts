@@ -23,13 +23,16 @@ export class MainMenuScene extends Phaser.Scene {
     this.add.text(lx, 160, '坩堝花園', {
       fontFamily: FONT, fontSize: '92px', color: '#ffffff', fontStyle: 'bold', stroke: '#4a2a6a', strokeThickness: 10,
     }).setOrigin(0.5);
-    this.add.image(lx, 380, 'cauldron').setDisplaySize(380, 130).setTint(0xc9a3ff).setAlpha(0.6);
+    this.add.image(lx, 420, 'cauldron').setDisplaySize(380, 110).setTint(0xc9a3ff).setAlpha(0.6);
     ['ing_J', 'ing_I', 'ing_S', 'ing_F', 'ing_T'].forEach((k, i) => {
-      const img = this.add.image(lx - 140 + i * 70, 310, k).setDisplaySize(56, 56);
-      this.tweens.add({ targets: img, y: 290, duration: 900 + i * 150, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+      const img = this.add.image(lx - 190 + i * 95 + (i >= 2 ? 0 : 0), 300, k).setDisplaySize(44, 44).setVisible(i !== 2);
+      this.tweens.add({ targets: img, y: 286, duration: 900 + i * 150, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
     });
-    this.add.text(lx, 500, '撿素材 → 湊滿三格 → 煉成喝下 → 越喝越強！', {
-      fontFamily: FONT, fontSize: '24px', color: COLORS.textDim,
+    this.add.text(lx, 242, '～ 時空貓咪煉金術師 ～', { fontFamily: FONT, fontSize: '26px', color: '#ffd166' }).setOrigin(0.5);
+    const cat = this.add.image(lx, 378, 'cat_apprentice').setDisplaySize(120, 120);
+    this.tweens.add({ targets: cat, y: 368, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.InOut' });
+    this.add.text(lx, 500, '時鐘博士打翻了時之坩堝，時空亂成一團！\n撿素材 → 湊滿三格 → 煉成喝下 → 越喝越強，喵！', {
+      fontFamily: FONT, fontSize: '21px', color: COLORS.textDim, align: 'center', lineSpacing: 8,
     }).setOrigin(0.5);
 
     const rx = cx(940);
@@ -40,7 +43,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.add.text(rx, 580, '左半邊拖曳移動　右下：衝刺 / 技能 / 煉成 / 換武器\n鍵盤：WASD 移動　空白 衝刺　K 煉成　E 技能　Q 換武器', {
       fontFamily: FONT, fontSize: '18px', color: COLORS.textDim, align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
-    this.add.text(GAME_W - 20, GAME_H - 20, 'v0.7 橫向＋時空裂縫版', {
+    this.add.text(GAME_W - 20, GAME_H - 20, 'v0.8 貓咪煉金術師版', {
       fontFamily: FONT, fontSize: '15px', color: '#4a4458',
     }).setOrigin(1, 1);
   }

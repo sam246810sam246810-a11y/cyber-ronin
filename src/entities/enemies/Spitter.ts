@@ -22,7 +22,7 @@ export class Spitter extends Enemy {
       shape: { kind: 'sector', x: this.x, y: this.y, angle, spread, len: range },
       onDone: () => {
         this.attacking = false;
-        this.attackTimer = Number(this.def.attackInterval ?? 3);
+        this.attackTimer = (Number(this.def.attackInterval ?? 3) * this.game.dungeon.attackMul);
         if (!this.alive || this.frozen) return;
         this.fire(angle, spread);
       },

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, PLAYER } from '../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, PLAYER } from '../config';
 import { clamp } from '../utils';
 import { baseStats, type Stats } from '../systems/BuffSystem';
 
@@ -28,13 +28,13 @@ export class Player {
   private readonly pointer: Phaser.GameObjects.Image;
   private readonly shadow: Phaser.GameObjects.Image;
 
-  constructor(private scene: Phaser.Scene, x: number, y: number, private color: number = COLORS.player) {
+  constructor(private scene: Phaser.Scene, x: number, y: number, texture = 'cat_apprentice', private color: number = 0xffffff) {
     this.x = x;
     this.y = y;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.4).setScale(0.7, 0.35);
-    this.sprite = scene.add.image(x, y, 'hero').setDepth(DEPTH.player).setTint(color)
-      .setDisplaySize(this.radius * 2.2, this.radius * 2.2);
-    this.pointer = scene.add.image(x, y, 'triangle').setDepth(DEPTH.player + 1).setTint(0x7ed4ff).setDisplaySize(14, 14);
+    this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.player).setTint(color)
+      .setDisplaySize(this.radius * 3.1, this.radius * 3.1);
+    this.pointer = scene.add.image(x, y, 'triangle').setDepth(DEPTH.player + 1).setTint(0xffd166).setDisplaySize(12, 12);
   }
 
   get invulnerable(): boolean {
@@ -134,7 +134,8 @@ export class Player {
   private sync(): void {
     this.sprite.setPosition(this.x, this.y);
     this.shadow.setPosition(this.x, this.y + 16);
-    this.pointer.setPosition(this.x + Math.cos(this.facing) * 30, this.y + Math.sin(this.facing) * 30);
+    this.pointer.setPosition(this.x + Math.cos(this.facing) * 42, this.y + Math.sin(this.facing) * 42);
+    this.sprite.setFlipX(Math.cos(this.facing) < -0.1);
     this.pointer.setRotation(this.facing + Math.PI / 2);
     // 無敵時閃爍
     const blink = this.invulnTimer > 0 && this.state !== 'dash' && !this.godMode;

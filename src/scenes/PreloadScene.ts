@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { generateSprites } from './sprites';
 
 /**
  * 第一階段：所有圖都用 Graphics 動態產生的幾何佔位圖。
@@ -202,6 +203,7 @@ export class PreloadScene extends Phaser.Scene {
       g.fillStyle(0xcccccc).fillRect(8, 20, 48, 6);
     });
     g.destroy();
+    generateSprites(this);
 
     // 戰場暈邊
     if (!this.textures.exists('vignette')) {

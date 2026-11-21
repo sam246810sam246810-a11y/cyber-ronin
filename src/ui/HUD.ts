@@ -10,6 +10,7 @@ export class HUD {
   private timeText: Phaser.GameObjects.Text;
   private bossBar: Phaser.GameObjects.Graphics;
   private coinText: Phaser.GameObjects.Text;
+  private dangerText: Phaser.GameObjects.Text;
   private bossName: Phaser.GameObjects.Text;
   private banner: Phaser.GameObjects.Text;
   private toast: Phaser.GameObjects.Container;
@@ -24,7 +25,10 @@ export class HUD {
     this.waveText = scene.add.text(RIGHT - 290, 26, '', {
       fontFamily: FONT, fontSize: '24px', color: COLORS.text, fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(DEPTH.ui);
-    this.timeText = scene.add.text(RIGHT - 290, 60, '00:00', {
+    this.dangerText = scene.add.text(RIGHT - 230, 60, '', {
+      fontFamily: FONT, fontSize: '16px', color: '#c9c9c9', fontStyle: 'bold',
+    }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
+    this.timeText = scene.add.text(RIGHT - 320, 60, '00:00', {
       fontFamily: FONT, fontSize: '17px', color: COLORS.textDim,
     }).setOrigin(0.5).setDepth(DEPTH.ui);
 
@@ -86,6 +90,16 @@ export class HUD {
     } else {
       this.bossName.setText('');
     }
+  }
+
+  private dangerShown = '';
+
+  /** 危險度：敵人血量倍率與每擊傷害 */
+  setDanger(hpMul: number, dmg: number): void {
+    const t = `☠ ×${hpMul < 10 ? hpMul.toFixed(1) : Math.round(hpMul)}${dmg > 1 ? `　💔${dmg}` : ''}`;
+    if (t === this.dangerShown) return;
+    this.dangerShown = t;
+    this.dangerText.setText(t).setColor(hpMul >= 6 ? '#ff5a6a' : hpMul >= 3 ? '#ffb86b' : '#c9c9c9');
   }
 
   setCoins(n: number): void {

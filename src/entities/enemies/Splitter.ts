@@ -11,7 +11,7 @@ export class Splitter extends Enemy {
       this.radius *= k;
       this.maxHp = this.hp = this.maxHp * Math.pow(0.4, gen);
       this.speed *= 1 + 0.3 * gen;
-      this.sprite.setDisplaySize(this.radius * 2, this.radius * 2);
+      this.sprite.setDisplaySize(this.radius * 2.5, this.radius * 2.5);
     }
   }
 
@@ -28,7 +28,7 @@ export class Splitter extends Enemy {
       for (let i = 0; i < n; i++) {
         const a = Math.random() * Math.PI * 2;
         const child = new Splitter(this.game, this.def, this.x + Math.cos(a) * 14, this.y + Math.sin(a) * 14,
-          false, 'circle', this.gen + 1);
+          false, 'yarn', this.gen + 1);
         child.knockback(this.x, this.y, 40);
         this.game.addEnemy(child);
       }

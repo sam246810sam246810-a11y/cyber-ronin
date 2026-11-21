@@ -131,7 +131,7 @@ export class GameScene extends Phaser.Scene {
     this.hazards = new HazardSystem(this);
     this.encounters = new EventSystem(this);
     this.crucible.qualityBonusProvider = () => this.encounters.takeQualityBonus();
-    this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7, hexToInt(this.character.color));
+    this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7, `cat_${this.character.id}`);
     this.buffs = new BuffSystem(this, this.character);
     this.player.hp = this.player.maxHp = this.character.stats.hp;
     this.buffs.recompute();
@@ -252,6 +252,7 @@ export class GameScene extends Phaser.Scene {
     this.projectiles.update(dt, this.enemies);
     this.effects.update(dt);
     this.buffs.update(dt, this.dungeon.combatActive);
+    if (this.dungeon.combatActive) this.buffs.tickCombat(dt, this.enemies.length > 0);
     this.telegraphs.update(dt);
     this.updatePickups(dt);
     this.hazards.update(dt);
@@ -271,6 +272,7 @@ export class GameScene extends Phaser.Scene {
     this.skillBtn.setEnabled(this.skills.ready);
     const boss = this.dungeon.boss;
     this.hud.setCoins(this.coins);
+    this.hud.setDanger(this.dungeon.hpMul, this.dungeon.enemyDamage);
     this.hud.update(this.player, this.dungeon.label, this.runTime,
       boss ? { hp: boss.hp, maxHp: boss.maxHp, name: boss.def.name, alive: boss.alive } : undefined);
   }
@@ -391,9 +393,10 @@ export class GameScene extends Phaser.Scene {
     this.enemies.push(e);
   }
 
+  /** 敵人造成的傷害會依難度放大 */
   hurtPlayer(amount: number): void {
     if (this.ended) return;
-    if (!this.player.hurt(amount)) return;
+    if (!this.player.hurt(amount * this.dungeon.enemyDamage)) return;
     Sound.play('hurt');
     this.hitStop(0.08);
     this.cameras.main.shake(140, 0.01);
@@ -564,6 +567,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   onRoomCleared(room: Room): void {
+    this.buffs.commitRoom();
     this.projectiles.clearEnemyBullets();
     const cx = (ARENA.x + ARENA_RIGHT) / 2;
     const cy = (ARENA.y + ARENA_BOTTOM) / 2;

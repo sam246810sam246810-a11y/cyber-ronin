@@ -17,7 +17,7 @@ export class ThunderKing extends Enemy {
   private crossDiagonal = false;
 
   constructor(game: GameScene, def: EnemyDef, x: number, y: number) {
-    super(game, def, x, y, false, 'mushroom');
+    super(game, def, x, y, false, 'doctor_rat');
     this.freezeResist = 0.4;
     this.knockbackResist = 0;
   }
@@ -56,7 +56,7 @@ export class ThunderKing extends Enemy {
   private attack(): void {
     const a = this.cycle[this.idx++ % this.cycle.length];
     const tele = Number(this.def.telegraph ?? 0.9) * (this.enraged ? 0.85 : 1);
-    this.attackTimer = Number(this.def.attackInterval ?? 2.4) * (this.enraged ? 0.7 : 1);
+    this.attackTimer = (Number(this.def.attackInterval ?? 2.4) * this.game.dungeon.attackMul) * (this.enraged ? 0.7 : 1);
     const p = this.game.player;
     this.busy = true;
     if (a === 'storm' || a === 'storm2') {

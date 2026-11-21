@@ -28,7 +28,7 @@ export class Wisp extends Enemy {
       shape: { kind: 'line', x1: this.x, y1: this.y, x2, y2, width: Number(this.def.beamWidth ?? 34) * (this.elite ? 1.5 : 1) },
       onDone: (shape) => {
         this.busy = false;
-        this.attackTimer = Number(this.def.attackInterval ?? 3.4);
+        this.attackTimer = (Number(this.def.attackInterval ?? 3.4) * this.game.dungeon.attackMul);
         if (!this.alive || this.frozen) return;
         this.game.fx.line(this.x, this.y, x2, y2, 0xffe14d, 10);
         this.game.fx.line(this.x, this.y, x2, y2, 0xffffff, 4);

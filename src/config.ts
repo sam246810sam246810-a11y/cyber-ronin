@@ -71,7 +71,7 @@ export const PLAYER = {
   bulletDamage: 1,
   bulletSpeed: 700,
   bulletRadius: 7,
-  autoAimRange: 520,
+  autoAimRange: 900,
   pickupRadius: 48,
 } as const;
 
@@ -165,3 +165,21 @@ export const STORAGE_KEYS = {
 } as const;
 
 export const FONT = "'PingFang TC','Noto Sans TC','Microsoft JhengHei','Heiti TC',system-ui,sans-serif";
+
+/**
+ * 難度曲線：敵人隨「全程第幾層」指數成長，並依玩家火力自動追趕。
+ * 每層血量 ×hpPerFloor；玩家火力超過預期時，超出部分的 catchUp 比例會加到敵人身上。
+ */
+export const DIFFICULTY = {
+  hpPerFloor: 1.32,
+  hpPerRoomDepth: 0.05,
+  /** 預期玩家火力每層成長 */
+  expectedPowerPerFloor: 1.3,
+  /** 超出預期火力時，敵人追上差距的比例 */
+  catchUp: 0.45,
+  /** 敵人傷害：每幾層 +1 */
+  damageEveryFloors: 3,
+  speedPerFloor: 0.03,
+  attackRatePerFloor: 0.97,
+  budgetPerFloor: 0.02,
+} as const;

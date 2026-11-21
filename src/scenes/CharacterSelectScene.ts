@@ -29,8 +29,8 @@ export class CharacterSelectScene extends Phaser.Scene {
       const bg = this.add.rectangle(x, y, 280, 270, COLORS.panel, 1).setStrokeStyle(4, hexToInt(rar.color), unlocked ? 0.9 : 0.4)
         .setInteractive({ useHandCursor: true });
       this.add.text(x, y - 115, rar.name, { fontFamily: FONT, fontSize: '17px', color: rar.color, fontStyle: 'bold' }).setOrigin(0.5);
-      const hero = this.add.image(x, y - 45, 'hero').setDisplaySize(90, 90).setTint(unlocked ? hexToInt(c.color) : 0x2a2a2a);
-      this.add.text(x, y + 24, c.name, { fontFamily: FONT, fontSize: '26px', color: unlocked ? '#ffffff' : '#666', fontStyle: 'bold' }).setOrigin(0.5);
+      const hero = this.add.image(x, y - 45, `cat_${c.id}`).setDisplaySize(100, 100).setTint(unlocked ? 0xffffff : 0x2a2a2a);
+      this.add.text(x, y + 24, `${c.title}・${c.name}`, { fontFamily: FONT, fontSize: '22px', color: unlocked ? '#ffffff' : '#666', fontStyle: 'bold' }).setOrigin(0.5);
       if (unlocked) {
         const s = c.stats;
         this.add.text(x, y + 78, `♥${s.hp}  攻${s.damage}  速${s.speed}\n技能：${c.skill.name}`, {
@@ -71,6 +71,6 @@ export class CharacterSelectScene extends Phaser.Scene {
     }
     const c = this.selected;
     const w = WEAPON_MAP[c.startWeapon];
-    this.detail.setText(`${c.name}：${c.desc}\n【被動・${c.passiveName}】${c.passiveDesc}\n【技能・${c.skill.name}】${c.skill.desc}（冷卻 ${c.skill.cooldown} 秒）　初始武器：${w?.name ?? ''}`);
+    this.detail.setText(`${c.title}・${c.name}：${c.desc}\n【被動・${c.passiveName}】${c.passiveDesc}\n【技能・${c.skill.name}】${c.skill.desc}（冷卻 ${c.skill.cooldown} 秒）　初始武器：${w?.name ?? ''}`);
   }
 }

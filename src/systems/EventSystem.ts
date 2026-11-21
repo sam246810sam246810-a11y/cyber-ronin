@@ -63,12 +63,16 @@ export class EventSystem {
     const base = INFO[kind];
     const nd = npc ? FUN.npcs[npc] : undefined;
     const info = nd
-      ? { name: nd.name, color: hexToInt(nd.color), texture: npc === 'chatty_mushroom' ? 'mushroom' : 'hero' }
+      ? {
+        name: nd.name,
+        color: hexToInt(nd.color),
+        texture: { future_self: `cat_${this.game.character.id}`, lost_alchemist: 'cat_gray', time_merchant: 'cat_merchant', chatty_mushroom: 'mushroom' }[npc!],
+      }
       : base;
     const glow = this.game.add.image(x, y, 'circle').setTint(info.color).setAlpha(0.25).setDisplaySize(120, 120).setDepth(DEPTH.pickup);
     const size = kind === 'stairs' || kind === 'portal' ? 96 : 68;
     const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(size, size).setDepth(DEPTH.pickup + 1);
-    if (nd || kind === 'portal') sprite.setTint(info.color);
+    if (kind === 'portal' || npc === 'chatty_mushroom') sprite.setTint(info.color);
     if (kind === 'portal') {
       this.game.tweens.add({ targets: sprite, angle: 360, duration: 2000, repeat: -1 });
     }

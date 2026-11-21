@@ -58,7 +58,7 @@ export abstract class Enemy {
     this.y = y;
     this.maxHp = this.hp = def.hp * (elite ? ELITE.hpMul : 1) * (game.dungeon?.hpMul ?? 1);
     this.radius = def.radius * (elite ? ELITE.radiusMul : 1);
-    this.speed = def.speed;
+    this.speed = def.speed * (game.dungeon?.enemySpeedMul ?? 1);
     this.baseTint = hexToInt(def.color);
 
     const scene = game as Phaser.Scene;
@@ -68,16 +68,17 @@ export abstract class Enemy {
       this.eliteRing = scene.add.image(x, y, 'ring').setDepth(DEPTH.enemy - 1).setTint(COLORS.gold)
         .setDisplaySize(this.radius * 2.6, this.radius * 2.6);
     }
+    // 圖比碰撞範圍大一點，比較好辨認
     this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
-      .setDisplaySize(this.radius * 2, this.radius * 2);
+      .setDisplaySize(this.radius * 2.5, this.radius * 2.5);
     this.hpBar = scene.add.graphics().setDepth(DEPTH.enemy + 2);
 
     // 出場動畫
     this.sprite.setScale(0);
     scene.tweens.add({
       targets: this.sprite,
-      scaleX: (this.radius * 2) / this.sprite.width,
-      scaleY: (this.radius * 2) / this.sprite.height,
+      scaleX: (this.radius * 2.5) / this.sprite.width,
+      scaleY: (this.radius * 2.5) / this.sprite.height,
       duration: 200,
       ease: 'Back.Out',
     });
@@ -155,6 +156,7 @@ export abstract class Enemy {
     if (!this.alive || amount <= 0) return;
     amount = this.absorb(amount, opts);
     if (amount <= 0) return;
+    this.game.buffs?.recordDamage(Math.min(amount, this.hp));
     this.hp -= amount;
     if (opts.flash !== false) {
       this.hitFlash = 0.08;

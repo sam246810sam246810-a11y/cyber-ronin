@@ -19,7 +19,7 @@ export class FlowerBoss extends Enemy {
   private homeY = ARENA.y + 200;
 
   constructor(game: GameScene, def: EnemyDef, x: number, y: number) {
-    super(game, def, x, y, false, 'flower');
+    super(game, def, x, y, false, 'rat_king');
     this.freezeResist = 0.4;
     this.knockbackResist = 0;
   }
@@ -63,7 +63,7 @@ export class FlowerBoss extends Enemy {
     const attack = this.cycle[this.cycleIndex % this.cycle.length];
     this.cycleIndex++;
     this.busy = true;
-    const interval = Number(this.def.attackInterval ?? 2.6) * (this.enraged ? 0.65 : 1);
+    const interval = (Number(this.def.attackInterval ?? 2.6) * this.game.dungeon.attackMul) * (this.enraged ? 0.65 : 1);
     this.attackTimer = interval;
     const tele = Number(this.def.telegraph ?? 0.9) * (this.enraged ? 0.85 : 1);
     const p = this.game.player;

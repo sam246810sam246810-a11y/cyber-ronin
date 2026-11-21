@@ -1,10 +1,10 @@
 [
   {
     "id": "apprentice",
-    "name": "見習煉金師",
+    "name": "麻糬",
     "rarity": 0,
     "color": "#f4f0e6",
-    "desc": "什麼都會一點的新手，適合摸索配方。",
+    "desc": "好奇心旺盛的橘貓見習生，什麼都想丟進坩堝試試。",
     "passiveName": "坩堝親和",
     "passiveDesc": "裂變率 +5%、拾取範圍 +20%",
     "stats": {
@@ -27,14 +27,15 @@
       "name": "緊急煉成",
       "cooldown": 25,
       "desc": "坩堝空格自動補上普通素材，立刻煉成喝下"
-    }
+    },
+    "title": "見習煉金貓"
   },
   {
     "id": "frost_archer",
-    "name": "冰晶射手",
+    "name": "雪球",
     "rarity": 1,
     "color": "#7ed4ff",
-    "desc": "射速快、身板薄，靠冰凍控場。",
+    "desc": "冷靜的白貓狙擊手，射速快但身子單薄。",
     "passiveName": "霜冷彈頭",
     "passiveDesc": "開局帶「冰封」1 層，冰晶素材屬性 +50%",
     "stats": {
@@ -64,14 +65,15 @@
       "name": "冰晶風暴",
       "cooldown": 12,
       "desc": "向四周射出 24 片冰刃，50% 機率冰凍"
-    }
+    },
+    "title": "冰晶射手貓"
   },
   {
     "id": "lava_knight",
-    "name": "熔岩重裝",
+    "name": "煤炭",
     "rarity": 2,
     "color": "#ff8a3d",
-    "desc": "血厚攻高但笨重，被打反而會爆發。",
+    "desc": "圓滾滾的黑貓，被打反而會噴出熔岩。",
     "passiveName": "熔岩護甲",
     "passiveDesc": "受傷時對周圍爆炸，火焰花素材屬性 +50%",
     "stats": {
@@ -99,14 +101,15 @@
       "name": "熔岩衝撞",
       "cooldown": 10,
       "desc": "無敵向前衝撞，撞傷路上敵人並留下熔岩"
-    }
+    },
+    "title": "熔岩重裝貓"
   },
   {
     "id": "storm_sage",
-    "name": "雷菇賢者",
+    "name": "雷雷",
     "rarity": 3,
     "color": "#ffe14d",
-    "desc": "藥水的力量在他身上加倍放大。",
+    "desc": "頭頂雷菇的三花貓，藥水的力量在牠身上加倍放大。",
     "passiveName": "共振",
     "passiveDesc": "所有藥水被動層數 +25%，開局帶「雷暴之核」1 層",
     "stats": {
@@ -137,6 +140,7 @@
       "name": "雷暴領域",
       "cooldown": 18,
       "desc": "5 秒內不斷落雷攻擊附近敵人"
-    }
+    },
+    "title": "雷菇賢者貓"
   }
 ]

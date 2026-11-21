@@ -1,4 +1,4 @@
-# 坩堝花園（MVP 試作）
+# 坩堝花園：時空貓咪煉金術師（MVP 試作）
 
 16:9 橫向 2D 俯視角煉金肉鴿手遊原型：撿 5 種元素、4 種稀有度的素材，三格坩堝煉藥並喝下，本局永久變強；煉成時有機率裂變成神話藥水。4 名角色各有能力值、被動與主動技能，達成條件解鎖；9 把分稀有度的武器，可同時帶 2 把切換。地下城爬塔：3 區（溫室 → 熔岩花園 → 雷雲山頂）× 3 層，每層隨機生成房間地圖，有戰鬥、精英挑戰、寶箱、商店、事件、樓梯與 Boss 房；穿門有機率掉進時空裂縫（過去 / 未來），戰鬥房可能帶祝福或詛咒詞條，還會遇到會說話的 NPC。規格見 [`docs/PRD.md`](docs/PRD.md)。
 
@@ -66,6 +66,8 @@ src/
 - **新增突變卡**：`data/mutations.json` 加一筆，再到 `BuffSystem` 或 `CrucibleSystem` 用 `mutations.value(id)` 讀取。
 - **新增敵人**：繼承 `Enemy` 實作 `act(dt)`，在 `data/enemies.json` 加數值，並在 `DungeonSystem.create()` 對應。
 - **新增區域**：在 `data/regions.json` 加一筆（配色、血量倍率、敵人池與花費、每層戰鬥預算、Boss 類型）。
+- **難度**：`src/config.ts` 的 `DIFFICULTY`（每層血量倍率、火力追趕比例、傷害成長）。
+- **角色與敵人造型**：`src/scenes/sprites.ts` 用 Graphics 畫的佔位圖，換正式美術時載入同名 key 即可。
 - **時空裂縫 / 詞條 / NPC**：機率、詞條與 NPC 台詞在 `src/data/fun.json`；裂縫流程在 `DungeonSystem`，NPC 對話在 `EventSystem.openNpc()`。
 - **調整地圖**：房間數量、特殊房比例與商店商品在 `src/systems/DungeonSystem.ts` 的 `generateFloor()`、`rollShop()`。
 - **換美術**：`PreloadScene` 目前用 Graphics 產生佔位圖，之後用 `this.load.image()` 載入同名 key 即可替換。

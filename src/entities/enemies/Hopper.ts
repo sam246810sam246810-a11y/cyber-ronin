@@ -35,7 +35,7 @@ export class Hopper extends Enemy {
       onDone: (shape) => {
         this.airborne = false;
         this.jump = undefined;
-        this.attackTimer = Number(this.def.attackInterval ?? 3.5);
+        this.attackTimer = (Number(this.def.attackInterval ?? 3.5) * this.game.dungeon.attackMul);
         if (!this.alive || this.frozen) return; // 空中被冰凍：直接掉下來，不造成傷害
         this.x = tx;
         this.y = ty;

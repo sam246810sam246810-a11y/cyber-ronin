@@ -1,4 +1,4 @@
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, RARITY } from '../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DIFFICULTY, RARITY } from '../config';
 import { ENEMIES, FLOORS_PER_REGION, FUN, REGIONS } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { FlowerBoss } from '../entities/bosses/FlowerBoss';
@@ -98,13 +98,44 @@ export class DungeonSystem {
   }
 
   /** 敵人血量倍率：區域倍率 × 層數成長 */
+  /** 難度基準層數（未來裂縫 +3 層、過去裂縫 −2 層） */
+  private get difficultyFloor(): number {
+    const f = this.globalFloor;
+    if (this.current?.type === 'rift_future') return f + 3;
+    if (this.current?.type === 'rift_past') return Math.max(1, f - 2);
+    return f;
+  }
+
+  /** 指數曲線部分 */
+  get curveMul(): number {
+    const depth = this.current && !this.inRift ? this.current.depth : 0;
+    return Math.pow(DIFFICULTY.hpPerFloor, this.difficultyFloor - 1) * (1 + DIFFICULTY.hpPerRoomDepth * depth);
+  }
+
+  /** 依玩家火力的追趕倍率：火力超出預期的部分，敵人追上一半 */
+  get catchUpMul(): number {
+    const expected = Math.pow(DIFFICULTY.expectedPowerPerFloor, this.globalFloor - 1);
+    const power = this.game.buffs?.powerRatio() ?? 1;
+    return 1 + DIFFICULTY.catchUp * Math.max(0, power / expected - 1);
+  }
+
+  /** 敵人血量倍率＝指數曲線 × 火力追趕 */
   get hpMul(): number {
-    if (this.current?.type === 'rift_past') return 0.8;
-    if (this.current?.type === 'rift_future') {
-      const next = REGIONS[Math.min(REGIONS.length - 1, this.regionIndex + 1)];
-      return next.hpMul * (this.regionIndex >= REGIONS.length - 1 ? 1.5 : 1.25);
-    }
-    return this.region.hpMul * (1 + 0.15 * (this.floor - 1));
+    return this.curveMul * this.catchUpMul;
+  }
+
+  /** 敵人每次攻擊造成的傷害（愛心數） */
+  get enemyDamage(): number {
+    return 1 + Math.floor((this.difficultyFloor - 1) / DIFFICULTY.damageEveryFloors);
+  }
+
+  get enemySpeedMul(): number {
+    return 1 + DIFFICULTY.speedPerFloor * (this.difficultyFloor - 1);
+  }
+
+  /** 敵人攻擊間隔倍率（越小越頻繁） */
+  get attackMul(): number {
+    return Math.pow(DIFFICULTY.attackRatePerFloor, this.difficultyFloor - 1);
   }
 
   get globalFloor(): number {
@@ -316,7 +347,8 @@ export class DungeonSystem {
     this.phase = 'combat';
     this.phaseTime = 0;
     this.game.setDoorsLocked(true);
-    let budget = this.region.roomBudget[this.floor - 1] * (elite ? 1.2 : 1) * (1 + 0.04 * this.current.depth);
+    let budget = this.region.roomBudget[this.floor - 1] * (elite ? 1.2 : 1) * (1 + 0.04 * this.current.depth)
+      * (1 + DIFFICULTY.budgetPerFloor * (this.globalFloor - 1));
     let pool: RegionEnemy[] = this.region.enemies.filter((e) => e.minFloor <= this.floor);
     if (this.current.type === 'rift_past') {
       budget = 12;
@@ -457,13 +489,13 @@ export class DungeonSystem {
   private create(type: MinionType, x: number, y: number, elite: boolean): Enemy {
     const def = ENEMIES[type];
     switch (type) {
-      case 'crawler': return new Crawler(this.game, def, x, y, elite, 'triangle');
-      case 'spitter': return new Spitter(this.game, def, x, y, elite, 'flower');
-      case 'hopper': return new Hopper(this.game, def, x, y, elite, 'mushroom');
-      case 'bomber': return new Bomber(this.game, def, x, y, elite, 'bomb');
-      case 'beetle': return new Beetle(this.game, def, x, y, elite, 'beetle');
-      case 'splitter': return new Splitter(this.game, def, x, y, elite, 'slime');
-      case 'wisp': return new Wisp(this.game, def, x, y, elite, 'wisp');
+      case 'crawler': return new Crawler(this.game, def, x, y, elite, 'mouse');
+      case 'spitter': return new Spitter(this.game, def, x, y, elite, 'mouse_dart');
+      case 'hopper': return new Hopper(this.game, def, x, y, elite, 'frog');
+      case 'bomber': return new Bomber(this.game, def, x, y, elite, 'mouse_bomb');
+      case 'beetle': return new Beetle(this.game, def, x, y, elite, 'mouse_armor');
+      case 'splitter': return new Splitter(this.game, def, x, y, elite, 'yarn');
+      case 'wisp': return new Wisp(this.game, def, x, y, elite, 'clock_ghost');
     }
   }
 

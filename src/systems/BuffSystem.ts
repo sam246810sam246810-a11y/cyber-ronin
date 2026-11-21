@@ -160,6 +160,45 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
     p.stats = s;
   }
 
+  /** 實測每秒傷害（指數移動平均，每清一間戰鬥房更新） */
+  private observedDps = 0;
+  private roomDamage = 0;
+  private roomTime = 0;
+
+  /** 敵人實際被扣的血量（不含溢出） */
+  recordDamage(amount: number): void {
+    this.roomDamage += amount;
+  }
+
+  /** 戰鬥中每幀累積時間 */
+  tickCombat(dt: number, enemiesAlive: boolean): void {
+    if (enemiesAlive) this.roomTime += dt;
+  }
+
+  /** 房間清空時結算本房 DPS */
+  commitRoom(): void {
+    if (this.roomTime > 3) {
+      const dps = this.roomDamage / this.roomTime;
+      this.observedDps = this.observedDps ? this.observedDps * 0.4 + dps * 0.6 : dps;
+    }
+    this.roomDamage = 0;
+    this.roomTime = 0;
+  }
+
+  /** 角色初始火力（拿初始武器時的理論 DPS） */
+  private get baseDps(): number {
+    const b = baseStats(this.character);
+    return b.damage / b.fireInterval;
+  }
+
+  /**
+   * 玩家火力相對於初始狀態的倍數（給難度追趕用）：用實測 DPS，
+   * 不管火力來自哪種藥水、武器或技能都量得到。
+   */
+  powerRatio(): number {
+    return this.observedDps ? this.observedDps / this.baseDps : 1;
+  }
+
   ensureAura(): void {
     if (this.aura && !this.aura.dead) return;
     this.aura = this.game.effects.addZone({
