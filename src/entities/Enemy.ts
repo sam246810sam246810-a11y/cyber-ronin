@@ -59,7 +59,8 @@ export abstract class Enemy {
     this.maxHp = this.hp = def.hp * (elite ? ELITE.hpMul : 1) * (game.dungeon?.hpMul ?? 1);
     this.radius = def.radius * (elite ? ELITE.radiusMul : 1);
     this.speed = def.speed * (game.dungeon?.enemySpeedMul ?? 1);
-    this.baseTint = hexToInt(def.color);
+    // 有美術圖就不染色（染色只給程式佔位圖用來區分種類）
+    this.baseTint = isArtTexture(game as Phaser.Scene, texture) ? 0xffffff : hexToInt(def.color);
 
     const scene = game as Phaser.Scene;
     this.shadow = scene.add.image(x, y + this.radius * 0.8, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.35)
@@ -70,15 +71,15 @@ export abstract class Enemy {
     }
     // 圖比碰撞範圍大一點，比較好辨認
     this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
-      .setDisplaySize(this.radius * 2.5, this.radius * 2.5);
+      .setDisplaySize(this.radius * 2.9, this.radius * 2.9);
     this.hpBar = scene.add.graphics().setDepth(DEPTH.enemy + 2);
 
     // 出場動畫
     this.sprite.setScale(0);
     scene.tweens.add({
       targets: this.sprite,
-      scaleX: (this.radius * 2.5) / this.sprite.width,
-      scaleY: (this.radius * 2.5) / this.sprite.height,
+      scaleX: (this.radius * 2.9) / this.sprite.width,
+      scaleY: (this.radius * 2.9) / this.sprite.height,
       duration: 200,
       ease: 'Back.Out',
     });
@@ -255,4 +256,10 @@ export abstract class Enemy {
     this.eliteRing?.destroy();
     this.hpBar.destroy();
   }
+}
+
+/** 真的載入美術圖（而非程式畫的 canvas 佔位圖）時回傳 true */
+export function isArtTexture(scene: Phaser.Scene, key: string): boolean {
+  if (!scene.textures.exists(key)) return false;
+  return scene.textures.get(key).getSourceImage() instanceof HTMLImageElement;
 }

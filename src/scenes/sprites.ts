@@ -123,6 +123,7 @@ export function generateSprites(scene: Phaser.Scene): void {
 
   // ---- 時空鼠軍團 ----
   gen('mouse', 64, 64, () => drawMouse(g));
+  gen('mouse_thief', 64, 64, () => drawMouse(g));
   gen('mouse_dart', 64, 64, () => drawMouse(g, (gg) => {
     gg.fillStyle(0x888888).fillRect(29, 46, 6, 18);
     gg.fillStyle(0xffffff).fillCircle(32, 46, 5);

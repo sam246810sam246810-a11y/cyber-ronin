@@ -33,7 +33,7 @@ export class Player {
     this.y = y;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.4).setScale(0.7, 0.35);
     this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.player).setTint(color)
-      .setDisplaySize(this.radius * 3.1, this.radius * 3.1);
+      .setDisplaySize(this.radius * 3.7, this.radius * 3.7);
     this.pointer = scene.add.image(x, y, 'triangle').setDepth(DEPTH.player + 1).setTint(0xffd166).setDisplaySize(12, 12);
   }
 

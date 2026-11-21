@@ -97,6 +97,7 @@ export class GameScene extends Phaser.Scene {
   private modText!: Phaser.GameObjects.Text;
   private darkness?: Phaser.GameObjects.Image;
   private drawnTheme?: RegionTheme;
+  private floorSprite?: Phaser.GameObjects.TileSprite;
   private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
@@ -231,8 +232,16 @@ export class GameScene extends Phaser.Scene {
     this.arenaGfx?.destroy();
     const g = this.arenaGfx = this.add.graphics().setDepth(DEPTH.floor);
     // 整個畫面先鋪背景色（寬螢幕兩側也不會是黑邊）
-    g.fillStyle(col(theme.bg), 1).fillRect(0, 0, GAME_W, 720);
-    g.fillStyle(col(theme.floor), 1).fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
+    const hasArt = !!theme.floorTex && this.textures.exists(theme.floorTex);
+    if (hasArt) {
+      // 只鋪戰場外圍，戰場內交給地板貼圖
+      g.fillStyle(col(theme.bg), 1)
+        .fillRect(0, 0, GAME_W, ARENA.y).fillRect(0, ARENA_BOTTOM, GAME_W, 720 - ARENA_BOTTOM)
+        .fillRect(0, ARENA.y, ARENA.x, ARENA.h).fillRect(ARENA_RIGHT, ARENA.y, GAME_W - ARENA_RIGHT, ARENA.h);
+    } else {
+      g.fillStyle(col(theme.bg), 1).fillRect(0, 0, GAME_W, 720);
+      g.fillStyle(col(theme.floor), 1).fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
+    }
     // 石板地磚：交錯排列＋隨機明暗
     const tile = 64;
     let seed = theme.floor.length * 97 + theme.tile.charCodeAt(2);
@@ -240,7 +249,16 @@ export class GameScene extends Phaser.Scene {
       seed = (seed * 16807) % 2147483647;
       return seed / 2147483647;
     };
-    for (let row = 0, y = ARENA.y; y < ARENA_BOTTOM; y += tile, row++) {
+    this.floorSprite?.destroy();
+    this.floorSprite = undefined;
+    if (hasArt) {
+      // 美術地板：整片鋪貼圖（256px 一格），再壓暗一點讓角色更突出
+      this.floorSprite = this.add.tileSprite(ARENA.x, ARENA.y, ARENA.w, ARENA.h, theme.floorTex!)
+        .setOrigin(0, 0).setDepth(DEPTH.floor).setTileScale(0.5, 0.5)
+        .setTint(theme.floorTint ?? 0xb8b8b8);
+      this.arenaGfx.setDepth(DEPTH.floor + 0.5);
+    }
+    for (let row = 0, y = ARENA.y; !hasArt && y < ARENA_BOTTOM; y += tile, row++) {
       const off = row % 2 ? tile / 2 : 0;
       for (let x = ARENA.x - off; x < ARENA_RIGHT; x += tile) {
         const x0 = Math.max(ARENA.x, x);
@@ -250,7 +268,7 @@ export class GameScene extends Phaser.Scene {
       }
     }
     // 草叢 / 碎石點綴
-    for (let i = 0; i < Math.round(ARENA.w / 30); i++) {
+    for (let i = 0; !hasArt && i < Math.round(ARENA.w / 30); i++) {
       const x = ARENA.x + 20 + rnd() * (ARENA.w - 40);
       const y = ARENA.y + 20 + rnd() * (ARENA.h - 40);
       g.fillStyle(col(theme.decoLight), 0.18);

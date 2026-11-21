@@ -30,7 +30,7 @@ const INFO: Record<EventKind, { name: string; color: number; texture: string }> 
 };
 
 const SIZES: Partial<Record<EventKind, [number, number]>> = {
-  stairs: [96, 96], portal: [96, 96], start: [120, 120], cauldron: [230, 154], history: [70, 70], knock: [96, 96], shelf: [110, 110], bookshelf: [110, 110], statue: [80, 80],
+  stairs: [96, 96], portal: [96, 96], start: [120, 120], cauldron: [230, 154], history: [70, 70], knock: [96, 96], shelf: [130, 130], bookshelf: [130, 130], statue: [104, 104],
 };
 
 interface RoomObject {
@@ -90,6 +90,8 @@ export class EventSystem {
     const [sw, sh] = SIZES[kind] ?? [68, 68];
     const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(sw, sh).setDepth(DEPTH.pickup + 1);
     if (kind === 'portal' || kind === 'start' || npc === 'chatty_mushroom') sprite.setTint(info.color);
+    // 還沒解鎖的貓咪雕像壓暗
+    if (kind === 'statue' && label?.startsWith('🔒')) sprite.setTint(0x505060);
     if (kind === 'portal' || kind === 'start') {
       this.game.tweens.add({ targets: sprite, angle: 360, duration: 2000, repeat: -1 });
     }

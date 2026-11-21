@@ -5,9 +5,24 @@ import { generateSprites } from './sprites';
  * 第一階段：所有圖都用 Graphics 動態產生的幾何佔位圖。
  * 第二階段接 Higgsfield 美術時，在 preload() 用 this.load.image() 載入同名 key 即可替換。
  */
+export const ART_SPRITES = [
+  'cat_apprentice', 'cat_frost_archer', 'cat_lava_knight', 'cat_storm_sage', 'cat_gray', 'cat_merchant',
+  'mouse', 'mouse_dart', 'mouse_bomb', 'mouse_armor', 'mouse_thief', 'frog', 'yarn', 'clock_ghost',
+  'rat_king', 'snail', 'doctor_rat',
+  'big_cauldron', 'shelf', 'bookshelf', 'dummy',
+];
+const ART_FLOORS = ['floor_greenhouse', 'floor_lava', 'floor_storm', 'floor_lobby'];
+
 export class PreloadScene extends Phaser.Scene {
   constructor() {
     super('Preload');
+  }
+
+  preload(): void {
+    // 精緻像素風美術（public/art）。載入失敗就沿用下面的程式繪製佔位圖。
+    for (const k of ART_SPRITES) this.load.image(k, `art/${k}.png`);
+    for (const k of ART_FLOORS) this.load.image(k, `art/${k}.jpg`);
+    this.load.on('loaderror', (f: Phaser.Loader.File) => console.warn('art missing', f.key));
   }
 
   create(): void {

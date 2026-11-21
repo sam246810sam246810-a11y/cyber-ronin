@@ -562,7 +562,7 @@ export class DungeonSystem {
       case 'beetle': return new Beetle(this.game, def, x, y, elite, 'mouse_armor');
       case 'splitter': return new Splitter(this.game, def, x, y, elite, 'yarn');
       case 'wisp': return new Wisp(this.game, def, x, y, elite, 'clock_ghost');
-      case 'thief': return new Thief(this.game, def, x, y, elite, 'mouse');
+      case 'thief': return new Thief(this.game, def, x, y, elite, 'mouse_thief');
     }
   }
 
