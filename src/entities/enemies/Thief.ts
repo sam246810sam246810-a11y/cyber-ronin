@@ -75,7 +75,7 @@ export class Thief extends Enemy {
     this.radius *= 1.35;
     this.speed *= 0.75;
     (this as unknown as { baseTint: number }).baseTint = hexToInt(ELEMENT_MAP[el].color);
-    this.sprite.setDisplaySize(this.radius * 2.9, this.radius * 2.9);
+    this.sprite.setDisplaySize(this.radius * 3.4, this.radius * 3.4);
     this.game.fx.burst(this.x, this.y, 120, hexToInt(ELEMENT_MAP[el].color), 500);
     this.game.showBanner(`煉金鼠突變了！（${ELEMENT_MAP[el].name}）`);
     Sound.play('fission');

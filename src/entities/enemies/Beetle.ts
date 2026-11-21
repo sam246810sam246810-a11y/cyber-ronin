@@ -14,7 +14,7 @@ export class Beetle extends Enemy {
   constructor(game: GameScene, def: EnemyDef, x: number, y: number, elite: boolean, texture: string) {
     super(game, def, x, y, elite, texture);
     this.maxShield = this.shield = Number(def.shield ?? 8) * (elite ? 2 : 1) * (game.dungeon?.hpMul ?? 1);
-    this.shieldRing = game.add.image(x, y, 'ring').setTint(0x7ed4ff).setDepth(DEPTH.enemy + 1)
+    this.shieldRing = game.add.image(x, y, 'ring').setTint(0x7ed4ff).setDepth(DEPTH.player + 0.5)
       .setDisplaySize(this.radius * 2.5, this.radius * 2.5);
   }
 

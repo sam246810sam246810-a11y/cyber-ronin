@@ -10,7 +10,11 @@ export const ART_SPRITES = [
   'mouse', 'mouse_dart', 'mouse_bomb', 'mouse_armor', 'mouse_thief', 'frog', 'yarn', 'clock_ghost',
   'rat_king', 'snail', 'doctor_rat',
   'big_cauldron', 'shelf', 'bookshelf', 'dummy',
+  'ing_J', 'ing_I', 'ing_S', 'ing_F', 'ing_T', 'coin', 'heart', 'flask', 'relic',
+  'chest', 'stairs', 'box', 'fountain', 'merchant', 'altar', 'teaser', 'flower', 'mushroom', 'portal', 'proj_orb',
+  'wpn_single', 'wpn_spread', 'wpn_melee', 'wpn_boomerang', 'wpn_lance', 'wpn_mortar', 'wpn_chain', 'wpn_orb',
 ];
+const ART_ROOMS = ['room_greenhouse', 'room_lava', 'room_storm', 'room_lobby'];
 const ART_FLOORS = ['floor_greenhouse', 'floor_lava', 'floor_storm', 'floor_lobby'];
 
 export class PreloadScene extends Phaser.Scene {
@@ -22,6 +26,7 @@ export class PreloadScene extends Phaser.Scene {
     // 精緻像素風美術（public/art）。載入失敗就沿用下面的程式繪製佔位圖。
     for (const k of ART_SPRITES) this.load.image(k, `art/${k}.png`);
     for (const k of ART_FLOORS) this.load.image(k, `art/${k}.jpg`);
+    for (const k of ART_ROOMS) this.load.image(k, `art/${k}.jpg`);
     this.load.on('loaderror', (f: Phaser.Loader.File) => console.warn('art missing', f.key));
   }
 

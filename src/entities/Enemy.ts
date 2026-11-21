@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, ELITE } from '../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, ELITE, ySortDepth } from '../config';
 import { hexToInt } from '../data';
 import type { EnemyDef } from '../types';
 import type { GameScene } from '../scenes/GameScene';
-import { clamp } from '../utils';
+import { clamp, isArtTexture } from '../utils';
 
 export interface DamageOptions {
   /** 是否觸發受擊閃白與傷害數字（持續傷害不觸發） */
@@ -71,15 +71,15 @@ export abstract class Enemy {
     }
     // 圖比碰撞範圍大一點，比較好辨認
     this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.enemy).setTint(this.baseTint)
-      .setDisplaySize(this.radius * 2.9, this.radius * 2.9);
-    this.hpBar = scene.add.graphics().setDepth(DEPTH.enemy + 2);
+      .setDisplaySize(this.radius * 3.4, this.radius * 3.4);
+    this.hpBar = scene.add.graphics().setDepth(DEPTH.projectile - 1);
 
     // 出場動畫
     this.sprite.setScale(0);
     scene.tweens.add({
       targets: this.sprite,
-      scaleX: (this.radius * 2.9) / this.sprite.width,
-      scaleY: (this.radius * 2.9) / this.sprite.height,
+      scaleX: (this.radius * 3.4) / this.sprite.width,
+      scaleY: (this.radius * 3.4) / this.sprite.height,
       duration: 200,
       ease: 'Back.Out',
     });
@@ -231,7 +231,8 @@ export abstract class Enemy {
     else if (this.slowTimer > 0) tint = 0xc9a3ff;
     this.sprite.setTint(tint);
     this.sprite.setAlpha(this.slowTimer > 0 && !this.frozen ? 0.8 : 1);
-    this.sprite.setPosition(this.x, this.y - this.liftOffset());
+    this.sprite.setPosition(this.x, this.y - this.liftOffset()).setDepth(ySortDepth(this.y));
+    this.eliteRing?.setDepth(this.sprite.depth - 0.001);
     this.shadow.setPosition(this.x, this.y + this.radius * 0.8);
     this.eliteRing?.setPosition(this.x, this.y - this.liftOffset());
 
@@ -258,8 +259,3 @@ export abstract class Enemy {
   }
 }
 
-/** 真的載入美術圖（而非程式畫的 canvas 佔位圖）時回傳 true */
-export function isArtTexture(scene: Phaser.Scene, key: string): boolean {
-  if (!scene.textures.exists(key)) return false;
-  return scene.textures.get(key).getSourceImage() instanceof HTMLImageElement;
-}

@@ -156,6 +156,8 @@ export interface RegionTheme {
   decoLight: string;
   /** 美術地板貼圖 key（有就用貼圖鋪地） */
   floorTex?: string;
+  /** 整間房的 2.5D 背景圖 key（含後牆，鋪滿畫面） */
+  roomTex?: string;
   /** 地板貼圖染色（時空裂縫用） */
   floorTint?: number;
 }

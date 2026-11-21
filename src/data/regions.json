@@ -12,7 +12,8 @@
       "wall": "#2c4a36",
       "deco": "#3a5a2a",
       "decoLight": "#6aa84f",
-      "floorTex": "floor_greenhouse"
+      "floorTex": "floor_greenhouse",
+      "roomTex": "room_greenhouse"
     },
     "enemies": [
       {
@@ -59,7 +60,8 @@
       "wall": "#6a2a1a",
       "deco": "#7a2a10",
       "decoLight": "#ff8a3d",
-      "floorTex": "floor_lava"
+      "floorTex": "floor_lava",
+      "roomTex": "room_lava"
     },
     "enemies": [
       {
@@ -118,7 +120,8 @@
       "wall": "#3a3a6a",
       "deco": "#3a2a6a",
       "decoLight": "#ffe14d",
-      "floorTex": "floor_storm"
+      "floorTex": "floor_storm",
+      "roomTex": "room_storm"
     },
     "enemies": [
       {

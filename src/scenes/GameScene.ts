@@ -98,6 +98,8 @@ export class GameScene extends Phaser.Scene {
   private darkness?: Phaser.GameObjects.Image;
   private drawnTheme?: RegionTheme;
   private floorSprite?: Phaser.GameObjects.TileSprite;
+  private roomBg?: Phaser.GameObjects.Image;
+  private roomArt = false;
   private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
@@ -231,6 +233,20 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(theme.bg);
     this.arenaGfx?.destroy();
     const g = this.arenaGfx = this.add.graphics().setDepth(DEPTH.floor);
+    this.roomBg?.destroy();
+    this.roomBg = undefined;
+    this.roomArt = !!theme.roomTex && this.textures.exists(theme.roomTex);
+    if (this.roomArt) {
+      // 2.5D 房間背景：整張圖等比放大蓋滿畫面（後牆、窗戶、角落道具都在圖裡）
+      this.floorSprite?.destroy();
+      this.floorSprite = undefined;
+      const bg = this.roomBg = this.add.image(GAME_W / 2, 360, theme.roomTex!).setDepth(DEPTH.floor - 1);
+      bg.setScale(Math.max(GAME_W / bg.width, 720 / bg.height));
+      if (theme.floorTint) bg.setTint(theme.floorTint);
+      this.vignette?.destroy();
+      this.vignette = undefined;
+      return;
+    }
     // 整個畫面先鋪背景色（寬螢幕兩側也不會是黑邊）
     const hasArt = !!theme.floorTex && this.textures.exists(theme.floorTex);
     if (hasArt) {
@@ -561,7 +577,14 @@ export class GameScene extends Phaser.Scene {
     for (const dir of Object.keys(DIRS) as Dir[]) {
       if (!room.doors[dir]) continue;
       const [x, y, w, h] = rects[dir];
-      g.fillStyle(hexToInt(theme.floor), 1).fillRect(x, y, w, h);
+      if (this.roomArt) {
+        // 背景圖上的門：後牆挖一個拱門，其餘三邊是發光的出入口
+        g.fillStyle(0x07050c, 0.85);
+        if (dir === 'n') {
+          g.fillRoundedRect(x + 8, ARENA.y - 88, w - 16, 92, { tl: 56, tr: 56, bl: 0, br: 0 });
+          g.lineStyle(5, 0xc9a35a, 1).strokeRoundedRect(x + 8, ARENA.y - 88, w - 16, 92, { tl: 56, tr: 56, bl: 0, br: 0 });
+        } else g.fillRect(x, y, w, h);
+      } else g.fillStyle(hexToInt(theme.floor), 1).fillRect(x, y, w, h);
       if (this.doorsLocked) {
         g.fillStyle(0xff3b3b, 0.9);
         const horiz = w > h;

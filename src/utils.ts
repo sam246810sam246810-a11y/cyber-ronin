@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 export const dist2 = (ax: number, ay: number, bx: number, by: number) => (ax - bx) ** 2 + (ay - by) ** 2;
 export const dist = (ax: number, ay: number, bx: number, by: number) => Math.sqrt(dist2(ax, ay, bx, by));
@@ -34,4 +35,10 @@ export function distToSegment(px: number, py: number, x1: number, y1: number, x2
 export function formatTime(sec: number): string {
   const s = Math.floor(sec);
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** 真的載入美術圖（而非程式畫的 canvas 佔位圖）時回傳 true */
+export function isArtTexture(scene: Phaser.Scene, key: string): boolean {
+  if (!scene.textures.exists(key)) return false;
+  return scene.textures.get(key).getSourceImage() instanceof HTMLImageElement;
 }

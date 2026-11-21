@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { DEPTH, FONT, RARITY } from '../config';
 import { hexToInt } from '../data';
 import type { RelicDef } from '../types';
@@ -15,7 +16,7 @@ export class RelicPickup {
     this.armed = armed;
     const c = hexToInt(RARITY[relic.rarity].color);
     const glow = scene.add.image(x, y, 'circle').setTint(c).setAlpha(0.3).setDisplaySize(76, 76).setDepth(DEPTH.pickup);
-    const gem = scene.add.image(x, y, 'relic').setTint(c).setDisplaySize(56, 56).setDepth(DEPTH.pickup);
+    const gem = scene.add.image(x, y, 'relic').setTint(isArtTexture(scene, 'relic') ? 0xffffff : c).setDisplaySize(56, 56).setDepth(DEPTH.pickup);
     this.icon = scene.add.text(x, y, relic.icon, { fontSize: '26px' }).setOrigin(0.5).setDepth(DEPTH.pickup + 1);
     const label = scene.add.text(x, y - 46, `聖物・${relic.name}`, {
       fontFamily: FONT, fontSize: '16px', color: RARITY[relic.rarity].color, fontStyle: 'bold', stroke: '#000', strokeThickness: 4,

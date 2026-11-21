@@ -11,7 +11,7 @@ export class Splitter extends Enemy {
       this.radius *= k;
       this.maxHp = this.hp = this.maxHp * Math.pow(0.4, gen);
       this.speed *= 1 + 0.3 * gen;
-      this.sprite.setDisplaySize(this.radius * 2.9, this.radius * 2.9);
+      this.sprite.setDisplaySize(this.radius * 3.4, this.radius * 3.4);
     }
   }
 

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { DEPTH, FONT, RARITY } from '../config';
 import { hexToInt } from '../data';
 import type { WeaponDef } from '../types';
@@ -16,7 +17,7 @@ export class WeaponPickup {
     const c = hexToInt(RARITY[weapon.rarity].color);
     const glow = scene.add.image(x, y, 'circle').setTint(c).setAlpha(0.28).setDisplaySize(70, 70).setDepth(DEPTH.pickup);
     const ring = scene.add.image(x, y, 'ring').setTint(c).setDisplaySize(64, 64).setDepth(DEPTH.pickup);
-    this.icon = scene.add.image(x, y, `wpn_${weapon.kind}`).setTint(c).setDisplaySize(42, 42).setDepth(DEPTH.pickup + 1);
+    this.icon = scene.add.image(x, y, `wpn_${weapon.kind}`).setTint(isArtTexture(scene, `wpn_${weapon.kind}`) ? 0xffffff : c).setDisplaySize(52, 52).setDepth(DEPTH.pickup + 1);
     const label = scene.add.text(x, y - 46, weapon.name, {
       fontFamily: FONT, fontSize: '17px', color: RARITY[weapon.rarity].color, fontStyle: 'bold', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);

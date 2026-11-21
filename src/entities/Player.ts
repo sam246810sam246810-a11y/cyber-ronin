@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, PLAYER } from '../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, PLAYER, ySortDepth } from '../config';
 import { clamp } from '../utils';
 import { baseStats, type Stats } from '../systems/BuffSystem';
 
@@ -33,7 +33,7 @@ export class Player {
     this.y = y;
     this.shadow = scene.add.image(x, y + 16, 'shadow').setDepth(DEPTH.shadow).setAlpha(0.4).setScale(0.7, 0.35);
     this.sprite = scene.add.image(x, y, texture).setDepth(DEPTH.player).setTint(color)
-      .setDisplaySize(this.radius * 3.7, this.radius * 3.7);
+      .setDisplaySize(this.radius * 4.3, this.radius * 4.3);
     this.pointer = scene.add.image(x, y, 'triangle').setDepth(DEPTH.player + 1).setTint(0xffd166).setDisplaySize(12, 12);
   }
 
@@ -132,7 +132,7 @@ export class Player {
   }
 
   private sync(): void {
-    this.sprite.setPosition(this.x, this.y);
+    this.sprite.setPosition(this.x, this.y).setDepth(ySortDepth(this.y + 0.5));
     this.shadow.setPosition(this.x, this.y + 16);
     this.pointer.setPosition(this.x + Math.cos(this.facing) * 42, this.y + Math.sin(this.facing) * 42);
     this.sprite.setFlipX(Math.cos(this.facing) < -0.1);

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { DEPTH } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 
@@ -8,7 +9,7 @@ export class GuardianFlower {
   private sprite: Phaser.GameObjects.Image;
 
   constructor(private game: GameScene, readonly x: number, readonly y: number) {
-    this.sprite = game.add.image(x, y, 'flower').setTint(0x7eff8a).setDisplaySize(44, 44).setDepth(DEPTH.player - 1);
+    this.sprite = game.add.image(x, y, 'flower').setTint(isArtTexture(game, 'flower') ? 0xffffff : 0x7eff8a).setDisplaySize(56, 56).setDepth(DEPTH.player - 1);
     game.tweens.add({ targets: this.sprite, scale: { from: 0, to: this.sprite.scale }, duration: 300, ease: 'Back.Out' });
   }
 

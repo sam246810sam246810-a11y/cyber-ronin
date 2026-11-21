@@ -4,7 +4,7 @@ import { ELEMENT_IDS, FUN, RELIC_MAP, WEAPON_MAP, hexToInt } from '../data';
 import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
 import type { Material, NpcKind, RarityIndex } from '../types';
-import { pick } from '../utils';
+import { isArtTexture, pick } from '../utils';
 import { isRift, type Room } from './DungeonSystem';
 import { Sound } from './SoundSystem';
 
@@ -30,7 +30,8 @@ const INFO: Record<EventKind, { name: string; color: number; texture: string }> 
 };
 
 const SIZES: Partial<Record<EventKind, [number, number]>> = {
-  stairs: [96, 96], portal: [96, 96], start: [120, 120], cauldron: [230, 154], history: [70, 70], knock: [96, 96], shelf: [130, 130], bookshelf: [130, 130], statue: [104, 104],
+  chest: [96, 96], fountain: [104, 104], merchant: [124, 124], shop: [124, 124], altar: [104, 104], npc: [84, 84],
+  stairs: [104, 104], portal: [104, 104], start: [120, 120], cauldron: [230, 154], history: [70, 70], knock: [96, 96], shelf: [130, 130], bookshelf: [130, 130], statue: [104, 104],
 };
 
 interface RoomObject {
@@ -88,8 +89,11 @@ export class EventSystem {
       : base;
     const glow = this.game.add.image(x, y, 'circle').setTint(info.color).setAlpha(0.25).setDisplaySize(120, 120).setDepth(DEPTH.pickup);
     const [sw, sh] = SIZES[kind] ?? [68, 68];
-    const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(sw, sh).setDepth(DEPTH.pickup + 1);
-    if (kind === 'portal' || kind === 'start' || npc === 'chatty_mushroom') sprite.setTint(info.color);
+    const ringKind = kind === 'portal' || kind === 'start';
+    const tex = ringKind && isArtTexture(this.game, 'portal') ? 'portal' : info.texture;
+    const sprite = this.game.add.image(x, y, tex).setDisplaySize(sw, sh).setDepth(DEPTH.pickup + 1);
+    if ((ringKind || npc === 'chatty_mushroom') && !isArtTexture(this.game, tex)) sprite.setTint(info.color);
+    else if (kind === 'start') sprite.setTint(0xb8ffc0);
     // 還沒解鎖的貓咪雕像壓暗
     if (kind === 'statue' && label?.startsWith('🔒')) sprite.setTint(0x505060);
     if (kind === 'portal' || kind === 'start') {

@@ -38,11 +38,16 @@ export let CENTER_DX = 0;
 export const cx = (x: number) => x + CENTER_DX;
 
 /** 戰鬥區：鋪滿整個螢幕（含瀏海側），介面都半透明疊在上面 */
-export const ARENA = { x: 14, y: 14, w: 1252, h: 692 };
+/** 戰場（可走範圍）。上方 110px 是房間背景圖的後牆（2.5D 俯視角），不能走進去 */
+export const ARENA = { x: 14, y: 110, w: 1252, h: 596 };
 export let ARENA_RIGHT = ARENA.x + ARENA.w;
 export let ARENA_BOTTOM = ARENA.y + ARENA.h;
 /** 右側錨點：右下按鈕與右上資訊以此為基準 */
 export let RIGHT = GAME_W;
+
+/** 房間背景圖比例與後牆高度比例 */
+export const ROOM_ART_ASPECT = 2688 / 1152;
+export const ROOM_WALL_FRAC = 0.235;
 
 /** 依目前螢幕重新計算版面，回傳新的畫面寬度 */
 export function relayout(): number {
@@ -52,10 +57,19 @@ export function relayout(): number {
   CENTER_DX = (GAME_W - 1280) / 2;
   ARENA.x = 14;
   ARENA.w = GAME_W - 28;
+  // 房間背景圖（21:9）等比蓋滿畫面，後牆約佔圖高 23.5%：可走範圍從牆腳開始
+  const imgH = Math.max(720, GAME_W / ROOM_ART_ASPECT);
+  ARENA.y = Math.round(ROOM_WALL_FRAC * imgH - (imgH - 720) / 2) + 6;
+  ARENA.h = 706 - ARENA.y;
   ARENA_RIGHT = ARENA.x + ARENA.w;
   ARENA_BOTTOM = ARENA.y + ARENA.h;
   RIGHT = GAME_W - SAFE_X;
   return GAME_W;
+}
+
+/** 2.5D 前後排序：y 越下面越靠前（角色共用 20~28 的深度帶） */
+export function ySortDepth(y: number): number {
+  return 20 + Math.max(0, Math.min(720, y)) / 90;
 }
 
 export const DEPTH = {

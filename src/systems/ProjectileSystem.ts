@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { isArtTexture } from '../utils';
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, PLAYER } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import type { Enemy } from '../entities/Enemy';
@@ -69,12 +70,15 @@ export class ProjectileSystem {
 
   private spawn(x: number, y: number, angle: number, speed: number, damage: number, friendly: boolean, opts: BulletOptions): void {
     const r = opts.radius ?? PLAYER.bulletRadius;
-    const sprite = this.game.add.image(x, y, opts.texture ?? 'circle')
+    // 有美術光球就用光球＋加亮混色，看起來像發光的法術彈
+    const glowArt = !opts.texture && isArtTexture(this.game, 'proj_orb');
+    const sprite = this.game.add.image(x, y, opts.texture ?? (glowArt ? 'proj_orb' : 'circle'))
       .setTint(opts.color ?? COLORS.bullet)
+      .setBlendMode(glowArt ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       .setDepth(DEPTH.projectile)
       .setRotation(angle + Math.PI / 2);
     if (opts.long || opts.texture === 'thorn') sprite.setDisplaySize(r * 1.6, r * 3.2);
-    else sprite.setDisplaySize(r * 2, r * 2);
+    else sprite.setDisplaySize(r * (glowArt ? 4.2 : 2), r * (glowArt ? 4.2 : 2));
     this.bullets.push({
       x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r, damage, friendly, sprite, opts, dead: false,
       pierceLeft: opts.pierce ?? 0, bouncesLeft: opts.bounces ?? 0, hit: new Set(), speed, traveled: 0, returning: false,

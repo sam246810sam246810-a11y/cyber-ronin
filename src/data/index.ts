@@ -121,8 +121,8 @@ export const FUN = funJson as unknown as {
 
 /** 時空裂縫的場景配色 */
 export const RIFT_THEMES: Record<'past' | 'future', RegionTheme> = {
-  past: { bg: '#1e170f', floor: '#3a2e1e', tile: '#43361f', wall: '#7a6440', deco: '#5a4a2a', decoLight: '#e0c08a', floorTex: 'floor_lobby', floorTint: 0xd8b070 },
-  future: { bg: '#05040f', floor: '#0e0b24', tile: '#151036', wall: '#00e0ff', deco: '#3a00a0', decoLight: '#ff3df0', floorTex: 'floor_storm', floorTint: 0x8a70ff },
+  past: { bg: '#1e170f', floor: '#3a2e1e', tile: '#43361f', wall: '#7a6440', deco: '#5a4a2a', decoLight: '#e0c08a', floorTex: 'floor_lobby', roomTex: 'room_greenhouse', floorTint: 0xd8b070 },
+  future: { bg: '#05040f', floor: '#0e0b24', tile: '#151036', wall: '#00e0ff', deco: '#3a00a0', decoLight: '#ff3df0', floorTex: 'floor_storm', roomTex: 'room_storm', floorTint: 0x8a70ff },
 };
 
 export const RELICS = relicsJson as RelicDef[];
@@ -133,5 +133,5 @@ export const RELIC_UNLOCK_COST = [10, 25, 45, 75];
 
 /** 大廳「貓咪煉金工房」的配色 */
 export const LOBBY_THEME: RegionTheme = {
-  bg: '#1a1410', floor: '#3a2a1e', tile: '#45321f', wall: '#7a5530', deco: '#5a3a1a', decoLight: '#ffd166', floorTex: 'floor_lobby', floorTint: 0x9c8a80,
+  bg: '#1a1410', floor: '#3a2a1e', tile: '#45321f', wall: '#7a5530', deco: '#5a3a1a', decoLight: '#ffd166', floorTex: 'floor_lobby', roomTex: 'room_lobby', floorTint: 0xd8ccc0,
 };
