@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, GAME_H, GAME_W } from './config';
+import { COLORS, GAME_H, GAME_W, computeLayout, relayout } from './config';
 import { BootScene } from './scenes/BootScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
@@ -25,10 +25,18 @@ document.addEventListener('touchend', (e) => {
   lastTouchEnd = now;
 }, { passive: false });
 
-const isPortraitPhone = () => window.innerHeight > window.innerWidth && Math.min(window.innerWidth, window.innerHeight) < 900;
+const isPortrait = () => window.innerHeight > window.innerWidth;
+const inCombat = (g: Phaser.Game) => g.scene.isActive('Game') || g.scene.isPaused('Game');
 
-function boot(): void {
-  const game = new Phaser.Game({
+let game: Phaser.Game | undefined;
+/** 戰鬥中尺寸改變時先記著，回到主選單再重建 */
+let layoutStale = false;
+let debugInstalled = false;
+
+function createGame(): void {
+  relayout();
+  layoutStale = false;
+  game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
     width: GAME_W,
@@ -42,32 +50,46 @@ function boot(): void {
     render: { antialias: true, roundPixels: false },
     scene: [BootScene, PreloadScene, MainMenuScene, CharacterSelectScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene, EventScene],
   });
-
   (window as unknown as { __phaser?: Phaser.Game }).__phaser = game;
-
-  if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
+  if (!debugInstalled && (import.meta.env.DEV || new URLSearchParams(location.search).has('debug'))) {
+    debugInstalled = true;
     installDebugPanel(game);
   }
-
-  // 寬高比明顯改變時（例如換手機方向）：不在戰鬥中就重新載入以套用新版面
-  const startAspect = window.innerWidth / window.innerHeight;
-  window.addEventListener('resize', () => {
-    const a = window.innerWidth / window.innerHeight;
-    if (isPortraitPhone() || Math.abs(a - startAspect) / startAspect < 0.12) return;
-    if (!game.scene.isActive('Game')) location.reload();
-  });
 }
 
-// 直拿手機時先等轉成橫向，才能用正確的螢幕比例建立畫面
-if (isPortraitPhone()) {
-  const wait = () => {
-    if (isPortraitPhone()) return;
-    window.removeEventListener('resize', wait);
-    window.removeEventListener('orientationchange', wait);
-    setTimeout(boot, 250);
-  };
-  window.addEventListener('resize', wait);
-  window.addEventListener('orientationchange', wait);
-} else {
-  boot();
+/** 用目前的螢幕尺寸重建整個遊戲（回到主選單） */
+function rebuild(): void {
+  game?.destroy(true);
+  game = undefined;
+  setTimeout(createGame, 50);
 }
+
+/**
+ * 尺寸穩定後才量：預覽器剛開啟、轉向、工具列收合時尺寸會連續變動。
+ * 已經建立後若寬高比明顯改變，不在戰鬥中就重建；在戰鬥中則等回到主選單。
+ */
+let settleTimer = 0;
+function onViewportChange(): void {
+  window.clearTimeout(settleTimer);
+  settleTimer = window.setTimeout(() => {
+    if (isPortrait()) return; // 直拿時顯示「請橫放」
+    if (!game) {
+      createGame();
+      return;
+    }
+    const want = computeLayout().gameW;
+    if (Math.abs(want - GAME_W) < 24) return;
+    if (inCombat(game)) layoutStale = true;
+    else rebuild();
+  }, 400);
+}
+window.addEventListener('resize', onViewportChange);
+window.addEventListener('orientationchange', onViewportChange);
+window.visualViewport?.addEventListener('resize', onViewportChange);
+// 主選單開啟時檢查：戰鬥中錯過的尺寸變更在這裡套用
+(window as unknown as { __checkLayout?: () => void }).__checkLayout = () => {
+  if (!game) return;
+  const want = computeLayout().gameW;
+  if (layoutStale || Math.abs(want - GAME_W) >= 24) rebuild();
+};
+onViewportChange();

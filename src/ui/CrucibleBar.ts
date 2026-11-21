@@ -1,8 +1,5 @@
 import Phaser from 'phaser';
 import { COLORS, DEPTH, FONT, RARITY, SAFE_X, TOP_H } from '../config';
-
-/** 坩堝群組的水平位移：寬螢幕時往中間靠 */
-const DX = SAFE_X + 0;
 import { ELEMENT_IDS, RECIPES, hexToInt, potionQuality, recipeKey } from '../data';
 import type { BuffSystem } from '../systems/BuffSystem';
 import { CodexStore } from '../systems/CodexStore';
@@ -25,6 +22,7 @@ export class CrucibleBar {
     private scene: Phaser.Scene, private crucible: CrucibleSystem, private buffs: BuffSystem, onBrew: () => void,
   ) {
     const cy = 40;
+    const DX = SAFE_X;
     this.cauldron = scene.add.image(DX + 370, cy + 4, 'cauldron').setDepth(DEPTH.ui - 1).setDisplaySize(236, 76).setAlpha(0.45);
     [300, 370, 440].map((x) => x + DX).forEach((x, i) => {
       const bg = scene.add.image(x, cy, 'slot').setDepth(DEPTH.ui).setDisplaySize(60, 60).setInteractive({ useHandCursor: true });

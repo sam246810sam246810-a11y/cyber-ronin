@@ -9,6 +9,8 @@ export class MainMenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    // 戰鬥中螢幕尺寸改變過：回到主選單時重建畫面
+    this.time.delayedCall(50, () => (window as unknown as { __checkLayout?: () => void }).__checkLayout?.());
     this.cameras.main.setBackgroundColor(COLORS.bg);
     const colors = [0xff7eb6, 0x7ed4ff, 0x7eff8a, 0xff8a3d, 0xffe14d];
     for (let i = 0; i < 30; i++) {

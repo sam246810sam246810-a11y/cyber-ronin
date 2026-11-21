@@ -1,9 +1,9 @@
 /** 全域常數。數值調整請優先改這裡或 data/*.json。 */
 /**
  * 畫面寬度依螢幕比例決定（高度固定 720），從 16:9 到 2.6:1 都能填滿不留黑邊。
- * 啟動時計算一次（main.ts 會等到橫向才建立遊戲）。
+ * main.ts 會等尺寸穩定才建立遊戲，尺寸改變時重新建立。
  */
-function computeLayout(): { gameW: number; safeX: number } {
+export function computeLayout(): { gameW: number; safeX: number } {
   const w = window.innerWidth || 1280;
   const h = window.innerHeight || 720;
   const aspect = Math.max(16 / 9, Math.min(2.6, w / h));
@@ -24,13 +24,16 @@ function computeLayout(): { gameW: number; safeX: number } {
   return { gameW, safeX: Math.min(80, Math.round(safePx * scale)) };
 }
 
-const LAYOUT = computeLayout();
-export const GAME_W = LAYOUT.gameW;
+/*
+ * 以下版面數值是「活的」：螢幕比例改變時 relayout() 會更新，
+ * 之後重新建立的場景都會讀到新值（ES module 的 export let 是即時綁定）。
+ */
+export let GAME_W = 1280;
 export const GAME_H = 720;
 /** 左右安全邊距（避開瀏海），按鈕與資訊都放在這之內 */
-export const SAFE_X = LAYOUT.safeX;
+export let SAFE_X = 0;
 /** 選單畫面以 1280 寬設計，置中時的水平位移 */
-export const CENTER_DX = (GAME_W - 1280) / 2;
+export let CENTER_DX = 0;
 /** 把 1280 寬設計的 x 座標轉成置中的座標 */
 export const cx = (x: number) => x + CENTER_DX;
 
@@ -38,11 +41,25 @@ export const cx = (x: number) => x + CENTER_DX;
 export const TOP_H = 92;
 
 /** 戰鬥區：資訊列以下整片，操作按鈕半透明疊在角落 */
-export const ARENA = { x: 12 + SAFE_X, y: 98, w: GAME_W - 2 * (12 + SAFE_X), h: 612 } as const;
-export const ARENA_RIGHT = ARENA.x + ARENA.w;
-export const ARENA_BOTTOM = ARENA.y + ARENA.h;
+export const ARENA = { x: 12, y: 98, w: 1256, h: 612 };
+export let ARENA_RIGHT = ARENA.x + ARENA.w;
+export let ARENA_BOTTOM = ARENA.y + ARENA.h;
 /** 右側錨點：右下按鈕與右上資訊以此為基準 */
-export const RIGHT = GAME_W - SAFE_X;
+export let RIGHT = GAME_W;
+
+/** 依目前螢幕重新計算版面，回傳新的畫面寬度 */
+export function relayout(): number {
+  const l = computeLayout();
+  GAME_W = l.gameW;
+  SAFE_X = l.safeX;
+  CENTER_DX = (GAME_W - 1280) / 2;
+  ARENA.x = 12 + SAFE_X;
+  ARENA.w = GAME_W - 2 * (12 + SAFE_X);
+  ARENA_RIGHT = ARENA.x + ARENA.w;
+  ARENA_BOTTOM = ARENA.y + ARENA.h;
+  RIGHT = GAME_W - SAFE_X;
+  return GAME_W;
+}
 
 export const DEPTH = {
   floor: 0,

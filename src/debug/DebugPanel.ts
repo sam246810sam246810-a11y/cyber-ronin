@@ -12,7 +12,8 @@ import type { ElementId, RarityIndex } from '../types';
 export function installDebugPanel(game: Phaser.Game): void {
   (window as unknown as { __WEAPON_MAP?: unknown }).__WEAPON_MAP = WEAPON_MAP;
   const getGame = (): GameScene | undefined => {
-    const s = game.scene.getScene('Game') as GameScene | null;
+    const g = (window as unknown as { __phaser?: Phaser.Game }).__phaser ?? game;
+    const s = g.scene.getScene('Game') as GameScene | null;
     return s && s.scene.isActive() ? s : undefined;
   };
 
