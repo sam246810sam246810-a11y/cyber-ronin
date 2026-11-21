@@ -1,26 +1,28 @@
 import Phaser from 'phaser';
-import { POTION } from '../config';
-import { RECIPES, recipeKey } from '../data';
-import type { IngredientId, RecipeDef } from '../types';
+import { FISSION } from '../config';
+import { LEGENDARIES, RECIPES, legendaryKey, recipeKey } from '../data';
+import type { Brew, IngredientId } from '../types';
+import { pick } from '../utils';
 import { CodexStore } from './CodexStore';
 import type { MutationSystem } from './MutationSystem';
 
 export type CrucibleState = 'empty' | 'filling' | 'full' | 'brewing';
 
 /**
- * 3 格坩堝 + 藥水架。
- * Empty → Filling → Full →（按煉成）→ Brewing → Empty
- * 手上有藥水時不能煉成。
+ * 3 格坩堝。放滿後按「煉成」→ 產生藥水（直接喝下）。
+ * 煉成時有機率「裂變」成傳說藥水。
+ * Empty → Filling → Full →（煉成）→ Brewing → Empty
  */
 export class CrucibleSystem extends Phaser.Events.EventEmitter {
   static readonly SLOTS = 3;
   static readonly BREW_TIME = 0.3;
 
   slots: (IngredientId | null)[] = [null, null, null];
-  rack: RecipeDef[] = [];
   private brewTimer = 0;
-  /** 本局新發現的配方 */
+  /** 本局新發現的圖鑑 key（配方或 L:傳說） */
   readonly discoveredThisRun: string[] = [];
+  /** debug：下次煉成必定裂變 */
+  forceFission = false;
 
   constructor(private mutations: MutationSystem) {
     super();
@@ -37,8 +39,8 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
     return this.slots.filter(Boolean).length;
   }
 
-  get rackCapacity(): number {
-    return POTION.rackBase + (this.mutations.stacks('double_brew') > 0 ? 1 : 0);
+  get fissionChance(): number {
+    return Math.min(FISSION.maxChance, FISSION.baseChance + FISSION.perCatalyst * this.mutations.stacks('catalyst'));
   }
 
   get canAccept(): boolean {
@@ -46,13 +48,12 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
   }
 
   get canBrew(): boolean {
-    return this.state === 'full' && this.rack.length === 0;
+    return this.state === 'full';
   }
 
   add(id: IngredientId): boolean {
     if (!this.canAccept) return false;
-    const i = this.slots.indexOf(null);
-    this.slots[i] = id;
+    this.slots[this.slots.indexOf(null)] = id;
     this.emit('changed');
     return true;
   }
@@ -63,31 +64,28 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
     this.emit('changed');
   }
 
-  brew(): boolean {
-    if (!this.canBrew) return false;
+  /** 煉成，回傳煉出的藥水（由呼叫端喝下） */
+  brew(): Brew | undefined {
+    if (!this.canBrew) return undefined;
     const key = recipeKey(this.slots as IngredientId[]);
     const recipe = RECIPES[key];
-    this.brewTimer = CrucibleSystem.BREW_TIME;
-    this.emit('brewing', recipe);
-    // 立即結算，動畫只是表演
     this.slots = [null, null, null];
-    this.rack.push(recipe);
-    const chance = Math.min(1, 0.2 * this.mutations.stacks('double_brew'));
-    const doubled = chance > 0 && Math.random() < chance && this.rack.length < this.rackCapacity;
-    if (doubled) this.rack.push(recipe);
-    if (CodexStore.discover(key)) {
-      this.discoveredThisRun.push(key);
-      this.emit('discovered', recipe);
-    }
-    this.emit('brewed', recipe, doubled);
-    this.emit('changed');
-    return true;
-  }
+    this.brewTimer = CrucibleSystem.BREW_TIME;
 
-  takePotion(): RecipeDef | undefined {
-    const r = this.rack.shift();
-    if (r) this.emit('changed');
-    return r;
+    let result: Brew = { kind: 'recipe', recipe };
+    if (this.forceFission || Math.random() < this.fissionChance) {
+      this.forceFission = false;
+      result = { kind: 'legendary', legendary: pick(LEGENDARIES), from: recipe };
+    }
+    const newKeys: string[] = [];
+    if (CodexStore.discover(key)) newKeys.push(key);
+    if (result.kind === 'legendary' && CodexStore.discover(legendaryKey(result.legendary.id))) {
+      newKeys.push(legendaryKey(result.legendary.id));
+    }
+    this.discoveredThisRun.push(...newKeys);
+    this.emit('brewed', result, newKeys);
+    this.emit('changed');
+    return result;
   }
 
   update(dt: number): void {

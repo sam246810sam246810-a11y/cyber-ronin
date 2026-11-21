@@ -49,13 +49,29 @@ export const DROP = {
   blinkAt: 3,
 } as const;
 
-export const POTION = {
-  flightTime: 0.5,
-  autoAimRange: 620,
-  defaultDistance: 300,
-  rackBase: 1,
-  arcHeight: 90,
-  pierceHitRadius: 26,
+/** 煉成時裂變成傳說藥水 */
+export const FISSION = {
+  baseChance: 0.15,
+  perCatalyst: 0.08,
+  maxChance: 0.6,
+} as const;
+
+/** 喝下藥水時，每個藥材帶來的屬性成長 */
+export const ELEMENT = {
+  /** 果凍：衝刺冷卻 ×0.95、移速 +3%；每 3 個 +1 最大血量 */
+  jellyDashMul: 0.95,
+  jellySpeed: 0.03,
+  jellyPerHeart: 3,
+  /** 冰晶：攻擊間隔 ×0.95、命中減速 +4% */
+  iceFireMul: 0.95,
+  iceSlow: 0.04,
+  /** 孢子：命中附毒每秒 +0.25 */
+  sporePoison: 0.25,
+  maxHp: 12,
+  minDashCooldown: 0.4,
+  minFireInterval: 0.12,
+  maxSpeedMul: 1.6,
+  maxSlow: 0.5,
 } as const;
 
 export const WAVE = {

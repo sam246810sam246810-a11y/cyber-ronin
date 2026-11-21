@@ -1,11 +1,11 @@
 [
-  { "id": "bounce", "name": "彈跳", "desc": "藥水落地後多彈跳 1 次", "icon": "↯" },
-  { "id": "split", "name": "分裂", "desc": "最後一次落地分出 2 個小藥水（50% 威力）", "icon": "✣" },
-  { "id": "spread", "name": "擴散", "desc": "藥水範圍 +25%", "icon": "◎" },
-  { "id": "linger", "name": "延時", "desc": "冰凍與場地效果持續 +1 秒", "icon": "⧗" },
-  { "id": "multi", "name": "連投", "desc": "一次多投 1 發，每發傷害 ×0.75", "icon": "⋔" },
-  { "id": "pierce", "name": "穿透", "desc": "飛行途中穿過 1 個敵人並造成傷害", "icon": "➶" },
-  { "id": "concentrate", "name": "濃縮", "desc": "藥水傷害 +20%", "icon": "✦" },
-  { "id": "double_brew", "name": "雙倍釀造", "desc": "煉成時 +20% 機率得到 2 瓶（藥水架 +1）", "icon": "⚗" },
-  { "id": "resonance", "name": "共鳴", "desc": "三格同色配方傷害 +35%", "icon": "❂" }
+  { "id": "concentrate", "name": "濃縮", "desc": "藥材的屬性加成 +25%", "icon": "✦" },
+  { "id": "spread", "name": "擴散", "desc": "藥水被動的範圍 +20%", "icon": "◎" },
+  { "id": "linger", "name": "延時", "desc": "週期型被動觸發加快 15%，場地效果 +1 秒", "icon": "⧗" },
+  { "id": "resonance", "name": "共鳴", "desc": "喝下三格同色藥水時，被動額外 +1 層", "icon": "❂" },
+  { "id": "catalyst", "name": "裂變催化", "desc": "煉成時裂變成傳說藥水的機率 +8%", "icon": "☢" },
+  { "id": "double_brew", "name": "雙倍釀造", "desc": "喝下時 20% 機率效果發揮兩次", "icon": "⚗" },
+  { "id": "rejuvenate", "name": "回春", "desc": "每喝一瓶藥水 25% 機率回復 1 點血", "icon": "♥" },
+  { "id": "harvest", "name": "豐收", "desc": "藥材掉落率 +10%", "icon": "✿" },
+  { "id": "magnet", "name": "磁吸", "desc": "藥材拾取範圍 +40%", "icon": "⊛" }
 ]

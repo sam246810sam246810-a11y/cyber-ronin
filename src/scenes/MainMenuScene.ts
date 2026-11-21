@@ -31,7 +31,7 @@ export class MainMenuScene extends Phaser.Scene {
     this.add.text(GAME_W / 2, 200, '坩堝花園', {
       fontFamily: FONT, fontSize: '84px', color: '#ffffff', fontStyle: 'bold', stroke: '#4a2a6a', strokeThickness: 10,
     }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, 520, '撿藥材 → 湊滿三格 → 煉成 → 丟出去！', {
+    this.add.text(GAME_W / 2, 520, '撿藥材 → 湊滿三格 → 煉成喝下 → 越喝越強！', {
       fontFamily: FONT, fontSize: '26px', color: COLORS.textDim,
     }).setOrigin(0.5);
 
@@ -39,10 +39,10 @@ export class MainMenuScene extends Phaser.Scene {
     textButton(this, GAME_W / 2, 850, 420, 90, `配方圖鑑  ${CodexStore.count}/${CodexStore.total}`,
       () => this.scene.start('Codex', { returnTo: 'MainMenu' }));
 
-    this.add.text(GAME_W / 2, 1060, '左下：搖桿移動　右下：衝刺 / 投擲\n鍵盤：WASD 移動　空白鍵 衝刺　J 投擲　K 煉成', {
+    this.add.text(GAME_W / 2, 1060, '左下：搖桿移動　右下：衝刺 / 煉成\n鍵盤：WASD 移動　空白鍵 衝刺　J 或 K 煉成', {
       fontFamily: FONT, fontSize: '20px', color: COLORS.textDim, align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, GAME_H - 40, 'v0.1 MVP 試作', {
+    this.add.text(GAME_W / 2, GAME_H - 40, 'v0.2 喝藥強化版', {
       fontFamily: FONT, fontSize: '16px', color: '#4a4458',
     }).setOrigin(0.5);
   }

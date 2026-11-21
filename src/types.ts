@@ -8,18 +8,6 @@ export interface IngredientDef {
   weight: number;
 }
 
-/** 藥水參數。所有突變卡都透過修改這份參數生效。 */
-export interface PotionParams {
-  damage: number;
-  radius: number;
-  duration: number;
-  bounces: number;
-  splits: number;
-  count: number;
-  pierce: number;
-  extra: Record<string, number>;
-}
-
 export interface RecipeDef {
   /** 排序後的組合字串，例如 "IJS" */
   key: string;
@@ -27,8 +15,20 @@ export interface RecipeDef {
   name: string;
   desc: string;
   color: string;
-  params: PotionParams;
 }
+
+/** 裂變產生的傳說藥水 */
+export interface LegendaryDef {
+  id: string;
+  name: string;
+  desc: string;
+  color: string;
+}
+
+/** 喝下的藥水：一般配方或傳說 */
+export type Brew =
+  | { kind: 'recipe'; recipe: RecipeDef }
+  | { kind: 'legendary'; legendary: LegendaryDef; from: RecipeDef };
 
 export type EnemyType = 'crawler' | 'spitter' | 'hopper' | 'boss';
 

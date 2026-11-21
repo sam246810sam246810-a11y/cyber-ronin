@@ -14,12 +14,11 @@ export class HUD {
   private toast: Phaser.GameObjects.Container;
   private toastText: Phaser.GameObjects.Text;
   private toastSub: Phaser.GameObjects.Text;
+  private toastBg: Phaser.GameObjects.Rectangle;
 
   constructor(private scene: Phaser.Scene, maxHp: number, onPause: () => void) {
     scene.add.rectangle(GAME_W / 2, 44, GAME_W, 88, 0x000000, 0.35).setDepth(DEPTH.ui - 1);
-    for (let i = 0; i < maxHp; i++) {
-      this.hearts.push(scene.add.image(36 + i * 38, 32, 'heart').setDepth(DEPTH.ui).setDisplaySize(32, 30));
-    }
+    this.ensureHearts(maxHp);
     this.waveText = scene.add.text(GAME_W / 2, 30, '', {
       fontFamily: FONT, fontSize: '28px', color: COLORS.text, fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(DEPTH.ui);
@@ -43,7 +42,7 @@ export class HUD {
       fontFamily: FONT, fontSize: '52px', color: '#ffffff', fontStyle: 'bold', stroke: '#2a1a3a', strokeThickness: 8,
     }).setOrigin(0.5).setDepth(DEPTH.overlay).setAlpha(0);
 
-    const toastBg = scene.add.rectangle(0, 0, 440, 96, 0x2a1a3a, 0.95).setStrokeStyle(3, COLORS.gold, 1);
+    const toastBg = this.toastBg = scene.add.rectangle(0, 0, 560, 96, 0x2a1a3a, 0.95).setStrokeStyle(3, COLORS.gold, 1);
     this.toastText = scene.add.text(0, -16, '', {
       fontFamily: FONT, fontSize: '30px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0.5);
@@ -54,8 +53,18 @@ export class HUD {
       .setDepth(DEPTH.overlay).setAlpha(0);
   }
 
+  /** 最大血量會成長，最多 12 顆，每排 6 顆 */
+  private ensureHearts(n: number): void {
+    while (this.hearts.length < n) {
+      const i = this.hearts.length;
+      this.hearts.push(this.scene.add.image(28 + (i % 6) * 30, 26 + Math.floor(i / 6) * 32, 'heart')
+        .setDepth(DEPTH.ui).setDisplaySize(26, 24));
+    }
+  }
+
   update(player: Player, label: string, time: number, boss?: { hp: number; maxHp: number; name: string; alive: boolean }): void {
-    this.hearts.forEach((h, i) => h.setAlpha(i < player.hp ? 1 : 0.2));
+    this.ensureHearts(player.maxHp);
+    this.hearts.forEach((h, i) => h.setVisible(i < player.maxHp).setAlpha(i < player.hp ? 1 : 0.2));
     this.waveText.setText(label);
     this.timeText.setText(formatTime(time));
 
@@ -80,14 +89,17 @@ export class HUD {
     });
   }
 
-  showToast(title: string, sub: string): void {
+  showToast(title: string, sub: string, legendary = false): void {
+    this.toastBg.setStrokeStyle(legendary ? 5 : 3, legendary ? 0xff9f43 : COLORS.gold, 1);
+    this.toastBg.setFillStyle(legendary ? 0x4a2a10 : 0x2a1a3a, 0.95);
+    this.toastText.setColor(legendary ? '#ffb86b' : '#ffd166');
     this.toastText.setText(title);
     this.toastSub.setText(sub);
     this.scene.tweens.killTweensOf(this.toast);
     this.toast.setAlpha(0).setY(170);
     this.scene.tweens.add({
       targets: this.toast, alpha: 1, y: 200, duration: 250, ease: 'Back.Out',
-      onComplete: () => this.scene.tweens.add({ targets: this.toast, alpha: 0, delay: 1600, duration: 300 }),
+      onComplete: () => this.scene.tweens.add({ targets: this.toast, alpha: 0, delay: legendary ? 2400 : 1400, duration: 300 }),
     });
   }
 }

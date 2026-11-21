@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, DEPTH, PLAYER } from '../config';
 import { clamp } from '../utils';
+import { baseStats, type Stats } from '../systems/BuffSystem';
 
 export type PlayerState = 'idle' | 'move' | 'dash' | 'hurt' | 'dead';
 
@@ -20,6 +21,8 @@ export class Player {
   private invulnTimer = 0;
   private hurtTimer = 0;
   godMode = false;
+  /** 由 BuffSystem 更新 */
+  stats: Stats = baseStats();
 
   readonly sprite: Phaser.GameObjects.Image;
   private readonly pointer: Phaser.GameObjects.Image;
@@ -39,7 +42,7 @@ export class Player {
   }
 
   get dashCooldownRatio(): number {
-    return this.dashCooldown / PLAYER.dashCooldown;
+    return this.dashCooldown / this.stats.dashCooldown;
   }
 
   tryDash(dirX: number, dirY: number): boolean {
@@ -55,7 +58,7 @@ export class Player {
     this.dashVY = (dirY / len) * speed;
     this.dashTimer = PLAYER.dashTime;
     this.invulnTimer = Math.max(this.invulnTimer, PLAYER.dashIframes);
-    this.dashCooldown = PLAYER.dashCooldown;
+    this.dashCooldown = this.stats.dashCooldown;
     this.state = 'dash';
     // 衝刺殘影
     const ghost = this.scene.add.image(this.x, this.y, 'circle').setTint(0x7ed4ff).setAlpha(0.5)
@@ -78,6 +81,13 @@ export class Player {
     return true;
   }
 
+  /** 不死鳥之淚的復活 */
+  revive(hp: number): void {
+    this.hp = Math.min(this.maxHp, hp);
+    this.state = 'idle';
+    this.invulnTimer = 2;
+  }
+
   update(dt: number, moveX: number, moveY: number): void {
     if (this.state === 'dead') {
       this.sync();
@@ -96,8 +106,8 @@ export class Player {
       const mag = Math.min(1, Math.hypot(moveX, moveY));
       if (mag > 0.05) {
         this.facing = Math.atan2(moveY, moveX);
-        this.x += Math.cos(this.facing) * PLAYER.speed * mag * dt;
-        this.y += Math.sin(this.facing) * PLAYER.speed * mag * dt;
+        this.x += Math.cos(this.facing) * this.stats.speed * mag * dt;
+        this.y += Math.sin(this.facing) * this.stats.speed * mag * dt;
         if (this.hurtTimer <= 0) this.state = 'move';
       } else if (this.hurtTimer <= 0) {
         this.state = 'idle';

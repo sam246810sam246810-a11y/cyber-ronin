@@ -52,6 +52,10 @@ export function installDebugPanel(game: Phaser.Game): void {
   add('+果凍 J', () => give('J'));
   add('+冰晶 I', () => give('I'));
   add('+孢子 S', () => give('S'));
+  add('下次必裂變', () => {
+    const g = getGame();
+    if (g) g.crucible.forceFission = true;
+  });
   add('跳過本波', () => getGame()?.waves.debugSkip());
   add('直接到 Boss', () => getGame()?.waves.debugToBoss());
   add('選突變卡', () => getGame()?.openCardSelect());
@@ -70,8 +74,8 @@ export function installDebugPanel(game: Phaser.Game): void {
   const refresh = () => {
     const g = getGame();
     status.textContent = g
-      ? `波:${g.waves.wave} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 圖鑑:${CodexStore.count}`
-      : `圖鑑:${CodexStore.count}/10（在遊戲中才能用大部分按鈕）`;
+      ? `波:${g.waves.wave} ${g.waves.phase} 敵:${g.enemies.length} 無敵:${g.player.godMode ? 'ON' : 'off'} 喝:${g.buffs.drinks} 裂變率:${Math.round(g.crucible.fissionChance * 100)}%`
+      : `圖鑑:${CodexStore.count}/${CodexStore.total}（在遊戲中才能用大部分按鈕）`;
   };
 
   toggle.addEventListener('click', () => {

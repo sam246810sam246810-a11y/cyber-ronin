@@ -1,5 +1,7 @@
 import { STORAGE_KEYS } from '../config';
-import { RECIPE_ORDER } from '../data';
+import { LEGENDARIES, RECIPE_ORDER, legendaryKey } from '../data';
+
+const ALL_KEYS = [...RECIPE_ORDER, ...LEGENDARIES.map((l) => legendaryKey(l.id))];
 
 /** 圖鑑解鎖紀錄（唯一會存進 localStorage 的資料） */
 class CodexStoreImpl {
@@ -39,15 +41,15 @@ class CodexStoreImpl {
   }
 
   get count(): number {
-    return this.known.size;
+    return ALL_KEYS.filter((k) => this.known.has(k)).length;
   }
 
   get total(): number {
-    return RECIPE_ORDER.length;
+    return ALL_KEYS.length;
   }
 
   unlockAll(): void {
-    RECIPE_ORDER.forEach((k) => this.known.add(k));
+    ALL_KEYS.forEach((k) => this.known.add(k));
     this.save();
   }
 

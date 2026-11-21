@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {
-  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, DROP, GAME_H, GAME_W, PLAYER, POTION,
+  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, GAME_H, GAME_W, PLAYER,
 } from '../config';
 import { INGREDIENTS } from '../data';
 import type { Enemy } from '../entities/Enemy';
@@ -10,16 +10,26 @@ import { CrucibleSystem } from '../systems/CrucibleSystem';
 import { FxSystem } from '../systems/FxSystem';
 import { InputSystem } from '../systems/InputSystem';
 import { MutationSystem } from '../systems/MutationSystem';
-import { PotionSystem } from '../systems/PotionSystem';
+import { EffectSystem } from '../systems/EffectSystem';
+import { BuffSystem } from '../systems/BuffSystem';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { TelegraphSystem } from '../systems/TelegraphSystem';
 import { WaveSystem } from '../systems/WaveSystem';
-import type { IngredientId } from '../types';
+import type { Brew, IngredientId } from '../types';
+import { clamp } from '../utils';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
-import { hexToInt } from '../data';
+import { LEGENDARIES, RECIPES, hexToInt } from '../data';
 import type { ResultData } from './ResultScene';
+
+export interface RunSummary {
+  drinks: number;
+  elements: Record<IngredientId, number>;
+  passives: { name: string; stacks: number; color: string; legendary: boolean }[];
+  mutations: { name: string; icon: string; stacks: number }[];
+  stats: [string, string][];
+}
 
 export class GameScene extends Phaser.Scene {
   player!: Player;
@@ -28,7 +38,8 @@ export class GameScene extends Phaser.Scene {
 
   telegraphs!: TelegraphSystem;
   projectiles!: ProjectileSystem;
-  potions!: PotionSystem;
+  effects!: EffectSystem;
+  buffs!: BuffSystem;
   crucible!: CrucibleSystem;
   mutations!: MutationSystem;
   waves!: WaveSystem;
@@ -37,7 +48,7 @@ export class GameScene extends Phaser.Scene {
 
   private hud!: HUD;
   private dashBtn!: RoundButton;
-  private throwBtn!: RoundButton;
+  private brewBtn!: RoundButton;
   private fireTimer = 0;
   runTime = 0;
   kills = 0;
@@ -62,24 +73,24 @@ export class GameScene extends Phaser.Scene {
     this.projectiles = new ProjectileSystem(this);
     this.mutations = new MutationSystem();
     this.crucible = new CrucibleSystem(this.mutations);
-    this.potions = new PotionSystem(this);
+    this.effects = new EffectSystem(this);
     this.waves = new WaveSystem(this);
     this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7);
+    this.buffs = new BuffSystem(this);
+    this.buffs.recompute();
 
     // UI
     this.add.rectangle(GAME_W / 2, (CONTROLS_Y + GAME_H) / 2, GAME_W, GAME_H - CONTROLS_Y, 0x0b0910).setDepth(DEPTH.ui - 2);
     this.hud = new HUD(this, PLAYER.hp, () => this.openPause());
-    new CrucibleBar(this, this.crucible, () => (this.input2.brewPressed = true));
+    new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
     this.input2 = new InputSystem(this);
     this.dashBtn = createRoundButton(this, 622, 1098, 68, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
-    this.throwBtn = createRoundButton(this, 474, 1186, 62, '投擲', 0x9a4fd0, () => (this.input2.throwPressed = true));
+    this.brewBtn = createRoundButton(this, 474, 1186, 62, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
     this.add.text(150, GAME_H - 34, '移動', { fontFamily: 'sans-serif', fontSize: '18px', color: COLORS.textDim })
       .setOrigin(0.5).setDepth(DEPTH.ui);
 
-    this.crucible.on('discovered', (r: { name: string; desc: string }) => this.hud.showToast(`新發現！${r.name}`, r.desc));
-    this.crucible.on('brewed', (_r: unknown, doubled: boolean) => {
-      this.fx.burst(150, 920, 120, 0xc9a3ff);
-      if (doubled) this.fx.floatText(580, 900, '雙倍釀造！', '#ffd166');
+    this.buffs.on('changed', (twice: boolean) => {
+      if (twice) this.fx.floatText(this.player.x, this.player.y - 70, '雙倍釀造！', '#ffd166');
     });
 
     this.events.on('resume', () => this.input2.consume());
@@ -121,9 +132,8 @@ export class GameScene extends Phaser.Scene {
 
     const actions = this.input2.consume();
     const move = this.input2.move;
-    if (actions.dash) this.player.tryDash(move.x, move.y);
-    if (actions.brew) this.crucible.brew();
-    if (actions.throw) this.throwPotion();
+    if (actions.dash) this.dash(move.x, move.y);
+    if (actions.brew) this.brewAndDrink();
 
     this.player.update(dt, move.x, move.y);
     this.crucible.update(dt);
@@ -135,15 +145,15 @@ export class GameScene extends Phaser.Scene {
     this.checkContact();
 
     this.projectiles.update(dt, this.enemies);
-    this.potions.update(dt);
+    this.effects.update(dt);
+    this.buffs.update(dt, phase === 'combat' || phase === 'boss');
     this.telegraphs.update(dt);
     this.updatePickups(dt);
     this.waves.update(dt);
 
     // UI
     this.dashBtn.setCooldown(this.player.dashCooldownRatio);
-    this.throwBtn.setEnabled(this.crucible.rack.length > 0);
-    this.throwBtn.setIcon(this.crucible.rack[0] ? hexToInt(this.crucible.rack[0].color) : null);
+    this.brewBtn.setEnabled(this.crucible.canBrew);
     const boss = this.waves.boss;
     this.hud.update(this.player, this.waves.label, this.runTime,
       boss ? { hp: boss.hp, maxHp: boss.maxHp, name: boss.def.name, alive: boss.alive } : undefined);
@@ -152,34 +162,71 @@ export class GameScene extends Phaser.Scene {
   private autoFire(dt: number): void {
     this.fireTimer -= dt;
     if (this.fireTimer > 0 || this.player.state === 'dead') return;
-    const target = this.potions.nearestEnemy(this.player.x, this.player.y, PLAYER.autoAimRange);
+    const p = this.player;
+    const st = this.buffs.stats;
+    const target = this.effects.nearestEnemy(p.x, p.y, PLAYER.autoAimRange);
     if (!target) return;
-    this.fireTimer = PLAYER.fireInterval;
-    const a = Math.atan2(target.y - this.player.y, target.x - this.player.x);
-    this.projectiles.fireFriendly(this.player.x, this.player.y, a, PLAYER.bulletSpeed, PLAYER.bulletDamage);
+    this.fireTimer = st.fireInterval;
+    const a = Math.atan2(target.y - p.y, target.x - p.x);
+    const n = Math.max(1, Math.round(st.shots));
+    for (let i = 0; i < n; i++) {
+      const ang = a + (i - (n - 1) / 2) * 0.16;
+      this.projectiles.fireFriendly(p.x, p.y, ang, PLAYER.bulletSpeed, st.damage, {
+        poison: st.poisonDps > 0 ? { dps: st.poisonDps, time: 2 } : undefined,
+        slow: st.slow > 0 ? { factor: st.slow, time: 1 } : undefined,
+        pierce: st.pierce,
+        bounces: st.bounces,
+        splash: st.splash,
+        freezeChance: st.freezeChance,
+        triggerPassives: true,
+        color: st.splash ? 0xf0b0ff : st.poisonDps > 0 ? 0xc8ffa8 : undefined,
+      });
+    }
+    this.buffs.onShot();
   }
 
-  private throwPotion(): void {
+  private dash(mx: number, my: number): void {
+    const p = this.player;
+    const sx = p.x;
+    const sy = p.y;
+    if (!p.tryDash(mx, my)) return;
+    const len = Math.hypot(mx, my) > 0.1 ? Math.hypot(mx, my) : 0;
+    const a = len ? Math.atan2(my, mx) : p.facing;
+    const ex = clamp(sx + Math.cos(a) * PLAYER.dashDistance, ARENA.x + p.radius, ARENA_RIGHT - p.radius);
+    const ey = clamp(sy + Math.sin(a) * PLAYER.dashDistance, ARENA.y + p.radius, ARENA_BOTTOM - p.radius);
+    this.buffs.onDash(sx, sy, ex, ey);
+  }
+
+  /** 煉成並立刻喝下 */
+  private brewAndDrink(): void {
     if (this.player.state === 'dead') return;
-    const recipe = this.crucible.takePotion();
-    if (!recipe) {
-      this.fx.floatText(this.player.x, this.player.y - 40, '沒有藥水', '#9a90a8', 18);
+    const brew = this.crucible.brew();
+    if (!brew) {
+      if (this.crucible.filled < 3) this.fx.floatText(this.player.x, this.player.y - 40, '要放滿 3 格', '#9a90a8', 18);
       return;
     }
+    this.buffs.drink(brew);
+    this.announceBrew(brew);
+  }
+
+  private announceBrew(brew: Brew): void {
     const p = this.player;
-    const target = this.potions.nearestEnemy(p.x, p.y, POTION.autoAimRange);
-    let tx: number;
-    let ty: number;
-    if (target) {
-      tx = target.x;
-      ty = target.y;
+    if (brew.kind === 'legendary') {
+      const L = brew.legendary;
+      const color = hexToInt(L.color);
+      this.fx.burst(p.x, p.y, 160, color, 500);
+      this.fx.burst(150, 920, 160, color, 500);
+      this.cameras.main.flash(250, 255, 220, 120);
+      this.cameras.main.shake(200, 0.006);
+      this.hud.showToast(`裂變！${L.name}`, L.desc, true);
     } else {
-      const m = this.input2.move;
-      const a = Math.hypot(m.x, m.y) > 0.1 ? Math.atan2(m.y, m.x) : p.facing;
-      tx = p.x + Math.cos(a) * POTION.defaultDistance;
-      ty = p.y + Math.sin(a) * POTION.defaultDistance;
+      const r = brew.recipe;
+      const color = hexToInt(r.color);
+      this.fx.burst(p.x, p.y, 70, color, 350);
+      this.fx.burst(150, 920, 120, color);
+      const n = this.buffs.stacksOf(r.id);
+      this.hud.showToast(`${r.name}${n > 1 ? ` Lv.${n}` : ''}`, r.desc, false);
     }
-    this.potions.throw(recipe, p.x, p.y, tx, ty);
   }
 
   /** 讓敵人不要完全疊在一起 */
@@ -226,7 +273,7 @@ export class GameScene extends Phaser.Scene {
     for (const pk of this.pickups) {
       pk.update(dt, blocked);
       if (!pk.alive) continue;
-      if (!blocked && (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2 <= (PLAYER.pickupRadius + p.radius) ** 2) {
+      if (!blocked && (pk.x - p.x) ** 2 + (pk.y - p.y) ** 2 <= (this.buffs.stats.pickupRadius + p.radius) ** 2) {
         if (this.crucible.add(pk.id)) {
           this.fx.sparks(pk.x, pk.y, 0xffffff, 4);
           pk.destroy();
@@ -250,14 +297,26 @@ export class GameScene extends Phaser.Scene {
     if (navigator.vibrate) {
       try { navigator.vibrate(60); } catch { /* ignore */ }
     }
-    if (this.player.hp <= 0) this.onDefeat();
+    if (this.player.hp <= 0) {
+      if (this.buffs.revives > 0) {
+        this.buffs.revives--;
+        this.player.revive(Math.ceil(this.player.maxHp / 2));
+        this.fx.burst(this.player.x, this.player.y, 200, 0xff9f43, 600);
+        this.effects.explode(this.player.x, this.player.y, 200, 5, 0xff9f43, { knockback: 120 });
+        this.hud.showToast('不死鳥復活！', `剩餘復活次數 ${this.buffs.revives}`, true);
+        this.projectiles.clearEnemyBullets();
+        return;
+      }
+      this.onDefeat();
+    }
   }
 
   onEnemyKilled(e: Enemy): void {
     this.kills++;
     this.fx.burst(e.x, e.y, e.radius * 1.6, hexToInt(e.def.color), 200);
+    this.buffs.onKill(e);
     if (e.def.type === 'boss') return;
-    if (e.elite || Math.random() < DROP.chance) this.dropIngredient(e.x, e.y);
+    if (e.elite || Math.random() < this.buffs.stats.dropChance) this.dropIngredient(e.x, e.y);
   }
 
   dropIngredient(x: number, y: number, id?: IngredientId): void {
@@ -286,7 +345,9 @@ export class GameScene extends Phaser.Scene {
       choices: choices.map((c) => ({ ...c, stacks: this.mutations.stacks(c.id) })),
       onPick: (id: string) => {
         this.mutations.add(id);
+        this.buffs.recompute();
         this.crucible.emit('changed');
+        this.buffs.emit('changed', false);
         this.scene.resume();
         if (this.waves.phase === 'cards') this.waves.next();
       },
@@ -296,8 +357,38 @@ export class GameScene extends Phaser.Scene {
 
   openPause(): void {
     if (this.ended) return;
-    this.scene.launch('Pause', { owned: this.mutations.owned() });
+    this.scene.launch('Pause', this.summary());
     this.scene.pause();
+  }
+
+  /** 暫停與結算畫面用的本局摘要 */
+  summary(): RunSummary {
+    const passives: RunSummary['passives'] = [];
+    for (const [id, n] of this.buffs.stacks) {
+      const r = Object.values(RECIPES).find((x) => x.id === id);
+      const L = LEGENDARIES.find((x) => x.id === id);
+      if (r) passives.push({ name: r.name, stacks: n, color: r.color, legendary: false });
+      if (L) passives.push({ name: L.name, stacks: n, color: L.color, legendary: true });
+    }
+    passives.sort((a, b) => Number(b.legendary) - Number(a.legendary) || b.stacks - a.stacks);
+    const st = this.buffs.stats;
+    return {
+      drinks: this.buffs.drinks,
+      elements: { ...this.buffs.elements },
+      passives,
+      mutations: this.mutations.owned().map((m) => ({ name: m.def.name, icon: m.def.icon, stacks: m.stacks })),
+      stats: [
+        ['最大血量', String(st.maxHp)],
+        ['攻擊間隔', `${st.fireInterval.toFixed(2)} 秒`],
+        ['傷害', st.damage.toFixed(1)],
+        ['每次射擊', `${st.shots} 發`],
+        ['衝刺冷卻', `${st.dashCooldown.toFixed(2)} 秒`],
+        ['移速', String(Math.round(st.speed))],
+        ['命中附毒', `${st.poisonDps.toFixed(2)}/秒`],
+        ['命中減速', `${Math.round(st.slow * 100)}%`],
+        ['復活次數', String(this.buffs.revives)],
+      ],
+    };
   }
 
   private onDefeat(): void {
@@ -319,7 +410,7 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       wave: this.waves.wave,
       discoveries: [...this.crucible.discoveredThisRun],
-      mutations: this.mutations.owned().map((m) => ({ name: m.def.name, stacks: m.stacks })),
+      ...this.summary(),
     };
     this.hud.showBanner(victory ? '勝利！' : '倒下了…');
     this.time.delayedCall(1300, () => this.scene.start('Result', data));

@@ -1,9 +1,8 @@
 import { MUTATIONS } from '../data';
-import { MODIFIERS } from '../mutations/registry';
-import type { MutationDef, PotionParams } from '../types';
+import type { MutationDef } from '../types';
 import { shuffle } from '../utils';
 
-/** 管理本局拿到的突變卡與層數 */
+/** 管理本局拿到的突變卡與層數。效果由 BuffSystem / CrucibleSystem 依層數讀取。 */
 export class MutationSystem {
   private stackMap = new Map<string, number>();
 
@@ -18,15 +17,6 @@ export class MutationSystem {
   /** 三選一，不重複 */
   roll(n = 3): MutationDef[] {
     return shuffle([...MUTATIONS]).slice(0, n);
-  }
-
-  /** 回傳套用所有突變後的參數複本 */
-  apply(base: PotionParams, recipeKey: string): PotionParams {
-    const p: PotionParams = { ...base, extra: { ...base.extra } };
-    for (const [id, s] of this.stackMap) {
-      if (s > 0) MODIFIERS[id]?.apply?.(p, s, recipeKey);
-    }
-    return p;
   }
 
   owned(): { def: MutationDef; stacks: number }[] {

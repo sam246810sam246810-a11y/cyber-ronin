@@ -3,8 +3,9 @@ import recipesJson from './recipes.json';
 import enemiesJson from './enemies.json';
 import wavesJson from './waves.json';
 import mutationsJson from './mutations.json';
+import legendariesJson from './legendaries.json';
 import type {
-  EnemyDef, EnemyType, IngredientDef, IngredientId, MutationDef, PotionParams, RecipeDef, WaveDef,
+  EnemyDef, EnemyType, IngredientDef, IngredientId, LegendaryDef, MutationDef, RecipeDef, WaveDef,
 } from '../types';
 
 export const INGREDIENTS = ingredientsJson as IngredientDef[];
@@ -12,18 +13,15 @@ export const INGREDIENT_MAP: Record<IngredientId, IngredientDef> = Object.fromEn
   INGREDIENTS.map((i) => [i.id, i]),
 ) as Record<IngredientId, IngredientDef>;
 
-export function defaultParams(): PotionParams {
-  return { damage: 0, radius: 60, duration: 0, bounces: 0, splits: 0, count: 1, pierce: 0, extra: {} };
-}
-
-type RawRecipe = Omit<RecipeDef, 'key' | 'params'> & { params: Partial<PotionParams> };
+type RawRecipe = Omit<RecipeDef, 'key'>;
 
 export const RECIPES: Record<string, RecipeDef> = Object.fromEntries(
-  Object.entries(recipesJson as Record<string, RawRecipe>).map(([key, r]) => {
-    const params = { ...defaultParams(), ...r.params, extra: { ...(r.params.extra ?? {}) } };
-    return [key, { ...r, key, params }];
-  }),
+  Object.entries(recipesJson as Record<string, RawRecipe>).map(([key, r]) => [key, { ...r, key }]),
 );
+
+export const LEGENDARIES = legendariesJson as LegendaryDef[];
+/** 圖鑑裡傳說藥水的 key */
+export const legendaryKey = (id: string) => `L:${id}`;
 
 /** 圖鑑顯示順序 */
 export const RECIPE_ORDER = ['JJJ', 'III', 'SSS', 'IJJ', 'JJS', 'IIJ', 'IIS', 'JSS', 'ISS', 'IJS'];

@@ -1,0 +1,10 @@
+[
+  { "id": "phoenix_tear", "name": "不死鳥之淚", "color": "#ff9f43",
+    "desc": "最大血量 +2、回滿血，並獲得 1 次倒下時復活" },
+  { "id": "time_sand", "name": "時之砂", "color": "#ffd166",
+    "desc": "攻速、衝刺冷卻與所有週期被動加快 25%" },
+  { "id": "world_seed", "name": "世界樹之種", "color": "#9bff6b",
+    "desc": "每 10 秒引發巨大的三元素綻放，冰凍並毒傷全場附近敵人" },
+  { "id": "chaos_essence", "name": "混沌原液", "color": "#e06bff",
+    "desc": "子彈命中時小範圍爆炸，傷害 +30%" }
+]

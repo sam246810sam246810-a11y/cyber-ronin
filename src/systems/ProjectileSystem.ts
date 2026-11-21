@@ -9,6 +9,13 @@ export interface BulletOptions {
   poison?: { dps: number; time: number };
   slow?: { factor: number; time: number };
   texture?: string;
+  pierce?: number;
+  bounces?: number;
+  /** 命中時小範圍爆炸（混沌原液） */
+  splash?: number;
+  freezeChance?: number;
+  /** 觸發藥水被動的 onHit（只有主武器） */
+  triggerPassives?: boolean;
 }
 
 interface Bullet {
@@ -22,6 +29,10 @@ interface Bullet {
   sprite: Phaser.GameObjects.Image;
   opts: BulletOptions;
   dead: boolean;
+  pierceLeft: number;
+  bouncesLeft: number;
+  hit: Set<Enemy>;
+  speed: number;
 }
 
 /** 玩家種子彈、敵人尖刺、冰毒針等直線投射物 */
@@ -48,6 +59,7 @@ export class ProjectileSystem {
     else sprite.setDisplaySize(r * 2, r * 2);
     this.bullets.push({
       x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r, damage, friendly, sprite, opts, dead: false,
+      pierceLeft: opts.pierce ?? 0, bouncesLeft: opts.bounces ?? 0, hit: new Set(), speed,
     });
   }
 
@@ -63,14 +75,10 @@ export class ProjectileSystem {
       }
       if (b.friendly) {
         for (const e of enemies) {
-          if (!e.alive || e.airborne) continue;
+          if (!e.alive || e.airborne || b.hit.has(e)) continue;
           const rr = e.radius + b.r;
           if ((e.x - b.x) ** 2 + (e.y - b.y) ** 2 <= rr * rr) {
-            if (b.opts.poison) e.applyPoison(b.opts.poison.dps, b.opts.poison.time);
-            if (b.opts.slow) e.applySlow(b.opts.slow.factor, b.opts.slow.time);
-            e.takeDamage(b.damage);
-            this.game.fx.sparks(b.x, b.y, b.opts.color ?? COLORS.bullet, 3);
-            b.dead = true;
+            this.hitEnemy(b, e);
             break;
           }
         }
@@ -88,6 +96,36 @@ export class ProjectileSystem {
         return !b.dead;
       });
     }
+  }
+
+  private hitEnemy(b: Bullet, e: Enemy): void {
+    b.hit.add(e);
+    const o = b.opts;
+    if (o.poison) e.applyPoison(o.poison.dps, o.poison.time);
+    if (o.slow) e.applySlow(o.slow.factor, o.slow.time);
+    if (o.freezeChance && Math.random() < o.freezeChance) e.applyFreeze(0.8);
+    if (o.triggerPassives) this.game.buffs.onHit(e);
+    e.takeDamage(b.damage);
+    this.game.fx.sparks(b.x, b.y, o.color ?? COLORS.bullet, 3);
+    if (o.splash) {
+      this.game.effects.explode(b.x, b.y, o.splash, b.damage * 0.5, 0xe06bff);
+    }
+    if (b.bouncesLeft > 0) {
+      const next = this.game.effects.nearestEnemy(b.x, b.y, 260, b.hit);
+      if (next) {
+        b.bouncesLeft--;
+        const a = Math.atan2(next.y - b.y, next.x - b.x);
+        b.vx = Math.cos(a) * b.speed;
+        b.vy = Math.sin(a) * b.speed;
+        b.sprite.setRotation(a + Math.PI / 2);
+        return;
+      }
+    }
+    if (b.pierceLeft > 0) {
+      b.pierceLeft--;
+      return;
+    }
+    b.dead = true;
   }
 
   clearEnemyBullets(): void {

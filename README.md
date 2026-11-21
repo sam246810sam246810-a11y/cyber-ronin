@@ -1,6 +1,6 @@
 # 坩堝花園（MVP 試作）
 
-9:16 直向 2D 俯視角煉金肉鴿手遊原型。規格見 [`docs/PRD.md`](docs/PRD.md)。
+9:16 直向 2D 俯視角煉金肉鴿手遊原型：撿藥材、三格坩堝煉藥並喝下，本局永久變強，煉成時有機率裂變成傳說藥水。規格見 [`docs/PRD.md`](docs/PRD.md)。
 
 ## 本地啟動
 
@@ -28,15 +28,14 @@ npm run dev
 |---|---|---|
 | 移動 | 左下區域按住拖曳（浮動搖桿） | WASD / 方向鍵 |
 | 衝刺（有無敵幀） | 右下「衝刺」 | 空白鍵 |
-| 投擲藥水 | 右下「投擲」 | J |
-| 煉成 | 坩堝列「煉成」 | K |
+| 煉成並喝下 | 右下「煉成」或坩堝列「煉成」 | J / K |
 | 丟棄藥材 | 點坩堝槽位 | — |
 | 選突變卡 | 點卡片 | 1 / 2 / 3 |
 
 ## Debug 面板
 
 `npm run dev` 時左下角會出現 🐞 按鈕（正式版網址加 `?debug` 也能打開）：
-給藥材、跳過本波、直接到 Boss、開突變卡、無敵、補血、解鎖 / 重置圖鑑。
+給藥材、下次必裂變、跳過本波、直接到 Boss、開突變卡、無敵、補血、解鎖 / 重置圖鑑。
 
 ## 專案結構
 
@@ -45,20 +44,20 @@ src/
   main.ts / config.ts      進入點、全域數值（移速、冷卻、掉落率…）
   scenes/                  Boot, Preload, MainMenu, Game, CardSelect, Pause, Result, Codex
   entities/                Player, Enemy（基底：減速/冰凍/中毒/擊退）, enemies/*, Pickup
-  systems/                 Input, Crucible, Potion, Projectile, Wave, Mutation, Telegraph, Fx, CodexStore
-  potions/effects/*        每種藥水一個效果函式；potions/registry.ts 註冊
-  mutations/registry.ts    突變卡修飾器
-  data/*.json              藥材、配方、敵人、波次、突變卡
+  systems/                 Input, Crucible（含裂變）, Buff（喝藥強化與數值）, Effect, Projectile, Wave,
+                           Mutation, Telegraph, Fx, CodexStore
+  potions/passives.ts      每種藥水 / 傳說藥水的被動效果
+  data/*.json              藥材、配方、傳說藥水、敵人、波次、突變卡
   ui/                      搖桿、按鈕、坩堝列、HUD
   debug/DebugPanel.ts      開發用面板
 ```
 
 ## 怎麼擴充
 
-- **新增配方 / 調整數值**：改 `src/data/recipes.json`（key 是排序後的三個藥材代號，例如 `"IJS"`）。
-- **新增藥水效果**：在 `src/potions/effects/` 加一個檔案，並在 `src/potions/registry.ts` 用配方的 `id` 註冊。
-  彈跳、分裂、連投、穿透由 `PotionSystem` 統一處理，效果函式只需要管「落地時發生什麼」。
-- **新增突變卡**：在 `src/data/mutations.json` 加一筆，並在 `src/mutations/registry.ts` 註冊同 id 的 `apply()`。
+- **調整數值**：屬性成長與裂變率在 `src/config.ts`（`ELEMENT`、`FISSION`）。
+- **新增或修改藥水**：改 `src/data/recipes.json` 或 `legendaries.json`，並在 `src/potions/passives.ts` 用同一個 `id` 註冊被動。
+  被動可以用 `stats`（改數值）、`period/onPeriod`（週期觸發）、`onShot`、`onHit`、`onKill`、`onDash`、`onAcquire` 這些鉤子。
+- **新增突變卡**：在 `src/data/mutations.json` 加一筆，再到 `BuffSystem` 或 `CrucibleSystem` 讀取它的層數。
 - **新增敵人**：繼承 `Enemy` 實作 `act(dt)`，在 `data/enemies.json` 加數值，並在 `WaveSystem.create()` 對應。
 - **換美術**：`PreloadScene` 目前用 Graphics 產生佔位圖，之後用 `this.load.image()` 載入同名 key 即可替換。
 
