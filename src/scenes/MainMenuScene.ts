@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
-import { COLORS, FONT, GAME_H, GAME_W } from '../config';
+import { COLORS, FONT, GAME_H, GAME_W, cx } from '../config';
 import { CodexStore } from '../systems/CodexStore';
-import { textButton } from '../ui/widgets';
+import { canFullscreen, textButton, toggleFullscreen } from '../ui/widgets';
 
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
@@ -19,7 +19,7 @@ export class MainMenuScene extends Phaser.Scene {
         duration: 3000 + Math.random() * 3000, yoyo: true, repeat: -1, ease: 'Sine.InOut',
       });
     }
-    const lx = 400;
+    const lx = cx(400);
     this.add.text(lx, 160, '坩堝花園', {
       fontFamily: FONT, fontSize: '92px', color: '#ffffff', fontStyle: 'bold', stroke: '#4a2a6a', strokeThickness: 10,
     }).setOrigin(0.5);
@@ -32,11 +32,12 @@ export class MainMenuScene extends Phaser.Scene {
       fontFamily: FONT, fontSize: '24px', color: COLORS.textDim,
     }).setOrigin(0.5);
 
-    const rx = 940;
+    const rx = cx(940);
     textButton(this, rx, 250, 420, 104, '開始遊戲', () => this.scene.start('CharacterSelect'), 0x7a4fc0);
     textButton(this, rx, 380, 420, 86, `配方圖鑑  ${CodexStore.count}/${CodexStore.total}`,
       () => this.scene.start('Codex', { returnTo: 'MainMenu' }));
-    this.add.text(rx, 520, '左半邊拖曳移動　右下：衝刺 / 技能 / 煉成 / 換武器\n鍵盤：WASD 移動　空白 衝刺　K 煉成　E 技能　Q 換武器', {
+    if (canFullscreen()) textButton(this, rx, 480, 260, 64, '⛶ 全螢幕', () => void toggleFullscreen());
+    this.add.text(rx, 580, '左半邊拖曳移動　右下：衝刺 / 技能 / 煉成 / 換武器\n鍵盤：WASD 移動　空白 衝刺　K 煉成　E 技能　Q 換武器', {
       fontFamily: FONT, fontSize: '18px', color: COLORS.textDim, align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
     this.add.text(GAME_W - 20, GAME_H - 20, 'v0.7 橫向＋時空裂縫版', {

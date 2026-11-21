@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, FONT, GAME_H, GAME_W, MYTHIC } from '../config';
+import { COLORS, FONT, GAME_H, GAME_W, MYTHIC, SAFE_X, cx } from '../config';
 import { MYTHICS, RECIPES, RECIPE_ORDER, hexToInt, mythicKey } from '../data';
 import { CodexStore } from '../systems/CodexStore';
 import { textButton } from '../ui/widgets';
@@ -45,11 +45,11 @@ export class CodexScene extends Phaser.Scene {
     });
 
     const my = 96 + 5 * (th + 4) + 20;
-    this.add.text(ox + 346, my, `【${MYTHIC.name}】裂變藥水`, {
+    this.add.text(cx(136) + 346, my, `【${MYTHIC.name}】裂變藥水`, {
       fontFamily: FONT, fontSize: '22px', color: MYTHIC.color, fontStyle: 'bold',
     }).setOrigin(0.5);
     MYTHICS.forEach((m, i) => {
-      const x = ox + 82 + i * 176;
+      const x = cx(136) + 82 + i * 176;
       const y = my + 50;
       const known = CodexStore.has(mythicKey(m.id));
       const frame = this.add.rectangle(x, y, 160, 70, known ? 0x3a1420 : 0x15101c, 1)
@@ -60,15 +60,15 @@ export class CodexScene extends Phaser.Scene {
       frame.on('pointerup', () => this.show(frame, known ? m.name : '？？？', known ? m.desc : '煉成時有機率裂變出現。'));
     });
 
-    this.add.rectangle(1010, my + 50, 420, 120, COLORS.panel, 1).setStrokeStyle(2, COLORS.accent, 0.4);
-    this.detailTitle = this.add.text(812, my, '點格子查看效果', {
+    this.add.rectangle(cx(1010), my + 50, 420, 120, COLORS.panel, 1).setStrokeStyle(2, COLORS.accent, 0.4);
+    this.detailTitle = this.add.text(cx(812), my, '點格子查看效果', {
       fontFamily: FONT, fontSize: '22px', color: '#ffd166', fontStyle: 'bold',
     });
-    this.detailBody = this.add.text(812, my + 30, '', {
+    this.detailBody = this.add.text(cx(812), my + 30, '', {
       fontFamily: FONT, fontSize: '15px', color: '#e8e0f0', lineSpacing: 3, wordWrap: { width: 396, useAdvancedWrap: true },
     });
 
-    textButton(this, 110, 40, 160, 54, '返回', () => {
+    textButton(this, SAFE_X + 110, 40, 160, 54, '返回', () => {
       if (data.returnTo === 'Pause') {
         this.scene.stop();
         this.scene.resume('Pause');

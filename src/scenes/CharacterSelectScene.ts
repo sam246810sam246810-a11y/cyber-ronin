@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, FONT, GAME_W, RARITY } from '../config';
+import { COLORS, FONT, GAME_W, RARITY, cx } from '../config';
 import { CHARACTERS, WEAPON_MAP, hexToInt } from '../data';
 import { ProgressStore } from '../systems/ProgressStore';
 import type { CharacterDef } from '../types';
@@ -22,7 +22,7 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.add.text(GAME_W / 2, 50, '選擇角色', { fontFamily: FONT, fontSize: '40px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
 
     CHARACTERS.forEach((c, i) => {
-      const x = 190 + i * 300;
+      const x = cx(190 + i * 300);
       const y = 240;
       const unlocked = ProgressStore.isUnlocked(c);
       const rar = RARITY[c.rarity];

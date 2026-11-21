@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
-import { COLORS, DEPTH, FONT, RARITY, TOP_H } from '../config';
+import { COLORS, DEPTH, FONT, RARITY, SAFE_X, TOP_H } from '../config';
+
+/** 坩堝群組的水平位移：寬螢幕時往中間靠 */
+const DX = SAFE_X + 0;
 import { ELEMENT_IDS, RECIPES, hexToInt, potionQuality, recipeKey } from '../data';
 import type { BuffSystem } from '../systems/BuffSystem';
 import { CodexStore } from '../systems/CodexStore';
@@ -22,8 +25,8 @@ export class CrucibleBar {
     private scene: Phaser.Scene, private crucible: CrucibleSystem, private buffs: BuffSystem, onBrew: () => void,
   ) {
     const cy = 40;
-    this.cauldron = scene.add.image(370, cy + 4, 'cauldron').setDepth(DEPTH.ui - 1).setDisplaySize(236, 76).setAlpha(0.45);
-    [300, 370, 440].forEach((x, i) => {
+    this.cauldron = scene.add.image(DX + 370, cy + 4, 'cauldron').setDepth(DEPTH.ui - 1).setDisplaySize(236, 76).setAlpha(0.45);
+    [300, 370, 440].map((x) => x + DX).forEach((x, i) => {
       const bg = scene.add.image(x, cy, 'slot').setDepth(DEPTH.ui).setDisplaySize(60, 60).setInteractive({ useHandCursor: true });
       bg.on('pointerdown', () => {
         if (this.crucible.slots[i]) scene.tweens.add({ targets: this.slotIcons[i], alpha: 0, duration: 120, yoyo: true });
@@ -32,23 +35,23 @@ export class CrucibleBar {
       this.slotBgs.push(bg);
       this.slotIcons.push(scene.add.image(x, cy, 'ing_J').setDepth(DEPTH.ui + 1).setDisplaySize(38, 38).setVisible(false));
     });
-    this.hint = scene.add.text(370, TOP_H - 10, '', { fontFamily: FONT, fontSize: '13px', color: COLORS.textDim })
+    this.hint = scene.add.text(DX + 370, TOP_H - 10, '', { fontFamily: FONT, fontSize: '13px', color: COLORS.textDim })
       .setOrigin(0.5).setDepth(DEPTH.ui);
 
     this.brewBg = scene.add.rectangle(0, 0, 104, 58, COLORS.panelLight).setStrokeStyle(3, COLORS.accent, 0.4);
     this.brewText = scene.add.text(0, 0, '煉成', { fontFamily: FONT, fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    this.brewBtn = scene.add.container(540, cy, [this.brewBg, this.brewText]).setDepth(DEPTH.ui)
+    this.brewBtn = scene.add.container(DX + 540, cy, [this.brewBg, this.brewText]).setDepth(DEPTH.ui)
       .setSize(104, 58).setInteractive({ useHandCursor: true });
     this.brewBtn.on('pointerdown', onBrew);
 
-    scene.add.rectangle(745, cy + 2, 270, 78, 0x000000, 0.25).setStrokeStyle(2, COLORS.accent, 0.3).setDepth(DEPTH.ui - 1);
+    scene.add.rectangle(DX + 745, cy + 2, 270, 78, 0x000000, 0.25).setStrokeStyle(2, COLORS.accent, 0.3).setDepth(DEPTH.ui - 1);
     ELEMENT_IDS.forEach((id, i) => {
-      const x = 640 + i * 52;
+      const x = DX + 640 + i * 52;
       scene.add.image(x, cy - 12, `ing_${id}`).setDisplaySize(24, 24).setDepth(DEPTH.ui);
       this.elemTexts[id] = scene.add.text(x, cy + 13, '0', { fontFamily: FONT, fontSize: '16px', color: '#ffffff', fontStyle: 'bold' })
         .setOrigin(0.5).setDepth(DEPTH.ui);
     });
-    this.fissionText = scene.add.text(745, cy + 33, '', { fontFamily: FONT, fontSize: '13px', color: '#ff8aa0' })
+    this.fissionText = scene.add.text(DX + 745, cy + 33, '', { fontFamily: FONT, fontSize: '13px', color: '#ff8aa0' })
       .setOrigin(0.5).setDepth(DEPTH.ui);
 
     crucible.on('changed', this.refresh, this);

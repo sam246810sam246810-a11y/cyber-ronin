@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA, COLORS, DEPTH, FONT, GAME_W, TOP_H } from '../config';
+import { ARENA, COLORS, DEPTH, FONT, GAME_W, RIGHT, SAFE_X, TOP_H } from '../config';
 import type { Player } from '../entities/Player';
 import { formatTime } from '../utils';
 
@@ -21,22 +21,22 @@ export class HUD {
     scene.add.rectangle(GAME_W / 2, TOP_H / 2, GAME_W, TOP_H, COLORS.bar, 0.96).setDepth(DEPTH.ui - 2);
     scene.add.rectangle(GAME_W / 2, TOP_H, GAME_W, 3, COLORS.accent, 0.5).setDepth(DEPTH.ui - 1);
     this.ensureHearts(maxHp);
-    this.waveText = scene.add.text(1000, 26, '', {
+    this.waveText = scene.add.text(RIGHT - 290, 26, '', {
       fontFamily: FONT, fontSize: '24px', color: COLORS.text, fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(DEPTH.ui);
-    this.timeText = scene.add.text(1000, 60, '00:00', {
+    this.timeText = scene.add.text(RIGHT - 290, 60, '00:00', {
       fontFamily: FONT, fontSize: '17px', color: COLORS.textDim,
     }).setOrigin(0.5).setDepth(DEPTH.ui);
 
-    const pause = scene.add.container(GAME_W - 42, 44, [
+    const pause = scene.add.container(RIGHT - 42, 44, [
       scene.add.rectangle(0, 0, 58, 58, COLORS.panelLight, 0.9).setStrokeStyle(2, COLORS.accent, 0.6),
       scene.add.rectangle(-8, 0, 7, 24, 0xffffff),
       scene.add.rectangle(8, 0, 7, 24, 0xffffff),
     ]).setDepth(DEPTH.ui).setSize(58, 58).setInteractive({ useHandCursor: true });
     pause.on('pointerdown', onPause);
 
-    scene.add.image(1112, 44, 'coin').setDisplaySize(24, 24).setDepth(DEPTH.ui);
-    this.coinText = scene.add.text(1130, 44, '0', {
+    scene.add.image(RIGHT - 168, 44, 'coin').setDisplaySize(24, 24).setDepth(DEPTH.ui);
+    this.coinText = scene.add.text(RIGHT - 150, 44, '0', {
       fontFamily: FONT, fontSize: '22px', color: '#ffd166', fontStyle: 'bold',
     }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
     this.bossBar = scene.add.graphics().setDepth(DEPTH.ui);
@@ -64,7 +64,7 @@ export class HUD {
   private ensureHearts(n: number): void {
     while (this.hearts.length < n) {
       const i = this.hearts.length;
-      this.hearts.push(this.scene.add.image(26 + (i % 7) * 29, 26 + Math.floor(i / 7) * 34, 'heart')
+      this.hearts.push(this.scene.add.image(26 + SAFE_X + (i % 7) * 29, 26 + Math.floor(i / 7) * 34, 'heart')
         .setDepth(DEPTH.ui).setDisplaySize(25, 23));
     }
   }

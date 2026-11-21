@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import {
-  ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, DROP_RARITY, FONT, GAME_W, MYTHIC, RARITY,
+  ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, DROP_RARITY, FONT, GAME_W, MYTHIC, RARITY, RIGHT, SAFE_X,
 } from '../config';
 import { ELEMENT_IDS, ELEMENT_MAP, FUN, MYTHICS, RIFT_THEMES, WEAPON_MAP, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
@@ -74,6 +74,7 @@ export class GameScene extends Phaser.Scene {
   private modText!: Phaser.GameObjects.Text;
   private darkness?: Phaser.GameObjects.Image;
   private drawnTheme?: RegionTheme;
+  private vignette?: Phaser.GameObjects.Image;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
   private stopTimer = 0;
@@ -107,6 +108,7 @@ export class GameScene extends Phaser.Scene {
     this.quest = undefined;
     this.darkness = undefined;
     this.drawnTheme = undefined;
+    this.vignette = undefined;
     this.unlocks = [];
     this.character = ProgressStore.selected;
 
@@ -143,12 +145,12 @@ export class GameScene extends Phaser.Scene {
     new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
     this.input2 = new InputSystem(this);
     // 右下按鈕弧形排列（半透明疊在戰場上）
-    this.dashBtn = createRoundButton(this, 1180, 612, 60, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
-    this.skillBtn = createRoundButton(this, 1050, 650, 46, '技能', 0xd08a2a, () => (this.input2.skillPressed = true));
-    this.brewBtn = createRoundButton(this, 1196, 474, 46, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
-    this.swapBtn = createRoundButton(this, 1078, 532, 38, '換武器', 0x3a6a4a, () => (this.input2.swapPressed = true));
+    this.dashBtn = createRoundButton(this, RIGHT - 100, 612, 60, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
+    this.skillBtn = createRoundButton(this, RIGHT - 230, 650, 46, '技能', 0xd08a2a, () => (this.input2.skillPressed = true));
+    this.brewBtn = createRoundButton(this, RIGHT - 84, 474, 46, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
+    this.swapBtn = createRoundButton(this, RIGHT - 202, 532, 38, '換武器', 0x3a6a4a, () => (this.input2.swapPressed = true));
     [this.dashBtn, this.skillBtn, this.brewBtn, this.swapBtn].forEach((b) => b.container.setAlpha(0.82));
-    this.weaponText = this.add.text(1078, 480, '', {
+    this.weaponText = this.add.text(RIGHT - 202, 480, '', {
       fontFamily: FONT, fontSize: '16px', color: '#ffffff', align: 'center', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(DEPTH.ui);
     this.modText = this.add.text(ARENA.x + 14, ARENA.y + 10, '', {
@@ -176,27 +178,45 @@ export class GameScene extends Phaser.Scene {
     this.cameras.main.setBackgroundColor(theme.bg);
     this.arenaGfx?.destroy();
     const g = this.arenaGfx = this.add.graphics().setDepth(DEPTH.floor);
+    // 整個畫面先鋪背景色（寬螢幕兩側也不會是黑邊）
+    g.fillStyle(col(theme.bg), 1).fillRect(0, 0, GAME_W, 720);
     g.fillStyle(col(theme.floor), 1).fillRect(ARENA.x, ARENA.y, ARENA.w, ARENA.h);
-    const tile = 56;
-    for (let y = ARENA.y; y < ARENA_BOTTOM; y += tile) {
-      for (let x = ARENA.x; x < ARENA_RIGHT; x += tile) {
-        if (((x - ARENA.x) / tile + (y - ARENA.y) / tile) % 2 === 0) {
-          g.fillStyle(col(theme.tile), 1).fillRect(x, y, Math.min(tile, ARENA_RIGHT - x), Math.min(tile, ARENA_BOTTOM - y));
-        }
+    // 石板地磚：交錯排列＋隨機明暗
+    const tile = 64;
+    let seed = theme.floor.length * 97 + theme.tile.charCodeAt(2);
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let row = 0, y = ARENA.y; y < ARENA_BOTTOM; y += tile, row++) {
+      const off = row % 2 ? tile / 2 : 0;
+      for (let x = ARENA.x - off; x < ARENA_RIGHT; x += tile) {
+        const x0 = Math.max(ARENA.x, x);
+        const w = Math.min(x + tile, ARENA_RIGHT) - x0;
+        const h = Math.min(tile, ARENA_BOTTOM - y);
+        g.fillStyle(col(theme.tile), 0.35 + rnd() * 0.65).fillRect(x0 + 2, y + 2, w - 4, h - 4);
       }
     }
-    g.lineStyle(8, col(theme.wall), 1).strokeRect(ARENA.x - 4, ARENA.y - 4, ARENA.w + 8, ARENA.h + 8);
-    const corners = [[ARENA.x + 20, ARENA.y + 20], [ARENA_RIGHT - 20, ARENA.y + 20], [ARENA.x + 20, ARENA_BOTTOM - 20], [ARENA_RIGHT - 20, ARENA_BOTTOM - 20]];
-    corners.forEach(([x, y]) => {
-      g.fillStyle(col(theme.deco), 0.8).fillCircle(x, y, 26);
-      g.fillStyle(col(theme.decoLight), 0.8).fillCircle(x - 6, y - 6, 12);
-    });
-    // 場地裝飾點
-    for (let i = 0; i < 14; i++) {
-      const x = ARENA.x + 40 + ((i * 197) % (ARENA.w - 80));
-      const y = ARENA.y + 40 + ((i * 331) % (ARENA.h - 80));
-      g.fillStyle(col(theme.decoLight), 0.08).fillCircle(x, y, 10 + (i % 3) * 6);
+    // 草叢 / 碎石點綴
+    for (let i = 0; i < Math.round(ARENA.w / 30); i++) {
+      const x = ARENA.x + 20 + rnd() * (ARENA.w - 40);
+      const y = ARENA.y + 20 + rnd() * (ARENA.h - 40);
+      g.fillStyle(col(theme.decoLight), 0.18);
+      for (let k = 0; k < 3; k++) g.fillTriangle(x + k * 5 - 6, y, x + k * 5 - 3, y - 10 - rnd() * 6, x + k * 5, y);
+      if (rnd() < 0.3) g.fillStyle(col(theme.deco), 0.35).fillCircle(x + 14, y + 6, 4 + rnd() * 4);
     }
+    // 牆：雙線＋角落花盆
+    g.lineStyle(10, col(theme.wall), 1).strokeRect(ARENA.x - 5, ARENA.y - 5, ARENA.w + 10, ARENA.h + 10);
+    g.lineStyle(2, col(theme.decoLight), 0.35).strokeRect(ARENA.x + 4, ARENA.y + 4, ARENA.w - 8, ARENA.h - 8);
+    const corners = [[ARENA.x + 24, ARENA.y + 24], [ARENA_RIGHT - 24, ARENA.y + 24], [ARENA.x + 24, ARENA_BOTTOM - 24], [ARENA_RIGHT - 24, ARENA_BOTTOM - 24]];
+    corners.forEach(([x, y]) => {
+      g.fillStyle(col(theme.deco), 0.9).fillCircle(x, y, 28);
+      g.fillStyle(col(theme.decoLight), 0.7).fillCircle(x - 7, y - 7, 13);
+      g.fillStyle(col(theme.decoLight), 0.35).fillCircle(x + 9, y + 4, 8);
+    });
+    this.vignette?.destroy();
+    this.vignette = this.add.image(ARENA.x + ARENA.w / 2, ARENA.y + ARENA.h / 2, 'vignette')
+      .setDisplaySize(ARENA.w, ARENA.h).setDepth(DEPTH.fx + 15);
   }
 
   update(_time: number, deltaMs: number): void {
@@ -296,7 +316,7 @@ export class GameScene extends Phaser.Scene {
       const M = brew.mythic;
       const color = hexToInt(M.color);
       this.fx.burst(p.x, p.y, 160, color, 500);
-      this.fx.burst(370, 40, 120, color, 500);
+      this.fx.burst(SAFE_X + 370, 40, 120, color, 500);
       this.cameras.main.flash(250, 255, 120, 140);
       this.cameras.main.shake(200, 0.006);
       this.hud.showToast(`裂變！【${MYTHIC.name}】${M.name}`, M.desc, MYTHIC.color);
@@ -304,7 +324,7 @@ export class GameScene extends Phaser.Scene {
       const r = brew.recipe;
       const q = RARITY[brew.quality];
       this.fx.burst(p.x, p.y, 70 + brew.quality * 25, hexToInt(q.color), 350);
-      this.fx.burst(370, 40, 90, hexToInt(r.color));
+      this.fx.burst(SAFE_X + 370, 40, 90, hexToInt(r.color));
       if (brew.quality >= 2) this.cameras.main.flash(150, 180, 140, 255);
       this.hud.showToast(`【${q.name}】${r.name}`, r.desc.replace('\n', '　'), brew.quality > 0 ? q.color : undefined);
     }

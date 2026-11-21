@@ -15,3 +15,21 @@ export function textButton(
   c.on('pointerup', onClick);
   return c;
 }
+
+/** 全螢幕切換（不支援的環境回傳 false，例如 iPhone 或部分 App 內瀏覽器） */
+export function canFullscreen(): boolean {
+  return !!document.fullscreenEnabled;
+}
+
+export async function toggleFullscreen(): Promise<void> {
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      const o = screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> };
+      await o.lock?.('landscape').catch(() => undefined);
+    }
+  } catch {
+    /* 不支援就算了 */
+  }
+}

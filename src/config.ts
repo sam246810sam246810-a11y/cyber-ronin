@@ -1,14 +1,48 @@
 /** 全域常數。數值調整請優先改這裡或 data/*.json。 */
-export const GAME_W = 1280;
+/**
+ * 畫面寬度依螢幕比例決定（高度固定 720），從 16:9 到 2.6:1 都能填滿不留黑邊。
+ * 啟動時計算一次（main.ts 會等到橫向才建立遊戲）。
+ */
+function computeLayout(): { gameW: number; safeX: number } {
+  const w = window.innerWidth || 1280;
+  const h = window.innerHeight || 720;
+  const aspect = Math.max(16 / 9, Math.min(2.6, w / h));
+  const gameW = Math.round(720 * aspect);
+  // 瀏海 / 圓角：讀取 CSS safe-area，換算成遊戲座標
+  let safePx = 0;
+  try {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;visibility:hidden;padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)';
+    document.documentElement.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    safePx = Math.max(parseFloat(cs.paddingLeft) || 0, parseFloat(cs.paddingRight) || 0);
+    probe.remove();
+  } catch {
+    /* ignore */
+  }
+  const scale = gameW / w;
+  return { gameW, safeX: Math.min(80, Math.round(safePx * scale)) };
+}
+
+const LAYOUT = computeLayout();
+export const GAME_W = LAYOUT.gameW;
 export const GAME_H = 720;
+/** 左右安全邊距（避開瀏海），按鈕與資訊都放在這之內 */
+export const SAFE_X = LAYOUT.safeX;
+/** 選單畫面以 1280 寬設計，置中時的水平位移 */
+export const CENTER_DX = (GAME_W - 1280) / 2;
+/** 把 1280 寬設計的 x 座標轉成置中的座標 */
+export const cx = (x: number) => x + CENTER_DX;
 
 /** 上方資訊列（血量 / 坩堝 / 樓層 / 金幣 / 暫停） */
 export const TOP_H = 92;
 
 /** 戰鬥區：資訊列以下整片，操作按鈕半透明疊在角落 */
-export const ARENA = { x: 16, y: 98, w: 1248, h: 610 } as const;
+export const ARENA = { x: 12 + SAFE_X, y: 98, w: GAME_W - 2 * (12 + SAFE_X), h: 612 } as const;
 export const ARENA_RIGHT = ARENA.x + ARENA.w;
 export const ARENA_BOTTOM = ARENA.y + ARENA.h;
+/** 右側錨點：右下按鈕與右上資訊以此為基準 */
+export const RIGHT = GAME_W - SAFE_X;
 
 export const DEPTH = {
   floor: 0,

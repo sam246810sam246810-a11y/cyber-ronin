@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, FONT, GAME_W } from '../config';
+import { COLORS, FONT, GAME_W, cx } from '../config';
 import { MYTHICS, RECIPES } from '../data';
 import { CodexStore } from '../systems/CodexStore';
 import { textButton } from '../ui/widgets';
@@ -48,13 +48,13 @@ export class ResultScene extends Phaser.Scene {
     ];
     rows.forEach(([k, v], i) => {
       const y = 230 + i * 52;
-      this.add.text(90, y, k, { fontFamily: FONT, fontSize: '24px', color: COLORS.textDim }).setOrigin(0, 0.5);
-      this.add.text(560, y, v, { fontFamily: FONT, fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(1, 0.5);
+      this.add.text(cx(90), y, k, { fontFamily: FONT, fontSize: '24px', color: COLORS.textDim }).setOrigin(0, 0.5);
+      this.add.text(cx(560), y, v, { fontFamily: FONT, fontSize: '24px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(1, 0.5);
     });
 
     const block = (y: number, title: string, color: string, body: string) => {
-      this.add.text(640, y, title, { fontFamily: FONT, fontSize: '21px', color });
-      this.add.text(640, y + 32, body, {
+      this.add.text(cx(640), y, title, { fontFamily: FONT, fontSize: '21px', color });
+      this.add.text(cx(640), y + 32, body, {
         fontFamily: FONT, fontSize: '18px', color: '#ffffff', wordWrap: { width: 580, useAdvancedWrap: true }, lineSpacing: 4,
       });
     };

@@ -25,23 +25,49 @@ document.addEventListener('touchend', (e) => {
   lastTouchEnd = now;
 }, { passive: false });
 
-const game = new Phaser.Game({
-  type: Phaser.AUTO,
-  parent: 'game',
-  width: GAME_W,
-  height: GAME_H,
-  backgroundColor: COLORS.bg,
-  scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
-  },
-  input: { activePointers: 4 },
-  render: { antialias: true, roundPixels: false },
-  scene: [BootScene, PreloadScene, MainMenuScene, CharacterSelectScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene, EventScene],
-});
+const isPortraitPhone = () => window.innerHeight > window.innerWidth && Math.min(window.innerWidth, window.innerHeight) < 900;
 
-(window as unknown as { __phaser?: Phaser.Game }).__phaser = game;
+function boot(): void {
+  const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    width: GAME_W,
+    height: GAME_H,
+    backgroundColor: COLORS.bg,
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+    },
+    input: { activePointers: 4 },
+    render: { antialias: true, roundPixels: false },
+    scene: [BootScene, PreloadScene, MainMenuScene, CharacterSelectScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene, EventScene],
+  });
 
-if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
-  installDebugPanel(game);
+  (window as unknown as { __phaser?: Phaser.Game }).__phaser = game;
+
+  if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
+    installDebugPanel(game);
+  }
+
+  // 寬高比明顯改變時（例如換手機方向）：不在戰鬥中就重新載入以套用新版面
+  const startAspect = window.innerWidth / window.innerHeight;
+  window.addEventListener('resize', () => {
+    const a = window.innerWidth / window.innerHeight;
+    if (isPortraitPhone() || Math.abs(a - startAspect) / startAspect < 0.12) return;
+    if (!game.scene.isActive('Game')) location.reload();
+  });
+}
+
+// 直拿手機時先等轉成橫向，才能用正確的螢幕比例建立畫面
+if (isPortraitPhone()) {
+  const wait = () => {
+    if (isPortraitPhone()) return;
+    window.removeEventListener('resize', wait);
+    window.removeEventListener('orientationchange', wait);
+    setTimeout(boot, 250);
+  };
+  window.addEventListener('resize', wait);
+  window.addEventListener('orientationchange', wait);
+} else {
+  boot();
 }

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ARENA_BOTTOM, COLORS, DEPTH, FONT, GAME_W } from '../config';
+import { ARENA_BOTTOM, COLORS, DEPTH, FONT, GAME_W, RIGHT } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import { ProgressStore } from './ProgressStore';
 
@@ -72,10 +72,10 @@ export class TutorialSystem {
     // 指示箭頭
     let target: { x: number; y: number } | undefined;
     if (c.step === 'pickup' && g.pickups[0]) target = { x: g.pickups[0].x, y: g.pickups[0].y - 40 };
-    if (c.step === 'brew') target = { x: 1196, y: 410 };
-    if (c.step === 'telegraph') target = { x: 1180, y: 535 };
-    if (c.step === 'skill') target = { x: 1050, y: 586 };
-    if (c.step === 'weapon') target = { x: 1078, y: 450 };
+    if (c.step === 'brew') target = { x: RIGHT - 84, y: 410 };
+    if (c.step === 'telegraph') target = { x: RIGHT - 100, y: 535 };
+    if (c.step === 'skill') target = { x: RIGHT - 230, y: 586 };
+    if (c.step === 'weapon') target = { x: RIGHT - 202, y: 450 };
     this.arrow.setVisible(!!target);
     if (target) this.arrow.setPosition(target.x, target.y + Math.sin(c.t * 8) * 6);
 

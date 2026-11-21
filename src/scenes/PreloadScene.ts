@@ -203,6 +203,20 @@ export class PreloadScene extends Phaser.Scene {
     });
     g.destroy();
 
+    // 戰場暈邊
+    if (!this.textures.exists('vignette')) {
+      const tex = this.textures.createCanvas('vignette', 512, 256);
+      if (tex) {
+        const ctx = tex.getContext();
+        const grad = ctx.createRadialGradient(256, 128, 60, 256, 128, 300);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(0.55, 'rgba(0,0,0,0.05)');
+        grad.addColorStop(1, 'rgba(0,0,0,0.55)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 256);
+        tex.refresh();
+      }
+    }
     // 黑暗詛咒：中間透明、外圍漸黑的視野遮罩
     if (!this.textures.exists('darkness')) {
       const tex = this.textures.createCanvas('darkness', 512, 512);
