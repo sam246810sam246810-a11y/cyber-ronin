@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { CodexStore } from '../systems/CodexStore';
 import { ProgressStore } from '../systems/ProgressStore';
+import { WEAPON_MAP } from '../data';
 import type { ElementId, RarityIndex } from '../types';
 
 /**
@@ -9,6 +10,7 @@ import type { ElementId, RarityIndex } from '../types';
  * 開發模式（npm run dev）自動啟用；正式版網址加 ?debug 也能打開。
  */
 export function installDebugPanel(game: Phaser.Game): void {
+  (window as unknown as { __WEAPON_MAP?: unknown }).__WEAPON_MAP = WEAPON_MAP;
   const getGame = (): GameScene | undefined => {
     const s = game.scene.getScene('Game') as GameScene | null;
     return s && s.scene.isActive() ? s : undefined;
@@ -66,6 +68,14 @@ export function installDebugPanel(game: Phaser.Game): void {
   add('+50 金幣', () => {
     const g = getGame();
     if (g) g.coins += 50;
+  });
+  add('掉武器', () => {
+    const g = getGame();
+    if (g) g.dropWeapon(g.player.x, g.player.y - 90);
+  });
+  add('技能冷卻歸零', () => {
+    const g = getGame();
+    if (g) g.skills.cooldown = 0;
   });
   add('寶箱', () => getGame()?.encounters.spawn('chest'));
   add('商店', () => getGame()?.encounters.spawn('shop'));

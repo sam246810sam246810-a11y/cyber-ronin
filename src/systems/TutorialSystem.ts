@@ -3,10 +3,12 @@ import { ARENA_BOTTOM, COLORS, DEPTH, FONT, GAME_W } from '../config';
 import type { GameScene } from '../scenes/GameScene';
 import { ProgressStore } from './ProgressStore';
 
-type Step = 'move' | 'pickup' | 'brew' | 'drink' | 'telegraph' | 'door' | 'stairs' | 'shop';
+type Step = 'move' | 'skill' | 'pickup' | 'brew' | 'drink' | 'telegraph' | 'door' | 'stairs' | 'shop' | 'weapon';
 
 const TEXT: Record<Step, string> = {
   move: '拖曳左下方移動，角色會自動射擊最近的敵人',
+  skill: '右下「技能」是角色專屬主動技，冷卻好就能用（鍵盤 E）',
+  weapon: '武器掉落！碰它就能裝備，最多帶 2 把，用「換武器」切換（鍵盤 Q）',
   pickup: '敵人掉了素材！走過去撿起來，會放進坩堝',
   brew: '坩堝滿了！按「煉成」把藥水喝下去',
   drink: '藥水效果整局有效。光暈顏色＝稀有度，越稀有越容易「裂變」！',
@@ -38,7 +40,10 @@ export class TutorialSystem {
     this.box = game.add.container(GAME_W / 2, ARENA_BOTTOM - 60, [bg, this.text]).setDepth(DEPTH.overlay - 5).setAlpha(0);
     this.arrow = game.add.text(0, 0, '▼', { fontFamily: FONT, fontSize: '34px', color: '#ffd166', stroke: '#000', strokeThickness: 4 })
       .setOrigin(0.5).setDepth(DEPTH.overlay - 4).setVisible(false);
-    if (this.enabled) this.notify('move');
+    if (this.enabled) {
+      this.notify('move');
+      this.notify('skill');
+    }
   }
 
   notify(step: Step): void {
@@ -67,8 +72,10 @@ export class TutorialSystem {
     // 指示箭頭
     let target: { x: number; y: number } | undefined;
     if (c.step === 'pickup' && g.pickups[0]) target = { x: g.pickups[0].x, y: g.pickups[0].y - 40 };
-    if (c.step === 'brew') target = { x: 474, y: 1100 };
-    if (c.step === 'telegraph') target = { x: 622, y: 1010 };
+    if (c.step === 'brew') target = { x: 500, y: 1124 };
+    if (c.step === 'telegraph') target = { x: 630, y: 1005 };
+    if (c.step === 'skill') target = { x: 638, y: 1148 };
+    if (c.step === 'weapon') target = { x: 486, y: 1012 };
     this.arrow.setVisible(!!target);
     if (target) this.arrow.setPosition(target.x, target.y + Math.sin(c.t * 8) * 6);
 
@@ -76,7 +83,7 @@ export class TutorialSystem {
       (c.step === 'move' && (c.t > 6 || Math.abs(g.player.x - GAME_W / 2) > 80)) ||
       (c.step === 'pickup' && (g.crucible.filled > 0 || c.t > 10)) ||
       (c.step === 'brew' && (g.crucible.filled < 3 || c.t > 15)) ||
-      (['drink', 'telegraph', 'door', 'stairs', 'shop'].includes(c.step) && c.t > 5);
+      (['drink', 'telegraph', 'door', 'stairs', 'shop', 'skill', 'weapon'].includes(c.step) && c.t > 5);
     if (done) {
       this.current = undefined;
       this.arrow.setVisible(false);

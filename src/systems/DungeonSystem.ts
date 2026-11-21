@@ -1,4 +1,4 @@
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT } from '../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, RARITY } from '../config';
 import { ENEMIES, FLOORS_PER_REGION, REGIONS } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { FlowerBoss } from '../entities/bosses/FlowerBoss';
@@ -16,6 +16,7 @@ import type { Material, MinionType, RegionDef, RoomType } from '../types';
 import { dist, pick, rand, shuffle } from '../utils';
 import type { EventKind } from './EventSystem';
 import { Sound } from './SoundSystem';
+import { rollWeapon } from './WeaponSystem';
 
 export type Dir = 'n' | 's' | 'e' | 'w';
 export const DIRS: Record<Dir, { dx: number; dy: number; opposite: Dir }> = {
@@ -26,7 +27,8 @@ export const DIRS: Record<Dir, { dx: number; dy: number; opposite: Dir }> = {
 };
 
 export interface ShopItem {
-  id: 'heal' | 'epic' | 'legendary' | 'card_rare' | 'card_epic';
+  id: 'heal' | 'epic' | 'legendary' | 'card_rare' | 'card_epic' | 'weapon';
+  weaponId?: string;
   label: string;
   desc: string;
   price: number;
@@ -45,6 +47,8 @@ export interface Room {
   used: boolean;
   /** 離開時留在地上的素材 */
   stash: { mat: Material; x: number; y: number; life: number }[];
+  /** 地上的武器 */
+  weapons: { id: string; x: number; y: number }[];
   eventKind?: EventKind;
   shop?: ShopItem[];
 }
@@ -142,7 +146,7 @@ export class DungeonSystem {
 
     this.rooms = [...cells.values()].map((p) => ({
       gx: p.gx, gy: p.gy, type: 'combat' as RoomType, depth: 0, doors: {},
-      visited: false, cleared: false, used: false, stash: [],
+      visited: false, cleared: false, used: false, stash: [], weapons: [],
     }));
     for (const r of this.rooms) {
       for (const [dir, d] of Object.entries(DIRS) as [Dir, typeof DIRS.n][]) {
@@ -208,7 +212,12 @@ export class DungeonSystem {
       { id: 'card_rare', label: '突變卡', desc: '抽一次突變卡（保底稀有）', price: Math.round(24 * m), sold: false },
       { id: 'card_epic', label: '珍稀突變卡', desc: '抽一次突變卡（保底史詩）', price: Math.round(42 * m), sold: false },
     ];
-    return [all[0], ...shuffle(all.slice(1)).slice(0, 2)];
+    const w = rollWeapon([30, 45, 20, 5 + this.regionIndex * 4], 1);
+    const weapon: ShopItem = {
+      id: 'weapon', weaponId: w.id, label: `【${RARITY[w.rarity].name}】${w.name}`, desc: w.desc,
+      price: Math.round([12, 30, 50, 80][w.rarity] * m), sold: false,
+    };
+    return [all[0], weapon, ...shuffle(all.slice(1)).slice(0, 2)];
   }
 
   // ---- 換房 ----

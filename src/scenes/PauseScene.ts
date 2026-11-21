@@ -39,9 +39,12 @@ export class PauseScene extends Phaser.Scene {
       this.add.text(676, y, `Lv.${Math.round(p.stacks * 10) / 10}`, { fontFamily: FONT, fontSize: '19px', color: '#c9a3ff' }).setOrigin(1, 0);
     });
 
+    this.add.text(GAME_W / 2, 615, `武器：${d.weapons.map((w) => w.name).join(' ／ ')}　技能：${d.skill}`, {
+      fontFamily: FONT, fontSize: '19px', color: '#ffd166', align: 'center', wordWrap: { width: 640, useAdvancedWrap: true },
+    }).setOrigin(0.5);
     const muts = d.mutations.length ? d.mutations.map((m) => `${m.icon}${m.name} ${m.value}`).join('　') : '（還沒有）';
-    this.add.text(GAME_W / 2, 650, '突變卡', { fontFamily: FONT, fontSize: '22px', color: COLORS.textDim }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, 682, muts, {
+    this.add.text(GAME_W / 2, 662, '突變卡', { fontFamily: FONT, fontSize: '22px', color: COLORS.textDim }).setOrigin(0.5);
+    this.add.text(GAME_W / 2, 692, muts, {
       fontFamily: FONT, fontSize: '19px', color: '#ffffff', align: 'center', wordWrap: { width: 640, useAdvancedWrap: true },
     }).setOrigin(0.5, 0);
 

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ARENA, DEPTH, FONT, GAME_W } from '../config';
-import { ELEMENT_IDS } from '../data';
+import { ELEMENT_IDS, WEAPON_MAP } from '../data';
 import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
 import type { Material, RarityIndex } from '../types';
@@ -100,6 +100,7 @@ export class EventSystem {
           g.dropMaterial(x + Math.cos(a) * 70, y + Math.sin(a) * 70 + 20, undefined, true);
         }
         g.dropCoins(x, y, 8 + g.dungeon.regionIndex * 4);
+        if (Math.random() < 0.5) g.dropWeapon(x, y + 90);
         break;
       }
       case 'altar':
@@ -192,6 +193,7 @@ export class EventSystem {
           case 'legendary': g.dropMaterial(g.player.x, g.player.y - 90, { el: pick(ELEMENT_IDS), r: 3 }); break;
           case 'card_rare': g.time.delayedCall(100, () => g.openCardSelect(undefined, 1)); break;
           case 'card_epic': g.time.delayedCall(100, () => g.openCardSelect(undefined, 2)); break;
+          case 'weapon': if (it.weaponId) g.dropWeapon(g.player.x, g.player.y - 100, WEAPON_MAP[it.weaponId]); break;
         }
       },
     })));

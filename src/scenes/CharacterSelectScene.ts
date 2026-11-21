@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, FONT, GAME_W, RARITY } from '../config';
-import { CHARACTERS, hexToInt } from '../data';
+import { CHARACTERS, WEAPON_MAP, hexToInt } from '../data';
 import { ProgressStore } from '../systems/ProgressStore';
 import type { CharacterDef } from '../types';
 import { textButton } from '../ui/widgets';
@@ -52,8 +52,8 @@ export class CharacterSelectScene extends Phaser.Scene {
       this.cards.push({ c, bg });
     });
 
-    this.detail = this.add.text(GAME_W / 2, 860, '', {
-      fontFamily: FONT, fontSize: '22px', color: '#ffffff', align: 'center', lineSpacing: 8,
+    this.detail = this.add.text(GAME_W / 2, 830, '', {
+      fontFamily: FONT, fontSize: '20px', color: '#ffffff', align: 'center', lineSpacing: 6,
       wordWrap: { width: 620, useAdvancedWrap: true },
     }).setOrigin(0.5, 0);
 
@@ -72,7 +72,8 @@ export class CharacterSelectScene extends Phaser.Scene {
       bg.setStrokeStyle(on ? 7 : 4, hexToInt(on ? '#ffffff' : RARITY[c.rarity].color), ProgressStore.isUnlocked(c) ? 1 : 0.4);
     }
     const c = this.selected;
-    this.detail.setText(`${c.name}：${c.desc}\n【${c.passiveName}】${c.passiveDesc}`);
+    const w = WEAPON_MAP[c.startWeapon];
+    this.detail.setText(`${c.name}：${c.desc}\n【被動・${c.passiveName}】${c.passiveDesc}\n【技能・${c.skill.name}】${c.skill.desc}（冷卻 ${c.skill.cooldown} 秒）\n初始武器：${w?.name ?? ''}`);
     this.startBtn.setAlpha(1);
   }
 }

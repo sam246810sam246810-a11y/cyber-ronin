@@ -5,10 +5,11 @@ import charactersJson from './characters.json';
 import enemiesJson from './enemies.json';
 import regionsJson from './regions.json';
 import mutationsJson from './mutations.json';
+import weaponsJson from './weapons.json';
 import { RARITY } from '../config';
 import type {
   CharacterDef, ElementDef, ElementId, EnemyDef, EnemyType, Material, MutationDef, MythicDef, RarityIndex,
-  RecipeDef, RegionDef,
+  RecipeDef, RegionDef, WeaponDef,
 } from '../types';
 
 export const ELEMENTS = elementsJson as ElementDef[];
@@ -88,6 +89,9 @@ export const MYTHICS = mythicsJson as MythicDef[];
 export const mythicKey = (id: string) => `M:${id}`;
 
 export const CHARACTERS = charactersJson as CharacterDef[];
+
+export const WEAPONS = weaponsJson as WeaponDef[];
+export const WEAPON_MAP = Object.fromEntries(WEAPONS.map((w) => [w.id, w])) as Record<string, WeaponDef>;
 
 export const ENEMIES = enemiesJson as unknown as Record<EnemyType, EnemyDef>;
 export const REGIONS = regionsJson as RegionDef[];

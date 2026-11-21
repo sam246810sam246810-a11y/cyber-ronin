@@ -2,22 +2,26 @@ import Phaser from 'phaser';
 import { CONTROLS_Y, GAME_H } from '../config';
 import { Joystick } from '../ui/Joystick';
 
-/** 合併觸控搖桿與鍵盤（WASD/方向鍵、空白鍵衝刺、J 或 K 煉成） */
+/** 合併觸控搖桿與鍵盤（WASD/方向鍵、空白鍵衝刺、J 或 K 煉成、E 技能、Q 換武器） */
 export class InputSystem {
   readonly joystick: Joystick;
   private keys?: Record<string, Phaser.Input.Keyboard.Key>;
   dashPressed = false;
   brewPressed = false;
+  skillPressed = false;
+  swapPressed = false;
 
   constructor(scene: Phaser.Scene) {
     scene.input.addPointer(3);
     this.joystick = new Joystick(scene, new Phaser.Geom.Rectangle(0, CONTROLS_Y, 400, GAME_H - CONTROLS_Y), 150, 1135);
     const kb = scene.input.keyboard;
     if (kb) {
-      this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,J,K') as Record<string, Phaser.Input.Keyboard.Key>;
+      this.keys = kb.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SPACE,J,K,E,Q') as Record<string, Phaser.Input.Keyboard.Key>;
       kb.on('keydown-SPACE', () => (this.dashPressed = true));
       kb.on('keydown-J', () => (this.brewPressed = true));
       kb.on('keydown-K', () => (this.brewPressed = true));
+      kb.on('keydown-E', () => (this.skillPressed = true));
+      kb.on('keydown-Q', () => (this.swapPressed = true));
     }
   }
 
@@ -35,9 +39,9 @@ export class InputSystem {
     return len ? { x: x / len, y: y / len } : { x: 0, y: 0 };
   }
 
-  consume(): { dash: boolean; brew: boolean } {
-    const r = { dash: this.dashPressed, brew: this.brewPressed };
-    this.dashPressed = this.brewPressed = false;
+  consume(): { dash: boolean; brew: boolean; skill: boolean; swap: boolean } {
+    const r = { dash: this.dashPressed, brew: this.brewPressed, skill: this.skillPressed, swap: this.swapPressed };
+    this.dashPressed = this.brewPressed = this.skillPressed = this.swapPressed = false;
     return r;
   }
 }

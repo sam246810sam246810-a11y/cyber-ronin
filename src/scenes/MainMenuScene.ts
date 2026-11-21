@@ -39,10 +39,10 @@ export class MainMenuScene extends Phaser.Scene {
     textButton(this, GAME_W / 2, 850, 420, 90, `配方圖鑑  ${CodexStore.count}/${CodexStore.total}`,
       () => this.scene.start('Codex', { returnTo: 'MainMenu' }));
 
-    this.add.text(GAME_W / 2, 1060, '左下：搖桿移動　右下：衝刺 / 煉成\n鍵盤：WASD 移動　空白鍵 衝刺　J 或 K 煉成', {
+    this.add.text(GAME_W / 2, 1060, '左下：搖桿移動　右下：衝刺 / 煉成 / 技能 / 換武器\n鍵盤：WASD 移動　空白 衝刺　K 煉成　E 技能　Q 換武器', {
       fontFamily: FONT, fontSize: '20px', color: COLORS.textDim, align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, GAME_H - 40, 'v0.5 地下城爬塔版', {
+    this.add.text(GAME_W / 2, GAME_H - 40, 'v0.6 武器＋技能版', {
       fontFamily: FONT, fontSize: '16px', color: '#4a4458',
     }).setOrigin(0.5);
   }

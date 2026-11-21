@@ -148,6 +148,53 @@ export class PreloadScene extends Phaser.Scene {
       g.fillStyle(0xffe58a).fillCircle(13, 13, 6);
       g.lineStyle(2, 0xb07a10).strokeCircle(16, 16, 14);
     });
+    gen('leaf', 32, 32, () => {
+      g.fillStyle(0xffffff).fillEllipse(16, 16, 30, 14);
+      g.fillStyle(0xbbbbbb).fillRect(4, 15, 24, 2);
+    });
+    // 武器圖示（白色，依稀有度上色）
+    gen('wpn_single', 64, 64, () => {
+      g.lineStyle(7, 0xffffff).lineBetween(32, 60, 32, 34).lineBetween(32, 34, 14, 10).lineBetween(32, 34, 50, 10);
+      g.lineStyle(2, 0xcccccc).lineBetween(14, 10, 50, 10);
+    });
+    gen('wpn_spread', 64, 64, () => {
+      g.fillStyle(0xffffff);
+      for (let i = -2; i <= 2; i++) g.fillTriangle(32, 58, 32 + i * 12 - 4, 8, 32 + i * 12 + 4, 8);
+    });
+    gen('wpn_melee', 64, 64, () => {
+      g.lineStyle(6, 0xffffff);
+      g.beginPath();
+      g.arc(32, 40, 24, Math.PI, Math.PI * 1.9, false);
+      g.strokePath();
+      g.fillStyle(0xffffff).fillRect(4, 38, 10, 22);
+    });
+    gen('wpn_boomerang', 64, 64, () => {
+      g.fillStyle(0xffffff).fillEllipse(22, 32, 16, 52).fillEllipse(42, 32, 16, 52);
+      g.fillStyle(0xbbbbbb).fillCircle(32, 32, 7);
+    });
+    gen('wpn_lance', 64, 64, () => {
+      g.fillStyle(0xffffff).fillRect(29, 18, 6, 44).fillTriangle(32, 0, 42, 20, 22, 20);
+    });
+    gen('wpn_mortar', 64, 64, () => {
+      g.fillStyle(0xffffff).fillRect(20, 14, 22, 36).fillRoundedRect(10, 46, 44, 14, 6);
+      g.fillStyle(0xbbbbbb).fillCircle(31, 12, 9);
+    });
+    gen('wpn_chain', 64, 64, () => {
+      g.fillStyle(0xffffff).fillRect(29, 20, 6, 42);
+      g.fillPoints([
+        new Phaser.Math.Vector2(36, 0), new Phaser.Math.Vector2(22, 18), new Phaser.Math.Vector2(32, 18),
+        new Phaser.Math.Vector2(26, 30), new Phaser.Math.Vector2(44, 12), new Phaser.Math.Vector2(34, 12),
+      ], true);
+    });
+    gen('wpn_orb', 64, 64, () => {
+      g.fillStyle(0xffffff);
+      for (let i = 0; i < 8; i++) {
+        const a = (Math.PI * 2 * i) / 8;
+        g.fillTriangle(32 + Math.cos(a) * 30, 32 + Math.sin(a) * 30, 32 + Math.cos(a + 0.3) * 16, 32 + Math.sin(a + 0.3) * 16,
+          32 + Math.cos(a - 0.3) * 16, 32 + Math.sin(a - 0.3) * 16);
+      }
+      g.fillCircle(32, 32, 16);
+    });
     // 角色佔位圖（白色可上色）
     gen('hero', 64, 64, () => {
       g.fillStyle(0xffffff).fillCircle(32, 36, 24);

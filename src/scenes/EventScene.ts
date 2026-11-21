@@ -43,15 +43,17 @@ export class EventScene extends Phaser.Scene {
       wordWrap: { width: 620, useAdvancedWrap: true },
     }).setOrigin(0.5, 0);
 
+    const step = d.options.length > 3 ? 148 : 170;
+    const h = d.options.length > 3 ? 128 : 140;
     d.options.forEach((o, i) => {
-      const y = 460 + i * 170;
+      const y = (d.options.length > 3 ? 420 : 460) + i * step;
       const c = hexToInt(d.color);
-      const bg = this.add.rectangle(0, 0, 600, 140, COLORS.panel, 1).setStrokeStyle(4, c, o.enabled ? 1 : 0.25);
+      const bg = this.add.rectangle(0, 0, 600, h, COLORS.panel, 1).setStrokeStyle(4, c, o.enabled ? 1 : 0.25);
       const label = this.add.text(-270, -28, o.label, { fontFamily: FONT, fontSize: '32px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5);
       const desc = this.add.text(-270, 26, o.desc, {
         fontFamily: FONT, fontSize: '22px', color: '#d8d0e6', wordWrap: { width: 540, useAdvancedWrap: true },
       }).setOrigin(0, 0.5);
-      const card = this.add.container(GAME_W / 2, y, [bg, label, desc]).setSize(600, 140).setAlpha(o.enabled ? 1 : 0.4);
+      const card = this.add.container(GAME_W / 2, y, [bg, label, desc]).setSize(600, h).setAlpha(o.enabled ? 1 : 0.4);
       if (o.enabled) {
         card.setInteractive({ useHandCursor: true });
         card.on('pointerup', () => {
@@ -60,6 +62,6 @@ export class EventScene extends Phaser.Scene {
         });
       }
     });
-    textButton(this, GAME_W / 2, 1020, 300, 80, '離開', () => close());
+    textButton(this, GAME_W / 2, d.options.length > 3 ? 1050 : 1020, 300, 76, '離開', () => close());
   }
 }

@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import {
-  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, DROP_RARITY, GAME_H, GAME_W, MYTHIC, PLAYER, RARITY,
+  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, DROP_RARITY, FONT, GAME_H, GAME_W, MYTHIC, RARITY,
 } from '../config';
-import { ELEMENT_IDS, ELEMENT_MAP, MYTHICS, hexToInt } from '../data';
+import { ELEMENT_IDS, ELEMENT_MAP, MYTHICS, WEAPON_MAP, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { Pickup } from '../entities/Pickup';
 import { Player } from '../entities/Player';
@@ -18,11 +18,14 @@ import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { TelegraphSystem } from '../systems/TelegraphSystem';
 import { DungeonSystem, DIRS, type Dir, type Room } from '../systems/DungeonSystem';
 import { Minimap } from '../ui/Minimap';
+import { WeaponSystem, rollWeapon } from '../systems/WeaponSystem';
+import { SkillSystem } from '../systems/SkillSystem';
+import { WeaponPickup } from '../entities/WeaponPickup';
 import { HazardSystem } from '../systems/HazardSystem';
 import { EventSystem } from '../systems/EventSystem';
 import { TutorialSystem } from '../systems/TutorialSystem';
 import { Sound } from '../systems/SoundSystem';
-import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme } from '../types';
+import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme, WeaponDef } from '../types';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
@@ -31,6 +34,8 @@ import type { ResultData } from './ResultScene';
 
 export interface RunSummary {
   character: string;
+  weapons: { name: string; color: string }[];
+  skill: string;
   region: string;
   drinks: number;
   elements: Record<ElementId, number>;
@@ -58,6 +63,12 @@ export class GameScene extends Phaser.Scene {
   /** 關卡內事件（寶箱 / 祈願泉 / 商人）；Phaser 已佔用 events 這個名字 */
   encounters!: EventSystem;
   tutorial!: TutorialSystem;
+  weapons!: WeaponSystem;
+  skills!: SkillSystem;
+  weaponPickups: WeaponPickup[] = [];
+  private swapBtn!: RoundButton;
+  private skillBtn!: RoundButton;
+  private weaponText!: Phaser.GameObjects.Text;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
   private stopTimer = 0;
@@ -71,7 +82,6 @@ export class GameScene extends Phaser.Scene {
   private hud!: HUD;
   private dashBtn!: RoundButton;
   private brewBtn!: RoundButton;
-  private fireTimer = 0;
   runTime = 0;
   kills = 0;
   private ended = false;
@@ -88,7 +98,7 @@ export class GameScene extends Phaser.Scene {
     this.runTime = 0;
     this.kills = 0;
     this.ended = false;
-    this.fireTimer = 0;
+    this.weaponPickups = [];
     this.unlocks = [];
     this.character = ProgressStore.selected;
 
@@ -116,6 +126,8 @@ export class GameScene extends Phaser.Scene {
     this.player.hp = this.player.maxHp = this.character.stats.hp;
     this.buffs.recompute();
     this.character.startModules?.forEach((m) => this.buffs.addModule(m.id, m.n));
+    this.weapons = new WeaponSystem(this, this.character.startWeapon);
+    this.skills = new SkillSystem(this, this.character.skill);
 
     // UI
     this.add.rectangle(GAME_W / 2, (CONTROLS_Y + GAME_H) / 2, GAME_W, GAME_H - CONTROLS_Y, 0x0b0910).setDepth(DEPTH.ui - 2);
@@ -123,8 +135,15 @@ export class GameScene extends Phaser.Scene {
     this.minimap = new Minimap(this, this.dungeon);
     new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
     this.input2 = new InputSystem(this);
-    this.dashBtn = createRoundButton(this, 622, 1098, 68, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
-    this.brewBtn = createRoundButton(this, 474, 1186, 62, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
+    this.dashBtn = createRoundButton(this, 630, 1088, 62, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
+    this.skillBtn = createRoundButton(this, 638, 1218, 50, '技能', 0xd08a2a, () => (this.input2.skillPressed = true));
+    this.brewBtn = createRoundButton(this, 500, 1200, 56, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
+    this.swapBtn = createRoundButton(this, 486, 1072, 40, '換武器', 0x3a6a4a, () => (this.input2.swapPressed = true));
+    this.weaponText = this.add.text(486, 1014, '', {
+      fontFamily: FONT, fontSize: '16px', color: '#ffffff', align: 'center', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(DEPTH.ui);
+    this.weapons.on('changed', () => this.refreshWeaponUI());
+    this.refreshWeaponUI();
     this.add.text(150, GAME_H - 34, '移動', { fontFamily: 'sans-serif', fontSize: '18px', color: COLORS.textDim })
       .setOrigin(0.5).setDepth(DEPTH.ui);
 
@@ -182,11 +201,16 @@ export class GameScene extends Phaser.Scene {
     const move = this.input2.move;
     if (actions.dash && this.player.tryDash(move.x, move.y)) Sound.play('dash');
     if (actions.brew) this.brewAndDrink();
+    if (actions.skill && !this.skills.use() && this.skills.cooldown > 0) {
+      this.fx.floatText(this.player.x, this.player.y - 40, `技能冷卻 ${Math.ceil(this.skills.cooldown)}s`, '#9a90a8', 18);
+    }
+    if (actions.swap) this.weapons.swap();
 
     this.player.update(dt, move.x, move.y);
     this.checkDoors();
     this.crucible.update(dt);
-    this.autoFire(dt);
+    this.weapons.update(dt);
+    this.skills.update(dt);
 
     this.enemies.forEach((e) => e.update(dt));
     this.separateEnemies();
@@ -202,41 +226,17 @@ export class GameScene extends Phaser.Scene {
     this.encounters.update(dt);
     this.tutorial.update(dt);
     this.updateCoins(dt);
+    this.updateWeaponPickups(dt);
     this.dungeon.update(dt);
 
     this.dashBtn.setCooldown(this.player.dashCooldownRatio);
     this.brewBtn.setEnabled(this.crucible.canBrew);
+    this.skillBtn.setCooldown(this.skills.ratio);
+    this.skillBtn.setEnabled(this.skills.ready);
     const boss = this.dungeon.boss;
     this.hud.setCoins(this.coins);
     this.hud.update(this.player, this.dungeon.label, this.runTime,
       boss ? { hp: boss.hp, maxHp: boss.maxHp, name: boss.def.name, alive: boss.alive } : undefined);
-  }
-
-  private autoFire(dt: number): void {
-    this.fireTimer -= dt;
-    if (this.fireTimer > 0 || this.player.state === 'dead') return;
-    const p = this.player;
-    const st = this.buffs.stats;
-    const target = this.effects.nearestEnemy(p.x, p.y, PLAYER.autoAimRange);
-    if (!target) return;
-    this.fireTimer = st.fireInterval;
-    const a = Math.atan2(target.y - p.y, target.x - p.x);
-    const n = Math.max(1, Math.round(st.shots));
-    for (let i = 0; i < n; i++) {
-      this.projectiles.fireFriendly(p.x, p.y, a + (i - (n - 1) / 2) * 0.16, PLAYER.bulletSpeed, st.damage, {
-        poison: st.poisonDps > 0 ? { dps: st.poisonDps, time: 2 } : undefined,
-        slow: st.slow > 0 ? { factor: st.slow, time: 1 } : undefined,
-        pierce: st.pierce,
-        bounces: st.bounces,
-        splash: st.splash,
-        freezeChance: st.freezeChance,
-        critChance: st.critChance,
-        triggerPassives: true,
-        color: st.splash ? 0xf0b0ff : st.critChance > 0.2 ? 0xffe14d : st.poisonDps > 0 ? 0xc8ffa8 : undefined,
-      });
-    }
-    this.buffs.onShot();
-    Sound.play('shoot');
   }
 
   /** 打擊停頓 */
@@ -255,7 +255,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 煉成並立刻喝下 */
-  private brewAndDrink(): void {
+  brewAndDrink(): void {
     if (this.player.state === 'dead') return;
     const brew = this.crucible.brew();
     if (!brew) {
@@ -481,7 +481,11 @@ export class GameScene extends Phaser.Scene {
     // 把上一間的素材收起來，金幣直接入袋
     if (prev && prev !== room) {
       prev.stash = this.pickups.filter((pk) => pk.alive).map((pk) => ({ mat: pk.mat, x: pk.x, y: pk.y, life: pk.life }));
+      prev.weapons = this.weaponPickups.filter((w) => w.alive).map((w) => ({ id: w.weapon.id, x: w.x, y: w.y }));
     }
+    this.weaponPickups.forEach((w) => w.destroy());
+    this.weaponPickups = room.weapons.map((w) => new WeaponPickup(this, WEAPON_MAP[w.id], w.x, w.y));
+    room.weapons = [];
     this.pickups.forEach((pk) => pk.destroy());
     this.pickups = [];
     this.coinItems.forEach((c) => {
@@ -524,6 +528,7 @@ export class GameScene extends Phaser.Scene {
     const cy = (ARENA.y + ARENA_BOTTOM) / 2;
     this.dropCoins(cx, cy, 3 + this.dungeon.floor + this.dungeon.regionIndex * 2);
     if (Math.random() < 0.5) this.dropMaterial(cx, cy + 40);
+    if (room.type === 'elite' ? Math.random() < 0.4 : Math.random() < 0.08) this.dropWeapon(cx, cy - 80);
     Sound.play('card');
     this.showBanner(room.type === 'elite' ? '挑戰成功！' : '房間清空');
     this.minimap.draw();
@@ -541,6 +546,7 @@ export class GameScene extends Phaser.Scene {
     this.hazards.clear();
     this.showBanner(`${region.name} 突破！`);
     for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2 + 80, undefined, true);
+    this.dropWeapon(GAME_W / 2, ARENA.y + ARENA.h / 2 - 140, undefined, 2);
     this.minimap.draw();
     this.time.delayedCall(1800, () => this.openCardSelect('Boss 獎勵', 1, () => {
       this.dungeon.afterCards();
@@ -564,6 +570,49 @@ export class GameScene extends Phaser.Scene {
   onRegionEnter(region: RegionDef, index: number): void {
     this.drawArena(region.theme);
     if (index > 0) this.heal(3);
+  }
+
+  // ---- 武器 ----
+
+  private refreshWeaponUI(): void {
+    const [a, b] = this.weapons.slots;
+    const cur = this.weapons.weapon;
+    const other = this.weapons.slots[1 - this.weapons.active];
+    this.weaponText.setText(other ? `${cur.name}\n⇄ ${other.name}` : cur.name);
+    this.weaponText.setColor(RARITY[cur.rarity].color);
+    this.swapBtn.setEnabled(!!(a && b));
+  }
+
+  /** 掉落武器（不指定就依稀有度權重抽） */
+  dropWeapon(x: number, y: number, w?: WeaponDef, minRarity: RarityIndex = 0): void {
+    if (!w) {
+      const base = DROP_RARITY.elite.map((v, i) => Math.max(0.1, v + DROP_RARITY.perWave[i] * this.dungeon.depthIndex));
+      w = rollWeapon(base, minRarity);
+    }
+    x = Math.max(ARENA.x + 40, Math.min(ARENA_RIGHT - 40, x));
+    y = Math.max(ARENA.y + 60, Math.min(ARENA_BOTTOM - 40, y));
+    this.weaponPickups.push(new WeaponPickup(this, w, x, y));
+    this.tutorial.notify('weapon');
+  }
+
+  private updateWeaponPickups(dt: number): void {
+    const p = this.player;
+    for (const wp of this.weaponPickups) {
+      if (!wp.alive) continue;
+      wp.update(dt);
+      const inside = (p.x - wp.x) ** 2 + (p.y - wp.y) ** 2 < (p.radius + 30) ** 2;
+      if (!inside) {
+        wp.armed = true;
+        continue;
+      }
+      if (!wp.armed) continue;
+      const dropped = this.weapons.equip(wp.weapon);
+      wp.destroy();
+      Sound.play('pickup', wp.weapon.rarity);
+      this.fx.floatText(p.x, p.y - 60, `裝備 ${wp.weapon.name}`, RARITY[wp.weapon.rarity].color, 22);
+      if (dropped) this.weaponPickups.push(new WeaponPickup(this, dropped, wp.x, wp.y, false));
+    }
+    this.weaponPickups = this.weaponPickups.filter((w) => w.alive);
   }
 
   // ---- 金幣 ----
@@ -646,6 +695,8 @@ export class GameScene extends Phaser.Scene {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     return {
       character: this.character.name,
+      weapons: this.weapons.slots.filter(Boolean).map((w) => ({ name: w!.name, color: RARITY[w!.rarity].color })),
+      skill: `${this.character.skill.name}（冷卻 ${this.character.skill.cooldown} 秒）`,
       region: this.dungeon.label,
       drinks: this.buffs.drinks,
       elements: { ...this.buffs.elements },

@@ -1,26 +1,142 @@
 [
-  { "id": "apprentice", "name": "見習煉金師", "rarity": 0, "color": "#f4f0e6",
+  {
+    "id": "apprentice",
+    "name": "見習煉金師",
+    "rarity": 0,
+    "color": "#f4f0e6",
     "desc": "什麼都會一點的新手，適合摸索配方。",
-    "passiveName": "坩堝親和", "passiveDesc": "裂變率 +5%、拾取範圍 +20%",
-    "stats": { "hp": 5, "speed": 220, "fireInterval": 0.5, "damage": 1, "dashCooldown": 1.2 },
-    "fissionBonus": 0.05, "pickupBonus": 0.2,
-    "unlock": { "type": "default", "value": 0, "text": "初始角色" } },
-  { "id": "frost_archer", "name": "冰晶射手", "rarity": 1, "color": "#7ed4ff",
+    "passiveName": "坩堝親和",
+    "passiveDesc": "裂變率 +5%、拾取範圍 +20%",
+    "stats": {
+      "hp": 5,
+      "speed": 220,
+      "fireInterval": 0.5,
+      "damage": 1,
+      "dashCooldown": 1.2
+    },
+    "fissionBonus": 0.05,
+    "pickupBonus": 0.2,
+    "unlock": {
+      "type": "default",
+      "value": 0,
+      "text": "初始角色"
+    },
+    "startWeapon": "seed_shooter",
+    "skill": {
+      "id": "emergency_brew",
+      "name": "緊急煉成",
+      "cooldown": 25,
+      "desc": "坩堝空格自動補上普通素材，立刻煉成喝下"
+    }
+  },
+  {
+    "id": "frost_archer",
+    "name": "冰晶射手",
+    "rarity": 1,
+    "color": "#7ed4ff",
     "desc": "射速快、身板薄，靠冰凍控場。",
-    "passiveName": "霜冷彈頭", "passiveDesc": "開局帶「冰封」1 層，冰晶素材屬性 +50%",
-    "stats": { "hp": 4, "speed": 235, "fireInterval": 0.38, "damage": 0.9, "dashCooldown": 1.1 },
-    "elementBonus": { "I": 1.5 }, "startModules": [{ "id": "rider_I", "n": 1 }],
-    "unlock": { "type": "bestFloor", "value": 3, "text": "任一角色到達第 3 層" } },
-  { "id": "lava_knight", "name": "熔岩重裝", "rarity": 2, "color": "#ff8a3d",
+    "passiveName": "霜冷彈頭",
+    "passiveDesc": "開局帶「冰封」1 層，冰晶素材屬性 +50%",
+    "stats": {
+      "hp": 4,
+      "speed": 235,
+      "fireInterval": 0.38,
+      "damage": 0.9,
+      "dashCooldown": 1.1
+    },
+    "elementBonus": {
+      "I": 1.5
+    },
+    "startModules": [
+      {
+        "id": "rider_I",
+        "n": 1
+      }
+    ],
+    "unlock": {
+      "type": "bestFloor",
+      "value": 3,
+      "text": "任一角色到達第 3 層"
+    },
+    "startWeapon": "pollen_mg",
+    "skill": {
+      "id": "frost_storm",
+      "name": "冰晶風暴",
+      "cooldown": 12,
+      "desc": "向四周射出 24 片冰刃，50% 機率冰凍"
+    }
+  },
+  {
+    "id": "lava_knight",
+    "name": "熔岩重裝",
+    "rarity": 2,
+    "color": "#ff8a3d",
     "desc": "血厚攻高但笨重，被打反而會爆發。",
-    "passiveName": "熔岩護甲", "passiveDesc": "受傷時對周圍爆炸，火焰花素材屬性 +50%",
-    "stats": { "hp": 8, "speed": 180, "fireInterval": 0.65, "damage": 1.6, "dashCooldown": 1.6 },
-    "elementBonus": { "F": 1.5 }, "hurtBlast": { "radius": 140, "damage": 5 },
-    "unlock": { "type": "fissions", "value": 3, "text": "累積裂變 3 次" } },
-  { "id": "storm_sage", "name": "雷菇賢者", "rarity": 3, "color": "#ffe14d",
+    "passiveName": "熔岩護甲",
+    "passiveDesc": "受傷時對周圍爆炸，火焰花素材屬性 +50%",
+    "stats": {
+      "hp": 8,
+      "speed": 180,
+      "fireInterval": 0.65,
+      "damage": 1.6,
+      "dashCooldown": 1.6
+    },
+    "elementBonus": {
+      "F": 1.5
+    },
+    "hurtBlast": {
+      "radius": 140,
+      "damage": 5
+    },
+    "unlock": {
+      "type": "fissions",
+      "value": 3,
+      "text": "累積裂變 3 次"
+    },
+    "startWeapon": "vine_whip",
+    "skill": {
+      "id": "lava_charge",
+      "name": "熔岩衝撞",
+      "cooldown": 10,
+      "desc": "無敵向前衝撞，撞傷路上敵人並留下熔岩"
+    }
+  },
+  {
+    "id": "storm_sage",
+    "name": "雷菇賢者",
+    "rarity": 3,
+    "color": "#ffe14d",
     "desc": "藥水的力量在他身上加倍放大。",
-    "passiveName": "共振", "passiveDesc": "所有藥水被動層數 +25%，開局帶「雷暴之核」1 層",
-    "stats": { "hp": 4, "speed": 215, "fireInterval": 0.45, "damage": 1, "dashCooldown": 1.2 },
-    "elementBonus": { "T": 1.5 }, "moduleMul": 1.25, "startModules": [{ "id": "core_T", "n": 1 }],
-    "unlock": { "type": "bossKills", "value": 1, "text": "擊敗任一區域 Boss" } }
+    "passiveName": "共振",
+    "passiveDesc": "所有藥水被動層數 +25%，開局帶「雷暴之核」1 層",
+    "stats": {
+      "hp": 4,
+      "speed": 215,
+      "fireInterval": 0.45,
+      "damage": 1,
+      "dashCooldown": 1.2
+    },
+    "elementBonus": {
+      "T": 1.5
+    },
+    "moduleMul": 1.25,
+    "startModules": [
+      {
+        "id": "core_T",
+        "n": 1
+      }
+    ],
+    "unlock": {
+      "type": "bossKills",
+      "value": 1,
+      "text": "擊敗任一區域 Boss"
+    },
+    "startWeapon": "thunder_staff",
+    "skill": {
+      "id": "thunder_field",
+      "name": "雷暴領域",
+      "cooldown": 18,
+      "desc": "5 秒內不斷落雷攻擊附近敵人"
+    }
+  }
 ]

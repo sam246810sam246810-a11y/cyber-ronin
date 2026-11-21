@@ -53,6 +53,17 @@ export class Player {
     this.sync();
   }
 
+  /** 技能用的強制衝刺（不吃冷卻） */
+  forceDash(dirX: number, dirY: number, distance: number, duration: number, iframes: number): void {
+    const len = Math.hypot(dirX, dirY) || 1;
+    const speed = distance / duration;
+    this.dashVX = (dirX / len) * speed;
+    this.dashVY = (dirY / len) * speed;
+    this.dashTimer = duration;
+    this.invulnTimer = Math.max(this.invulnTimer, iframes);
+    this.state = 'dash';
+  }
+
   tryDash(dirX: number, dirY: number): boolean {
     if (this.dashCooldown > 0 || this.state === 'dead' || this.state === 'dash') return false;
     let len = Math.hypot(dirX, dirY);

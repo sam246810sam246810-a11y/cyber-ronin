@@ -83,6 +83,37 @@ export interface CharacterDef {
   /** 所有藥水被動層數倍率 */
   moduleMul?: number;
   unlock: { type: 'default' | 'bestFloor' | 'fissions' | 'bossKills'; value: number; text: string };
+  startWeapon: string;
+  skill: SkillDef;
+}
+
+export interface SkillDef {
+  id: 'emergency_brew' | 'frost_storm' | 'lava_charge' | 'thunder_field';
+  name: string;
+  desc: string;
+  cooldown: number;
+}
+
+export type WeaponKind = 'single' | 'spread' | 'melee' | 'boomerang' | 'lance' | 'mortar' | 'chain' | 'orb';
+
+export interface WeaponDef {
+  id: string;
+  name: string;
+  rarity: RarityIndex;
+  kind: WeaponKind;
+  desc: string;
+  intervalMul: number;
+  damageMul: number;
+  speed?: number;
+  bullets?: number;
+  spread?: number;
+  maxDist?: number;
+  jitter?: number;
+  radius?: number;
+  arc?: number;
+  range?: number;
+  pierce?: number;
+  hops?: number;
 }
 
 export type EnemyType =
