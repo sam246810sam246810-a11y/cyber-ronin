@@ -16,7 +16,7 @@ export class Wisp extends Enemy {
     if (this.attackTimer > 0) return;
     this.busy = true;
     this.blink();
-    const p = this.game.player;
+    const p = this.targetPoint();
     const a = Math.atan2(p.y - this.y, p.x - this.x);
     const len = Number(this.def.beamLength ?? 640);
     const x2 = this.x + Math.cos(a) * len;
@@ -34,13 +34,13 @@ export class Wisp extends Enemy {
         this.game.fx.line(this.x, this.y, x2, y2, 0xffffff, 4);
         Sound.play('zap');
         const pl = this.game.player;
-        if (TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
+        if (!this.game.playerHidden && TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
       },
     });
   }
 
   private blink(): void {
-    const p = this.game.player;
+    const p = this.targetPoint();
     this.game.fx.burst(this.x, this.y, 30, 0xc9a3ff);
     for (let i = 0; i < 10; i++) {
       const x = rand(ARENA.x + 60, ARENA_RIGHT - 60);

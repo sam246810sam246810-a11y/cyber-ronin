@@ -11,8 +11,9 @@ import { Hopper } from '../entities/enemies/Hopper';
 import { Spitter } from '../entities/enemies/Spitter';
 import { Splitter } from '../entities/enemies/Splitter';
 import { Wisp } from '../entities/enemies/Wisp';
+import { Thief } from '../entities/enemies/Thief';
 import type { GameScene } from '../scenes/GameScene';
-import type { Material, MinionType, NpcKind, RegionDef, RegionEnemy, RoomModId, RoomType } from '../types';
+import type { Material, MinionType, NpcKind, RegionDef, RegionEnemy, RoomModId, RoomType, TerrainPatch, TerrainType } from '../types';
 import { dist, pick, rand, shuffle } from '../utils';
 import type { EventKind } from './EventSystem';
 import { Sound } from './SoundSystem';
@@ -59,6 +60,12 @@ export interface Room {
   /** 清空後出現的 NPC */
   npc?: NpcKind;
   npcDone?: boolean;
+  /** 元素地形與陽光光斑 */
+  terrain?: TerrainPatch[];
+  /** 紙箱位置（貓咪天性） */
+  box?: { x: number; y: number };
+  /** 可撞翻的雜物架 */
+  shelf?: { x: number; y: number; broken: boolean };
 }
 
 export const isRift = (r?: Room) => r?.type === 'rift_past' || r?.type === 'rift_future';
@@ -270,6 +277,8 @@ export class DungeonSystem {
     if (combatRooms.length && Math.random() < FUN.npcChance) {
       pick(combatRooms).npc = pick(Object.keys(FUN.npcs) as NpcKind[]);
     }
+    // 元素地形、紙箱、雜物架、陽光
+    for (const r of this.rooms) this.decorate(r);
     // 至少留 3 間戰鬥房，不足就把事件房改回戰鬥
     while (this.rooms.filter((r) => r.type === 'combat').length < 3) {
       const r = this.rooms.find((x) => x.type === 'event' || x.type === 'treasure');
@@ -277,6 +286,35 @@ export class DungeonSystem {
       r.type = 'combat';
       r.cleared = false;
     }
+  }
+
+  /** 隨機擺放地形與貓咪互動物件（避開中央與門口） */
+  private decorate(r: Room): void {
+    const spot = (margin = 130): { x: number; y: number } => {
+      for (let i = 0; i < 20; i++) {
+        const x = rand(ARENA.x + margin, ARENA_RIGHT - margin);
+        const y = rand(ARENA.y + margin, ARENA_BOTTOM - margin);
+        const cx = (ARENA.x + ARENA_RIGHT) / 2;
+        const cy = (ARENA.y + ARENA_BOTTOM) / 2;
+        if (Math.abs(x - cx) < 110 && Math.abs(y - cy) < 110) continue;
+        return { x, y };
+      }
+      return { x: ARENA.x + margin, y: ARENA.y + margin };
+    };
+    const terrain: TerrainPatch[] = [];
+    if ((r.type === 'combat' || r.type === 'elite') && Math.random() < 0.75) {
+      const n = 2 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < n; i++) {
+        const type = pick(['water', 'grass', 'grass', 'oil'] as TerrainType[]);
+        terrain.push({ type, ...spot(), r: rand(70, 110) });
+      }
+    }
+    if (r.type === 'start' || ((r.type === 'combat' || r.type === 'treasure') && Math.random() < 0.18)) {
+      terrain.push({ type: 'sun', ...spot(), r: 70 });
+    }
+    r.terrain = terrain;
+    if (r.type === 'combat' && Math.random() < 0.3) r.box = spot(160);
+    if (!['boss', 'exit', 'shop'].includes(r.type) && Math.random() < 0.25) r.shelf = { ...spot(100), broken: false };
   }
 
   private rollShop(): ShopItem[] {
@@ -367,6 +405,7 @@ export class DungeonSystem {
 
   startCombat(elite: boolean): void {
     if (this.current.mod) this.game.onRoomModStart(this.current.mod);
+    this.game.onCombatStart();
     this.phase = 'combat';
     this.phaseTime = 0;
     this.game.setDoorsLocked(true);
@@ -418,6 +457,10 @@ export class DungeonSystem {
       onDone: () => {
         const B = type === 'boss_snail' ? MagmaSnail : type === 'boss_king' ? ThunderKing : FlowerBoss;
         this.boss = new B(this.game, def, x, y);
+        // 時空因果：打碎過實驗筆記
+        const nerf = Math.pow(0.85, this.game.causality.notes);
+        this.boss.maxHp *= nerf;
+        this.boss.hp = this.boss.maxHp;
         this.game.addEnemy(this.boss);
       },
     });
@@ -519,6 +562,7 @@ export class DungeonSystem {
       case 'beetle': return new Beetle(this.game, def, x, y, elite, 'mouse_armor');
       case 'splitter': return new Splitter(this.game, def, x, y, elite, 'yarn');
       case 'wisp': return new Wisp(this.game, def, x, y, elite, 'clock_ghost');
+      case 'thief': return new Thief(this.game, def, x, y, elite, 'mouse');
     }
   }
 

@@ -1,18 +1,62 @@
 {
-  "riftChance": 0.06,
+  "riftChance": 0.08,
   "roomModChance": 0.3,
   "npcChance": 0.55,
   "mods": [
-    { "id": "golden", "name": "黃金房", "desc": "這間房的金幣 ×3", "icon": "☀", "curse": false },
-    { "id": "bounty", "name": "豐饒", "desc": "這間房素材掉落率 +40%", "icon": "✿", "curse": false },
-    { "id": "frenzy", "name": "狂熱", "desc": "這間房攻擊速度 +30%", "icon": "⚡", "curse": false },
-    { "id": "darkness", "name": "黑暗", "desc": "視野縮小（清空後額外金幣）", "icon": "☾", "curse": true },
-    { "id": "gale", "name": "疾風", "desc": "敵人移動速度 +35%（清空後額外金幣）", "icon": "≋", "curse": true },
-    { "id": "gravity", "name": "重力異常", "desc": "子彈會往下彎（清空後額外金幣）", "icon": "⇩", "curse": true }
+    {
+      "id": "golden",
+      "name": "黃金房",
+      "desc": "這間房的金幣 ×3",
+      "icon": "☀",
+      "curse": false
+    },
+    {
+      "id": "bounty",
+      "name": "豐饒",
+      "desc": "這間房素材掉落率 +40%",
+      "icon": "✿",
+      "curse": false
+    },
+    {
+      "id": "frenzy",
+      "name": "狂熱",
+      "desc": "這間房攻擊速度 +30%",
+      "icon": "⚡",
+      "curse": false
+    },
+    {
+      "id": "darkness",
+      "name": "黑暗",
+      "desc": "視野縮小（清空後額外金幣）",
+      "icon": "☾",
+      "curse": true
+    },
+    {
+      "id": "gale",
+      "name": "疾風",
+      "desc": "敵人移動速度 +35%（清空後額外金幣）",
+      "icon": "≋",
+      "curse": true
+    },
+    {
+      "id": "gravity",
+      "name": "重力異常",
+      "desc": "子彈會往下彎（清空後額外金幣）",
+      "icon": "⇩",
+      "curse": true
+    },
+    {
+      "id": "teaser",
+      "name": "逗貓棒",
+      "desc": "忍不住被逗貓棒吸過去（清空後額外金幣）",
+      "icon": "🪶",
+      "curse": true
+    }
   ],
   "npcs": {
     "future_self": {
-      "name": "未來的自己", "color": "#ffd166",
+      "name": "未來的自己",
+      "color": "#ffd166",
       "lines": [
         "喵。我是未來的你……別問我怎麼來的。這個給你，你會用得上。",
         "聽好，時鐘博士很會放十字雷射。……算了，說太多會改變歷史。",
@@ -20,27 +64,52 @@
       ]
     },
     "lost_alchemist": {
-      "name": "迷路的煉金貓", "color": "#c9a3ff",
+      "name": "迷路的煉金貓",
+      "color": "#c9a3ff",
       "lines": [
         "喵嗚……我的坩堝被時鐘博士炸了，把我炸到這裡。能幫我清掉接下來 2 間戰鬥房嗎？我會好好答謝你。"
       ]
     },
     "time_merchant": {
-      "name": "時間旅商貓", "color": "#7ed4ff",
+      "name": "時間旅商貓",
+      "color": "#7ed4ff",
       "lines": [
         "時間是最好的商品，喵。付我 15 枚金幣，你穿過的下一扇門就會通往時空的另一端。"
       ]
     },
     "chatty_mushroom": {
-      "name": "話嘮蘑菇", "color": "#c08a4a",
+      "name": "話嘮蘑菇",
+      "color": "#c08a4a",
       "lines": [
         "你知道嗎？毒傷可以無視盔甲鼠的頭盔喔！",
         "三格放同一種元素，叫做純色藥水，核心被動會疊兩層！",
         "素材越稀有，裂變率越高。傳說素材一個就 +12% 呢！",
         "炸彈鼠被你打爆的話，炸到的是牠旁邊的同伴喔。",
-        "聽說穿門的時候，有時會掉進時空裂縫……我上次就在未來迷路了三天。"
-        ,"毛線球怪打散了還會再分裂，貓咪千萬別跟它玩起來啊！"
+        "聽說穿門的時候，有時會掉進時空裂縫……我上次就在未來迷路了三天。",
+        "毛線球怪打散了還會再分裂，貓咪千萬別跟它玩起來啊！"
       ]
     }
-  }
+  },
+  "history": [
+    {
+      "id": "flower",
+      "name": "種下守護花",
+      "desc": "之後每間戰鬥房都會長出會射擊的守護花（可疊加）"
+    },
+    {
+      "id": "notes",
+      "name": "打碎實驗筆記",
+      "desc": "時鐘博士的研究被毀，之後的 Boss 血量 −15%（可疊加）"
+    },
+    {
+      "id": "kitten",
+      "name": "救下迷路小貓",
+      "desc": "小貓長大後開了店，之後商店打 75 折"
+    },
+    {
+      "id": "bury",
+      "name": "埋下時之砂",
+      "desc": "在未來挖出來：結算時多 20 時之砂"
+    }
+  ]
 }

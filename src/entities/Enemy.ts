@@ -168,6 +168,20 @@ export abstract class Enemy {
     }
   }
 
+  /** 躲紙箱時的亂晃目標 */
+  private confused = { x: 0, y: 0, t: 0 };
+
+  /** 追擊目標：玩家躲進紙箱時改成在附近亂晃 */
+  targetPoint(): { x: number; y: number } {
+    const p = this.game.player;
+    if (!this.game.playerHidden || this.def.boss) return p;
+    this.confused.t -= 1 / 30;
+    if (this.confused.t <= 0) {
+      this.confused = { x: this.x + (Math.random() - 0.5) * 300, y: this.y + (Math.random() - 0.5) * 300, t: 1.5 };
+    }
+    return this.confused;
+  }
+
   /** 護盾等吸收傷害的鉤子，回傳實際扣血量 */
   protected absorb(amount: number, _opts: DamageOptions): number {
     return amount;

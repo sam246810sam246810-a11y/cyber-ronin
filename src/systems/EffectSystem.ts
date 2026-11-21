@@ -113,7 +113,10 @@ export class EffectSystem {
 
   explode(x: number, y: number, r: number, damage: number, color: number, opts: ExplodeOptions = {}): Enemy[] {
     this.game.fx.burst(x, y, r, color);
-    if (damage > 0) Sound.play('explode');
+    if (damage > 0) {
+      Sound.play('explode');
+      this.game.terrain?.onHit(x, y);
+    }
     const hit = this.enemiesInRadius(x, y, r);
     for (const e of hit) {
       if (opts.freeze) e.applyFreeze(opts.freeze);

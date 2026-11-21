@@ -12,7 +12,7 @@ import metaJson from './meta.json';
 import { RARITY } from '../config';
 import type {
   CharacterDef, ElementDef, ElementId, EnemyDef, EnemyType, Material, MutationDef, MythicDef, RarityIndex,
-  RecipeDef, RegionDef, WeaponDef, RelicDef, MetaUpgradeDef, RoomModDef, NpcKind, NpcDef, RegionTheme,
+  RecipeDef, RegionDef, WeaponDef, RelicDef, MetaUpgradeDef, HistoryId, RoomModDef, NpcKind, NpcDef, RegionTheme,
 } from '../types';
 
 export const ELEMENTS = elementsJson as ElementDef[];
@@ -116,6 +116,7 @@ export const FUN = funJson as unknown as {
   npcChance: number;
   mods: RoomModDef[];
   npcs: Record<NpcKind, NpcDef>;
+  history: { id: HistoryId; name: string; desc: string }[];
 };
 
 /** 時空裂縫的場景配色 */

@@ -16,7 +16,7 @@ export class Splitter extends Enemy {
   }
 
   protected act(dt: number): void {
-    const p = this.game.player;
+    const p = this.targetPoint();
     const wobble = 1 + 0.15 * Math.sin(this.game.time.now / 120 + this.x);
     this.moveToward(p.x, p.y, dt, this.speed * wobble);
   }

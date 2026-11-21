@@ -9,7 +9,7 @@ import { isRift, type Room } from './DungeonSystem';
 import { Sound } from './SoundSystem';
 
 export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs' | 'npc' | 'portal'
-  | 'statue' | 'cauldron' | 'shelf' | 'bookshelf' | 'start';
+  | 'statue' | 'cauldron' | 'shelf' | 'bookshelf' | 'start' | 'history' | 'knock';
 
 const INFO: Record<EventKind, { name: string; color: number; texture: string }> = {
   chest: { name: '寶箱', color: 0xffd166, texture: 'chest' },
@@ -25,10 +25,12 @@ const INFO: Record<EventKind, { name: string; color: number; texture: string }> 
   shelf: { name: '聖物展示架', color: 0xffd166, texture: 'shelf' },
   bookshelf: { name: '配方圖鑑', color: 0x7ed4ff, texture: 'bookshelf' },
   start: { name: '出發冒險！', color: 0x7eff8a, texture: 'ring' },
+  history: { name: '時之石・改寫歷史', color: 0xe0c08a, texture: 'relic' },
+  knock: { name: '雜物架（衝刺撞翻）', color: 0xc8a070, texture: 'shelf' },
 };
 
 const SIZES: Partial<Record<EventKind, [number, number]>> = {
-  stairs: [96, 96], portal: [96, 96], start: [120, 120], cauldron: [230, 154], shelf: [110, 110], bookshelf: [110, 110], statue: [80, 80],
+  stairs: [96, 96], portal: [96, 96], start: [120, 120], cauldron: [230, 154], history: [70, 70], knock: [96, 96], shelf: [110, 110], bookshelf: [110, 110], statue: [80, 80],
 };
 
 interface RoomObject {
@@ -69,6 +71,8 @@ export class EventSystem {
     if (room.type === 'exit') this.spawn('stairs', cx, cy);
     if (room.type === 'boss' && room.cleared) this.spawn('stairs', cx, cy);
     if (isRift(room) && room.cleared) this.spawn('portal', cx, cy);
+    if (room.type === 'rift_past' && room.cleared && !room.used) this.spawn('history', cx - 220, cy);
+    if (room.shelf && !room.shelf.broken) this.spawn('knock', room.shelf.x, room.shelf.y);
     if (room.npc && !room.npcDone && room.cleared) this.spawn('npc', cx + 200, cy, room.npc);
   }
 
@@ -194,6 +198,24 @@ export class EventSystem {
       case 'start':
         g.startRunFromLobby();
         break;
+      case 'history':
+        this.openHistory(room);
+        break;
+      case 'knock':
+        if (g.player.state !== 'dash') {
+          g.fx.floatText(x, y - 60, '用衝刺撞翻它！', '#ffd166', 20);
+          break;
+        }
+        if (room.shelf) room.shelf.broken = true;
+        this.removeActive();
+        Sound.play('explode');
+        g.fx.shatter(x, y, 0xc8a070, 40, 14);
+        g.cameras.main.shake(120, 0.006);
+        g.fx.floatText(x, y - 50, '喵！全部打翻～', '#ffd166', 22);
+        g.dropCoins(x, y, 3 + Math.floor(Math.random() * 4));
+        g.dropMaterial(x + 40, y + 30);
+        if (Math.random() < 0.12) g.dropRelic(x - 50, y + 30);
+        break;
       case 'fountain':
         this.openFountain(room);
         break;
@@ -204,6 +226,19 @@ export class EventSystem {
         this.openShop(room);
         break;
     }
+  }
+
+  /** 過去裂縫的時之石：三選一改寫歷史 */
+  private openHistory(room: Room): void {
+    const g = this.game;
+    const opts = [...FUN.history].sort(() => Math.random() - 0.5).slice(0, 3);
+    this.open('改寫歷史', '你在過去留下的痕跡，會改變接下來的冒險。', '#e0c08a', opts.map((h) => ({
+      label: h.name, desc: h.desc, enabled: true,
+      onPick: () => g.applyHistory(h.id),
+    })), () => {
+      room.used = true;
+      this.removeActive();
+    });
   }
 
   private openNpc(room: Room, npc: NpcKind): void {
@@ -319,12 +354,13 @@ export class EventSystem {
   private openShop(room: Room): void {
     const g = this.game;
     const items = room.shop ?? [];
-    this.open('商店', `「歡迎光臨！」　持有金幣：${g.coins}`, '#7eff8a', items.map((it) => ({
-      label: it.sold ? `${it.label}（已售出）` : `${it.label}　🪙${it.price}`,
+    const price = (n: number) => (g.causality.kitten ? Math.round(n * 0.75) : n);
+    this.open('商店', `「歡迎光臨！」${g.causality.kitten ? '（小貓店長：全部 75 折喵！）' : ''}　持有金幣：${g.coins}`, '#7eff8a', items.map((it) => ({
+      label: it.sold ? `${it.label}（已售出）` : `${it.label}　🪙${price(it.price)}`,
       desc: it.desc,
-      enabled: !it.sold && g.coins >= it.price,
+      enabled: !it.sold && g.coins >= price(it.price),
       onPick: () => {
-        g.coins -= it.price;
+        g.coins -= price(it.price);
         it.sold = true;
         Sound.play('pickup', 2);
         switch (it.id) {

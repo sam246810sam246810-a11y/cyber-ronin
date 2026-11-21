@@ -25,11 +25,13 @@ import { RelicPickup } from '../entities/RelicPickup';
 import { RelicSystem } from '../systems/RelicSystem';
 import { MetaStore } from '../systems/MetaStore';
 import { Dummy } from '../entities/enemies/Dummy';
+import { TerrainSystem } from '../systems/TerrainSystem';
+import { GuardianFlower } from '../entities/Ally';
 import { HazardSystem } from '../systems/HazardSystem';
 import { EventSystem } from '../systems/EventSystem';
 import { TutorialSystem } from '../systems/TutorialSystem';
 import { Sound } from '../systems/SoundSystem';
-import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme, RelicDef, RoomModId, WeaponDef } from '../types';
+import type { Brew, CharacterDef, ElementId, HistoryId, Material, RarityIndex, RegionDef, RegionTheme, RelicDef, RoomModId, WeaponDef } from '../types';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
@@ -78,6 +80,14 @@ export class GameScene extends Phaser.Scene {
   sand = 0;
   /** 剩餘突變卡重抽次數 */
   rerolls = 0;
+  terrain!: TerrainSystem;
+  /** 躲在紙箱裡：敵人找不到、也不會攻擊 */
+  playerHidden = false;
+  /** 時空因果：在過去改寫的歷史 */
+  causality = { flowers: 0, notes: 0, kitten: false, bury: 0 };
+  private allies: GuardianFlower[] = [];
+  private box?: { x: number; y: number; time: number; sprite: Phaser.GameObjects.Image; label: Phaser.GameObjects.Text };
+  private teaser?: { sprite: Phaser.GameObjects.Image; t: number };
   private swapBtn!: RoundButton;
   private skillBtn!: RoundButton;
   private weaponText!: Phaser.GameObjects.Text;
@@ -124,6 +134,11 @@ export class GameScene extends Phaser.Scene {
     this.weaponPickups = [];
     this.relicPickups = [];
     this.sand = 0;
+    this.playerHidden = false;
+    this.causality = { flowers: 0, notes: 0, kitten: false, bury: 0 };
+    this.allies = [];
+    this.box = undefined;
+    this.teaser = undefined;
     this.quest = undefined;
     this.darkness = undefined;
     this.drawnTheme = undefined;
@@ -150,6 +165,7 @@ export class GameScene extends Phaser.Scene {
     this.hazards = new HazardSystem(this);
     this.encounters = new EventSystem(this);
     this.relics = new RelicSystem(this);
+    this.terrain = new TerrainSystem(this);
     this.crucible.qualityBonusProvider = () => this.encounters.takeQualityBonus() + this.relics.qualityBonus();
     this.crucible.bonusChance += 0.03 * MetaStore.level('affinity');
     this.crucible.extraChance = () => this.relics.fissionAdd;
@@ -300,6 +316,10 @@ export class GameScene extends Phaser.Scene {
     this.updateCoins(dt);
     this.updateWeaponPickups(dt);
     this.updateRelicPickups(dt);
+    this.terrain.update(dt, Math.hypot(move.x, move.y) > 0.1 || this.player.state === 'dash');
+    this.allies.forEach((a) => a.update(dt));
+    this.updateBox(dt);
+    this.updateTeaser(dt);
     this.dungeon.update(dt);
 
     if (this.darkness) {
@@ -403,7 +423,7 @@ export class GameScene extends Phaser.Scene {
 
   private checkContact(): void {
     const p = this.player;
-    if (p.invulnerable) return;
+    if (p.invulnerable || this.playerHidden) return;
     for (const e of this.enemies) {
       if (!e.alive || e.airborne || e.frozen) continue;
       const rr = e.radius + p.radius * 0.7;
@@ -610,6 +630,9 @@ export class GameScene extends Phaser.Scene {
     else if (fromDir === 'e') p.setPosition(ARENA_RIGHT - inset, cy);
     else p.setPosition(cx, ARENA.y + ARENA.h * 0.7);
 
+    this.terrain.load(room.terrain ?? []);
+    this.clearRoomExtras();
+    if (room.box) this.spawnBox(room.box.x, room.box.y);
     if (room.type === 'lobby') this.drawArena(LOBBY_THEME);
     else if (room.type === 'rift_past') this.drawArena(RIFT_THEMES.past);
     else if (room.type === 'rift_future') this.drawArena(RIFT_THEMES.future);
@@ -625,6 +648,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   onRoomCleared(room: Room): void {
+    this.allies.forEach((a) => a.destroy());
+    this.allies = [];
+    this.teaser?.sprite.destroy();
+    this.teaser = undefined;
     this.relics.onRoomClear();
     if (room.type === 'elite') this.addSand(3);
     if (room.type === 'rift_past') this.addSand(5);
@@ -725,6 +752,10 @@ export class GameScene extends Phaser.Scene {
     const parts: string[] = [];
     if (mod) parts.push(`${mod.icon} ${mod.name}：${mod.desc}${room.cleared ? '（已結束）' : ''}`);
     if (this.quest) parts.push(`📜 委託：再清 ${this.quest.left} 間戰鬥房`);
+    const c = this.causality;
+    const hist = [c.flowers ? `守護花×${c.flowers}` : '', c.notes ? `Boss 血量 −${Math.round((1 - Math.pow(0.85, c.notes)) * 100)}%` : '',
+      c.kitten ? '商店 75 折' : '', c.bury ? `埋砂×${c.bury}` : ''].filter(Boolean);
+    if (hist.length) parts.push(`⌛ 改寫的歷史：${hist.join('、')}`);
     if (this.dungeon.forceRift) parts.push('⌛ 時空正在扭曲……');
     this.modText.setText(parts.join('\n')).setColor(mod?.curse && !room.cleared ? '#ff9aa8' : '#ffe9a8');
   }
@@ -808,6 +839,95 @@ export class GameScene extends Phaser.Scene {
       if (dropped) this.weaponPickups.push(new WeaponPickup(this, dropped, wp.x, wp.y, false));
     }
     this.weaponPickups = this.weaponPickups.filter((w) => w.alive);
+  }
+
+  // ---- 時空因果 / 貓咪天性 ----
+
+  /** 進入戰鬥：長出守護花 */
+  onCombatStart(): void {
+    for (let i = 0; i < this.causality.flowers; i++) {
+      const a = (Math.PI * 2 * i) / Math.max(1, this.causality.flowers) + Math.random();
+      const x = Math.max(ARENA.x + 40, Math.min(ARENA_RIGHT - 40, this.player.x + Math.cos(a) * 110));
+      const y = Math.max(ARENA.y + 40, Math.min(ARENA_BOTTOM - 40, this.player.y + Math.sin(a) * 110));
+      this.allies.push(new GuardianFlower(this, x, y));
+    }
+  }
+
+  applyHistory(id: HistoryId): void {
+    const c = this.causality;
+    if (id === 'flower') c.flowers++;
+    if (id === 'notes') c.notes++;
+    if (id === 'kitten') c.kitten = true;
+    if (id === 'bury') c.bury++;
+    const h = FUN.history.find((x) => x.id === id)!;
+    this.hud.showToast(`歷史被改寫了：${h.name}`, h.desc, '#e0c08a');
+    Sound.play('fission');
+    this.refreshModText();
+  }
+
+  private clearRoomExtras(): void {
+    this.allies.forEach((a) => a.destroy());
+    this.allies = [];
+    this.box?.sprite.destroy();
+    this.box?.label.destroy();
+    this.box = undefined;
+    this.teaser?.sprite.destroy();
+    this.teaser = undefined;
+    this.playerHidden = false;
+  }
+
+  private spawnBox(x: number, y: number): void {
+    const sprite = this.add.image(x, y, 'box').setDisplaySize(84, 70).setDepth(DEPTH.pickup);
+    const label = this.add.text(x, y - 52, '紙箱（鑽進去躲 4 秒）', {
+      fontFamily: FONT, fontSize: '15px', color: '#e8d0a8', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(DEPTH.pickup + 1);
+    this.box = { x, y, time: 4, sprite, label };
+  }
+
+  private updateBox(dt: number): void {
+    const b = this.box;
+    if (!b) return;
+    const p = this.player;
+    const inside = b.time > 0 && Math.abs(p.x - b.x) < 40 && Math.abs(p.y - b.y) < 34;
+    if (inside && !this.playerHidden) {
+      this.fx.floatText(b.x, b.y - 60, '躲進紙箱！', '#ffd166', 20);
+      Sound.play('card');
+    }
+    this.playerHidden = inside;
+    p.sprite.setAlpha(inside ? 0.25 : p.sprite.alpha);
+    if (!inside && b.time > 0) b.label.setText(`紙箱（還能躲 ${b.time.toFixed(1)} 秒）`);
+    if (inside) {
+      b.time -= dt;
+      b.label.setText(`躲藏中… ${b.time.toFixed(1)}s`);
+      b.sprite.setRotation(Math.sin(this.time.now / 60) * 0.05);
+      if (b.time <= 0) {
+        this.playerHidden = false;
+        b.label.setText('紙箱壞掉了');
+        b.sprite.setAlpha(0.4).setRotation(0.3);
+        this.fx.shatter(b.x, b.y, 0xc8a070, 30, 8);
+      }
+    }
+  }
+
+  private updateTeaser(dt: number): void {
+    const active = this.roomMod === 'teaser' && !this.dungeon.current.cleared && this.dungeon.combatActive;
+    if (!active) return;
+    if (!this.teaser) {
+      this.teaser = { sprite: this.add.image(GAME_W / 2, ARENA.y + 200, 'teaser').setDisplaySize(60, 80).setDepth(DEPTH.player + 2), t: 0 };
+    }
+    const t = this.teaser;
+    t.t += dt;
+    const cx = (ARENA.x + ARENA_RIGHT) / 2;
+    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
+    const tx = cx + Math.cos(t.t * 0.6) * ARENA.w * 0.32;
+    const ty = cy + Math.sin(t.t * 0.9) * ARENA.h * 0.28;
+    t.sprite.setPosition(tx, ty).setRotation(Math.sin(t.t * 6) * 0.4);
+    const p = this.player;
+    const d = Math.hypot(tx - p.x, ty - p.y);
+    if (d > 30 && p.state !== 'dash') {
+      p.x += ((tx - p.x) / d) * 95 * dt;
+      p.y += ((ty - p.y) / d) * 95 * dt;
+    }
   }
 
   // ---- 大廳 ----
@@ -1064,7 +1184,7 @@ export class GameScene extends Phaser.Scene {
     this.telegraphs.clear();
     this.tutorial.finish();
     // 時之砂：本局掉落 + 依樓層結算，倒下也保留
-    const bonus = this.dungeon.globalFloor * 3 + (victory ? 30 : 0);
+    const bonus = this.dungeon.globalFloor * 3 + (victory ? 30 : 0) + 20 * this.causality.bury;
     this.sand += bonus;
     MetaStore.addSand(this.sand);
     const data: ResultData = {

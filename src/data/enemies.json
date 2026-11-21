@@ -117,5 +117,16 @@
     "contactDamage": 1,
     "attackInterval": 2.4,
     "telegraph": 0.9
+  },
+  "thief": {
+    "type": "thief",
+    "name": "煉金鼠",
+    "hp": 6,
+    "speed": 150,
+    "radius": 18,
+    "color": "#d8b8ff",
+    "contactDamage": 1,
+    "attackInterval": 2.6,
+    "telegraph": 0.7
   }
 }

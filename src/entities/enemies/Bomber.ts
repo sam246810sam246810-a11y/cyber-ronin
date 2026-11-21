@@ -9,7 +9,7 @@ export class Bomber extends Enemy {
 
   protected act(dt: number): void {
     if (this.arming) return;
-    const p = this.game.player;
+    const p = this.targetPoint();
     this.moveToward(p.x, p.y, dt);
     const trigger = Number(this.def.triggerRange ?? 90);
     if (dist(this.x, this.y, p.x, p.y) < trigger) {
@@ -26,7 +26,7 @@ export class Bomber extends Enemy {
             return;
           }
           const pl = this.game.player;
-          if (TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
+          if (!this.game.playerHidden && TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
           this.game.fx.burst(this.x, this.y, r, 0xff5a2a);
           Sound.play('explode');
           this.selfDestruct = true;

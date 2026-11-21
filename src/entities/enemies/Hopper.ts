@@ -9,7 +9,7 @@ export class Hopper extends Enemy {
   private jump?: { sx: number; sy: number; tx: number; ty: number; t: number; dur: number };
 
   protected act(dt: number): void {
-    const p = this.game.player;
+    const p = this.targetPoint();
     if (this.jump) {
       const j = this.jump;
       j.t = Math.min(j.dur, j.t + dt);
@@ -42,7 +42,7 @@ export class Hopper extends Enemy {
         this.game.fx.burst(tx, ty, r, 0xc08a4a);
         this.game.cameras.main.shake(80, 0.004);
         const pl = this.game.player;
-        if (TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
+        if (!this.game.playerHidden && TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
       },
     });
   }

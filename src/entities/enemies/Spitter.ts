@@ -9,7 +9,7 @@ export class Spitter extends Enemy {
   protected act(dt: number): void {
     if (this.attacking) return;
     this.attackTimer -= dt;
-    const p = this.game.player;
+    const p = this.targetPoint();
     const range = Number(this.def.range ?? 420);
     if (this.attackTimer > 0 || dist(this.x, this.y, p.x, p.y) > range * 1.6) return;
 

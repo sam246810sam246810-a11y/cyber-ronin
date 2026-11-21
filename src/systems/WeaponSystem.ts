@@ -54,7 +54,7 @@ export class WeaponSystem extends Phaser.Events.EventEmitter {
   update(dt: number): void {
     this.timer -= dt;
     const p = this.game.player;
-    if (this.timer > 0 || p.state === 'dead') return;
+    if (this.timer > 0 || p.state === 'dead' || this.game.playerHidden) return;
     const w = this.weapon;
     const range = w.range ?? PLAYER.autoAimRange;
     const target = this.game.effects.nearestEnemy(p.x, p.y, range);

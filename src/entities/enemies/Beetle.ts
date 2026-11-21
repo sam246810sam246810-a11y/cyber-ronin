@@ -19,7 +19,7 @@ export class Beetle extends Enemy {
   }
 
   protected act(dt: number): void {
-    const p = this.game.player;
+    const p = this.targetPoint();
     this.moveToward(p.x, p.y, dt);
     this.sprite.setFlipX(p.x < this.x);
     this.sinceHit += dt;

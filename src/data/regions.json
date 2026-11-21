@@ -1,37 +1,170 @@
 [
   {
-    "id": "greenhouse", "name": "溫室", "subtitle": "失控的植物溫室", "hpMul": 1, "boss": "boss_flower",
-    "theme": { "bg": "#0f1a14", "floor": "#16261c", "tile": "#1b2e22", "wall": "#2c4a36", "deco": "#3a5a2a", "decoLight": "#6aa84f" },
+    "id": "greenhouse",
+    "name": "溫室",
+    "subtitle": "失控的植物溫室",
+    "hpMul": 1,
+    "boss": "boss_flower",
+    "theme": {
+      "bg": "#0f1a14",
+      "floor": "#16261c",
+      "tile": "#1b2e22",
+      "wall": "#2c4a36",
+      "deco": "#3a5a2a",
+      "decoLight": "#6aa84f"
+    },
     "enemies": [
-      { "type": "crawler", "weight": 6, "cost": 1, "minFloor": 1 },
-      { "type": "spitter", "weight": 2, "cost": 3, "minFloor": 1 },
-      { "type": "hopper", "weight": 2, "cost": 3, "minFloor": 2 }
+      {
+        "type": "crawler",
+        "weight": 6,
+        "cost": 1,
+        "minFloor": 1
+      },
+      {
+        "type": "spitter",
+        "weight": 2,
+        "cost": 3,
+        "minFloor": 1
+      },
+      {
+        "type": "hopper",
+        "weight": 2,
+        "cost": 3,
+        "minFloor": 2
+      },
+      {
+        "type": "thief",
+        "weight": 1.6,
+        "cost": 2,
+        "minFloor": 1
+      }
     ],
-    "roomBudget": [9, 13, 16]
+    "roomBudget": [
+      9,
+      13,
+      16
+    ]
   },
   {
-    "id": "lava", "name": "熔岩花園", "subtitle": "沸騰的火焰花田", "hpMul": 1.7, "boss": "boss_snail",
-    "theme": { "bg": "#1a0f0c", "floor": "#2a1612", "tile": "#341b14", "wall": "#6a2a1a", "deco": "#7a2a10", "decoLight": "#ff8a3d" },
+    "id": "lava",
+    "name": "熔岩花園",
+    "subtitle": "沸騰的火焰花田",
+    "hpMul": 1.7,
+    "boss": "boss_snail",
+    "theme": {
+      "bg": "#1a0f0c",
+      "floor": "#2a1612",
+      "tile": "#341b14",
+      "wall": "#6a2a1a",
+      "deco": "#7a2a10",
+      "decoLight": "#ff8a3d"
+    },
     "enemies": [
-      { "type": "crawler", "weight": 4, "cost": 1, "minFloor": 1 },
-      { "type": "bomber", "weight": 4, "cost": 2, "minFloor": 1 },
-      { "type": "beetle", "weight": 2, "cost": 3, "minFloor": 1 },
-      { "type": "spitter", "weight": 1, "cost": 3, "minFloor": 2 },
-      { "type": "hopper", "weight": 1, "cost": 3, "minFloor": 2 }
+      {
+        "type": "crawler",
+        "weight": 4,
+        "cost": 1,
+        "minFloor": 1
+      },
+      {
+        "type": "bomber",
+        "weight": 4,
+        "cost": 2,
+        "minFloor": 1
+      },
+      {
+        "type": "beetle",
+        "weight": 2,
+        "cost": 3,
+        "minFloor": 1
+      },
+      {
+        "type": "spitter",
+        "weight": 1,
+        "cost": 3,
+        "minFloor": 2
+      },
+      {
+        "type": "hopper",
+        "weight": 1,
+        "cost": 3,
+        "minFloor": 2
+      },
+      {
+        "type": "thief",
+        "weight": 1.6,
+        "cost": 2,
+        "minFloor": 1
+      }
     ],
-    "roomBudget": [14, 17, 20]
+    "roomBudget": [
+      14,
+      17,
+      20
+    ]
   },
   {
-    "id": "storm", "name": "雷雲山頂", "subtitle": "雷鳴不止的菇林高原", "hpMul": 2.6, "boss": "boss_king",
-    "theme": { "bg": "#0e0f1c", "floor": "#171a2e", "tile": "#1d2138", "wall": "#3a3a6a", "deco": "#3a2a6a", "decoLight": "#ffe14d" },
+    "id": "storm",
+    "name": "雷雲山頂",
+    "subtitle": "雷鳴不止的菇林高原",
+    "hpMul": 2.6,
+    "boss": "boss_king",
+    "theme": {
+      "bg": "#0e0f1c",
+      "floor": "#171a2e",
+      "tile": "#1d2138",
+      "wall": "#3a3a6a",
+      "deco": "#3a2a6a",
+      "decoLight": "#ffe14d"
+    },
     "enemies": [
-      { "type": "splitter", "weight": 4, "cost": 3, "minFloor": 1 },
-      { "type": "crawler", "weight": 3, "cost": 1, "minFloor": 1 },
-      { "type": "wisp", "weight": 2, "cost": 3, "minFloor": 1 },
-      { "type": "bomber", "weight": 2, "cost": 2, "minFloor": 2 },
-      { "type": "beetle", "weight": 1, "cost": 3, "minFloor": 2 },
-      { "type": "hopper", "weight": 1, "cost": 3, "minFloor": 3 }
+      {
+        "type": "splitter",
+        "weight": 4,
+        "cost": 3,
+        "minFloor": 1
+      },
+      {
+        "type": "crawler",
+        "weight": 3,
+        "cost": 1,
+        "minFloor": 1
+      },
+      {
+        "type": "wisp",
+        "weight": 2,
+        "cost": 3,
+        "minFloor": 1
+      },
+      {
+        "type": "bomber",
+        "weight": 2,
+        "cost": 2,
+        "minFloor": 2
+      },
+      {
+        "type": "beetle",
+        "weight": 1,
+        "cost": 3,
+        "minFloor": 2
+      },
+      {
+        "type": "hopper",
+        "weight": 1,
+        "cost": 3,
+        "minFloor": 3
+      },
+      {
+        "type": "thief",
+        "weight": 1.6,
+        "cost": 2,
+        "minFloor": 1
+      }
     ],
-    "roomBudget": [17, 20, 23]
+    "roomBudget": [
+      17,
+      20,
+      23
+    ]
   }
 ]

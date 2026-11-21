@@ -132,7 +132,7 @@ export class ProjectileSystem {
         }
       } else {
         const rr = p.radius * 0.7 + b.r;
-        if ((p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= rr * rr && !p.invulnerable) {
+        if (!this.game.playerHidden && (p.x - b.x) ** 2 + (p.y - b.y) ** 2 <= rr * rr && !p.invulnerable) {
           this.game.hurtPlayer(b.damage);
           b.dead = true;
         }
@@ -167,6 +167,7 @@ export class ProjectileSystem {
     e.takeDamage(dmg, { crit });
     Sound.play(crit ? 'crit' : 'hit');
     if (o.splash) this.game.effects.explode(e.x, e.y, o.splash, dmg * 0.5, 0xe06bff);
+    if (o.triggerPassives !== undefined) this.game.terrain?.onHit(e.x, e.y);
     return crit;
   }
 

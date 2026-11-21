@@ -119,7 +119,7 @@ export interface WeaponDef {
 }
 
 export type EnemyType =
-  | 'crawler' | 'spitter' | 'hopper' | 'bomber' | 'beetle' | 'splitter' | 'wisp'
+  | 'crawler' | 'spitter' | 'hopper' | 'bomber' | 'beetle' | 'splitter' | 'wisp' | 'thief'
   | 'boss_flower' | 'boss_snail' | 'boss_king';
 export type MinionType = Exclude<EnemyType, 'boss_flower' | 'boss_snail' | 'boss_king'>;
 export type BossType = Extract<EnemyType, 'boss_flower' | 'boss_snail' | 'boss_king'>;
@@ -170,7 +170,7 @@ export interface RegionDef {
 
 export type RoomType = 'start' | 'combat' | 'elite' | 'treasure' | 'shop' | 'event' | 'exit' | 'boss' | 'rift_past' | 'rift_future' | 'lobby';
 
-export type RoomModId = 'golden' | 'bounty' | 'frenzy' | 'darkness' | 'gale' | 'gravity';
+export type RoomModId = 'golden' | 'bounty' | 'frenzy' | 'darkness' | 'gale' | 'gravity' | 'teaser';
 export interface RoomModDef {
   id: RoomModId;
   name: string;
@@ -215,3 +215,13 @@ export interface MetaUpgradeDef {
   max: number;
   costs: number[];
 }
+
+export type TerrainType = 'water' | 'grass' | 'oil' | 'sun';
+export interface TerrainPatch {
+  type: TerrainType;
+  x: number;
+  y: number;
+  r: number;
+}
+
+export type HistoryId = 'flower' | 'notes' | 'kitten' | 'bury';
