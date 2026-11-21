@@ -33,10 +33,29 @@
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
       }
       canvas { touch-action: none; display: block; }
+      #rotate {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        background: #0f1a14;
+        color: #f4f0e6;
+        font: 600 20px 'PingFang TC','Noto Sans TC',system-ui,sans-serif;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 16px;
+        text-align: center;
+        padding: 24px;
+      }
+      #rotate .icon { font-size: 56px; animation: tilt 1.6s ease-in-out infinite; }
+      @keyframes tilt { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-90deg); } }
+      @media (orientation: portrait) and (max-width: 900px) { #rotate { display: flex; } }
     </style>
   </head>
   <body>
     <div id="game"></div>
+    <div id="rotate"><div class="icon">📱</div><div>請把手機橫放來玩</div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

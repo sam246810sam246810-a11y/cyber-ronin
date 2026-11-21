@@ -1,5 +1,5 @@
 import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, RARITY } from '../config';
-import { ENEMIES, FLOORS_PER_REGION, REGIONS } from '../data';
+import { ENEMIES, FLOORS_PER_REGION, FUN, REGIONS } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { FlowerBoss } from '../entities/bosses/FlowerBoss';
 import { MagmaSnail } from '../entities/bosses/MagmaSnail';
@@ -12,7 +12,7 @@ import { Spitter } from '../entities/enemies/Spitter';
 import { Splitter } from '../entities/enemies/Splitter';
 import { Wisp } from '../entities/enemies/Wisp';
 import type { GameScene } from '../scenes/GameScene';
-import type { Material, MinionType, RegionDef, RoomType } from '../types';
+import type { Material, MinionType, NpcKind, RegionDef, RegionEnemy, RoomModId, RoomType } from '../types';
 import { dist, pick, rand, shuffle } from '../utils';
 import type { EventKind } from './EventSystem';
 import { Sound } from './SoundSystem';
@@ -51,7 +51,14 @@ export interface Room {
   weapons: { id: string; x: number; y: number }[];
   eventKind?: EventKind;
   shop?: ShopItem[];
+  /** 房間詞條（祝福 / 詛咒） */
+  mod?: RoomModId;
+  /** 清空後出現的 NPC */
+  npc?: NpcKind;
+  npcDone?: boolean;
 }
+
+export const isRift = (r?: Room) => r?.type === 'rift_past' || r?.type === 'rift_future';
 
 export type DungeonPhase = 'explore' | 'combat' | 'boss' | 'cards' | 'victory' | 'defeat';
 
@@ -79,6 +86,10 @@ export class DungeonSystem {
   private pendingSpawns = 0;
   private wavesLeft: QueuedSpawn[][] = [];
   private phaseTime = 0;
+  /** 時空裂縫：結束後要回去的房間 */
+  private riftReturn?: { room: Room; fromDir: Dir };
+  /** 時間旅商：下一次穿門必定進入裂縫 */
+  forceRift = false;
 
   constructor(private game: GameScene) {}
 
@@ -88,6 +99,11 @@ export class DungeonSystem {
 
   /** 敵人血量倍率：區域倍率 × 層數成長 */
   get hpMul(): number {
+    if (this.current?.type === 'rift_past') return 0.8;
+    if (this.current?.type === 'rift_future') {
+      const next = REGIONS[Math.min(REGIONS.length - 1, this.regionIndex + 1)];
+      return next.hpMul * (this.regionIndex >= REGIONS.length - 1 ? 1.5 : 1.25);
+    }
     return this.region.hpMul * (1 + 0.15 * (this.floor - 1));
   }
 
@@ -105,7 +121,13 @@ export class DungeonSystem {
   }
 
   get label(): string {
+    if (this.current?.type === 'rift_past') return '時空裂縫・過去';
+    if (this.current?.type === 'rift_future') return '時空裂縫・未來';
     return `${this.region.name} ${this.regionIndex + 1}-${this.floor}`;
+  }
+
+  get inRift(): boolean {
+    return isRift(this.current);
   }
 
   get combatActive(): boolean {
@@ -194,6 +216,14 @@ export class DungeonSystem {
       if (t === 'event') r.eventKind = Math.random() < 0.5 ? 'fountain' : 'merchant';
       if (t === 'shop') r.shop = this.rollShop();
     }
+    // 房間詞條與 NPC
+    for (const r of this.rooms) {
+      if (r.type === 'combat' && Math.random() < FUN.roomModChance) r.mod = pick(FUN.mods).id;
+    }
+    const combatRooms = this.rooms.filter((r) => r.type === 'combat');
+    if (combatRooms.length && Math.random() < FUN.npcChance) {
+      pick(combatRooms).npc = pick(Object.keys(FUN.npcs) as NpcKind[]);
+    }
     // 至少留 3 間戰鬥房，不足就把事件房改回戰鬥
     while (this.rooms.filter((r) => r.type === 'combat').length < 3) {
       const r = this.rooms.find((x) => x.type === 'event' || x.type === 'treasure');
@@ -228,7 +258,37 @@ export class DungeonSystem {
     const d = DIRS[dir];
     const next = this.roomAt(this.current.gx + d.dx, this.current.gy + d.dy);
     if (!next) return;
+    const riftable = !['start', 'exit', 'boss'].includes(next.type) && !this.inRift;
+    if (riftable && (this.forceRift || Math.random() < FUN.riftChance)) {
+      this.forceRift = false;
+      const kind: RoomType = Math.random() < 0.5 ? 'rift_past' : 'rift_future';
+      this.riftReturn = { room: next, fromDir: d.opposite };
+      this.game.riftTransition(kind === 'rift_future', () => this.enterRift(kind));
+      return;
+    }
     this.game.transition(() => this.enter(next, d.opposite));
+  }
+
+  private enterRift(kind: RoomType): void {
+    const rift: Room = {
+      gx: -99, gy: -99, type: kind, depth: this.current.depth + 1, doors: {},
+      visited: true, cleared: false, used: false, stash: [], weapons: [],
+    };
+    this.enter(rift);
+    this.game.time.delayedCall(1200, () => {
+      if (this.current === rift) this.startCombat(kind === 'rift_future');
+    });
+  }
+
+  /** 從裂縫回到原本要去的房間 */
+  leaveRift(): void {
+    const back = this.riftReturn;
+    if (!back || !this.inRift) return;
+    this.riftReturn = undefined;
+    this.game.riftTransition(false, () => {
+      this.game.onRiftExit(this.region);
+      this.enter(back.room, back.fromDir);
+    });
   }
 
   private enter(room: Room, fromDir?: Dir): void {
@@ -251,12 +311,22 @@ export class DungeonSystem {
     if (this.current.type === 'elite' && !this.current.cleared) this.startCombat(true);
   }
 
-  private startCombat(elite: boolean): void {
+  startCombat(elite: boolean): void {
+    if (this.current.mod) this.game.onRoomModStart(this.current.mod);
     this.phase = 'combat';
     this.phaseTime = 0;
     this.game.setDoorsLocked(true);
-    const budget = this.region.roomBudget[this.floor - 1] * (elite ? 1.2 : 1) * (1 + 0.04 * this.current.depth);
-    const pool = this.region.enemies.filter((e) => e.minFloor <= this.floor);
+    let budget = this.region.roomBudget[this.floor - 1] * (elite ? 1.2 : 1) * (1 + 0.04 * this.current.depth);
+    let pool: RegionEnemy[] = this.region.enemies.filter((e) => e.minFloor <= this.floor);
+    if (this.current.type === 'rift_past') {
+      budget = 12;
+      pool = REGIONS[0].enemies;
+      elite = false;
+    } else if (this.current.type === 'rift_future') {
+      const next = REGIONS[Math.min(REGIONS.length - 1, this.regionIndex + 1)];
+      budget = next.roomBudget[2] * 1.1;
+      pool = next.enemies;
+    }
     const makeWave = (b: number, forcedElites: number) => {
       const list: QueuedSpawn[] = [];
       let left = b;
@@ -274,7 +344,7 @@ export class DungeonSystem {
     };
     this.wavesLeft = [makeWave(budget * 0.45, elite ? 1 : 0), makeWave(budget * 0.55, elite ? 2 : 0)];
     this.queue = this.wavesLeft.shift()!;
-    if (elite) this.game.showBanner('精英挑戰！');
+    if (elite && !this.inRift) this.game.showBanner('精英挑戰！');
   }
 
   private startBoss(): void {

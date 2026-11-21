@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
 import {
-  ARENA, ARENA_BOTTOM, ARENA_RIGHT, COLORS, CONTROLS_Y, DEPTH, DROP_RARITY, FONT, GAME_H, GAME_W, MYTHIC, RARITY,
+  ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, DROP_RARITY, FONT, GAME_W, MYTHIC, RARITY,
 } from '../config';
-import { ELEMENT_IDS, ELEMENT_MAP, MYTHICS, WEAPON_MAP, hexToInt } from '../data';
+import { ELEMENT_IDS, ELEMENT_MAP, FUN, MYTHICS, RIFT_THEMES, WEAPON_MAP, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { Pickup } from '../entities/Pickup';
 import { Player } from '../entities/Player';
@@ -16,7 +16,7 @@ import { MutationSystem, rollRarity } from '../systems/MutationSystem';
 import { ProgressStore } from '../systems/ProgressStore';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { TelegraphSystem } from '../systems/TelegraphSystem';
-import { DungeonSystem, DIRS, type Dir, type Room } from '../systems/DungeonSystem';
+import { DungeonSystem, DIRS, isRift, type Dir, type Room } from '../systems/DungeonSystem';
 import { Minimap } from '../ui/Minimap';
 import { WeaponSystem, rollWeapon } from '../systems/WeaponSystem';
 import { SkillSystem } from '../systems/SkillSystem';
@@ -25,7 +25,7 @@ import { HazardSystem } from '../systems/HazardSystem';
 import { EventSystem } from '../systems/EventSystem';
 import { TutorialSystem } from '../systems/TutorialSystem';
 import { Sound } from '../systems/SoundSystem';
-import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme, WeaponDef } from '../types';
+import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme, RoomModId, WeaponDef } from '../types';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
@@ -69,6 +69,11 @@ export class GameScene extends Phaser.Scene {
   private swapBtn!: RoundButton;
   private skillBtn!: RoundButton;
   private weaponText!: Phaser.GameObjects.Text;
+  /** 迷路的煉金師的委託 */
+  quest?: { left: number };
+  private modText!: Phaser.GameObjects.Text;
+  private darkness?: Phaser.GameObjects.Image;
+  private drawnTheme?: RegionTheme;
   private arenaGfx?: Phaser.GameObjects.Graphics;
   /** 打擊停頓剩餘秒數 */
   private stopTimer = 0;
@@ -99,6 +104,9 @@ export class GameScene extends Phaser.Scene {
     this.kills = 0;
     this.ended = false;
     this.weaponPickups = [];
+    this.quest = undefined;
+    this.darkness = undefined;
+    this.drawnTheme = undefined;
     this.unlocks = [];
     this.character = ProgressStore.selected;
 
@@ -130,22 +138,24 @@ export class GameScene extends Phaser.Scene {
     this.skills = new SkillSystem(this, this.character.skill);
 
     // UI
-    this.add.rectangle(GAME_W / 2, (CONTROLS_Y + GAME_H) / 2, GAME_W, GAME_H - CONTROLS_Y, 0x0b0910).setDepth(DEPTH.ui - 2);
     this.hud = new HUD(this, this.player.maxHp, () => this.openPause());
     this.minimap = new Minimap(this, this.dungeon);
     new CrucibleBar(this, this.crucible, this.buffs, () => (this.input2.brewPressed = true));
     this.input2 = new InputSystem(this);
-    this.dashBtn = createRoundButton(this, 630, 1088, 62, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
-    this.skillBtn = createRoundButton(this, 638, 1218, 50, '技能', 0xd08a2a, () => (this.input2.skillPressed = true));
-    this.brewBtn = createRoundButton(this, 500, 1200, 56, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
-    this.swapBtn = createRoundButton(this, 486, 1072, 40, '換武器', 0x3a6a4a, () => (this.input2.swapPressed = true));
-    this.weaponText = this.add.text(486, 1014, '', {
+    // 右下按鈕弧形排列（半透明疊在戰場上）
+    this.dashBtn = createRoundButton(this, 1180, 612, 60, '衝刺', 0x3a7bd5, () => (this.input2.dashPressed = true));
+    this.skillBtn = createRoundButton(this, 1050, 650, 46, '技能', 0xd08a2a, () => (this.input2.skillPressed = true));
+    this.brewBtn = createRoundButton(this, 1196, 474, 46, '煉成', 0x9a4fd0, () => (this.input2.brewPressed = true));
+    this.swapBtn = createRoundButton(this, 1078, 532, 38, '換武器', 0x3a6a4a, () => (this.input2.swapPressed = true));
+    [this.dashBtn, this.skillBtn, this.brewBtn, this.swapBtn].forEach((b) => b.container.setAlpha(0.82));
+    this.weaponText = this.add.text(1078, 480, '', {
       fontFamily: FONT, fontSize: '16px', color: '#ffffff', align: 'center', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(DEPTH.ui);
+    this.modText = this.add.text(ARENA.x + 14, ARENA.y + 10, '', {
+      fontFamily: FONT, fontSize: '18px', color: '#ffffff', stroke: '#000', strokeThickness: 4,
+    }).setDepth(DEPTH.ui);
     this.weapons.on('changed', () => this.refreshWeaponUI());
     this.refreshWeaponUI();
-    this.add.text(150, GAME_H - 34, '移動', { fontFamily: 'sans-serif', fontSize: '18px', color: COLORS.textDim })
-      .setOrigin(0.5).setDepth(DEPTH.ui);
 
     this.buffs.on('changed', (twice: boolean) => {
       if (twice) this.fx.floatText(this.player.x, this.player.y - 70, '雙倍釀造！', '#ffd166');
@@ -160,6 +170,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawArena(theme: RegionTheme): void {
+    if (this.drawnTheme === theme) return;
+    this.drawnTheme = theme;
     const col = (h: string) => hexToInt(h);
     this.cameras.main.setBackgroundColor(theme.bg);
     this.arenaGfx?.destroy();
@@ -229,6 +241,10 @@ export class GameScene extends Phaser.Scene {
     this.updateWeaponPickups(dt);
     this.dungeon.update(dt);
 
+    if (this.darkness) {
+      const on = this.roomMod === 'darkness' && !this.dungeon.current.cleared;
+      this.darkness.setVisible(on).setPosition(this.player.x, this.player.y);
+    }
     this.dashBtn.setCooldown(this.player.dashCooldownRatio);
     this.brewBtn.setEnabled(this.crucible.canBrew);
     this.skillBtn.setCooldown(this.skills.ratio);
@@ -280,7 +296,7 @@ export class GameScene extends Phaser.Scene {
       const M = brew.mythic;
       const color = hexToInt(M.color);
       this.fx.burst(p.x, p.y, 160, color, 500);
-      this.fx.burst(150, 920, 160, color, 500);
+      this.fx.burst(370, 40, 120, color, 500);
       this.cameras.main.flash(250, 255, 120, 140);
       this.cameras.main.shake(200, 0.006);
       this.hud.showToast(`裂變！【${MYTHIC.name}】${M.name}`, M.desc, MYTHIC.color);
@@ -288,7 +304,7 @@ export class GameScene extends Phaser.Scene {
       const r = brew.recipe;
       const q = RARITY[brew.quality];
       this.fx.burst(p.x, p.y, 70 + brew.quality * 25, hexToInt(q.color), 350);
-      this.fx.burst(150, 920, 120, hexToInt(r.color));
+      this.fx.burst(370, 40, 90, hexToInt(r.color));
       if (brew.quality >= 2) this.cameras.main.flash(150, 180, 140, 255);
       this.hud.showToast(`【${q.name}】${r.name}`, r.desc.replace('\n', '　'), brew.quality > 0 ? q.color : undefined);
     }
@@ -390,7 +406,8 @@ export class GameScene extends Phaser.Scene {
     }
     if (e.elite) this.dropCoins(e.x, e.y, 5);
     else if (Math.random() < 0.35) this.dropCoins(e.x, e.y, 1);
-    if (e.elite || Math.random() < this.buffs.stats.dropChance) this.dropMaterial(e.x, e.y, undefined, e.elite);
+    const dropChance = this.buffs.stats.dropChance + (this.roomMod === 'bounty' ? 0.4 : 0);
+    if (e.elite || Math.random() < dropChance) this.dropMaterial(e.x, e.y, undefined, e.elite);
   }
 
   /** 掉落素材：元素隨機，稀有度依波數、精英、鑑寶卡決定 */
@@ -514,6 +531,10 @@ export class GameScene extends Phaser.Scene {
     else if (fromDir === 'e') p.setPosition(ARENA_RIGHT - inset, cy);
     else p.setPosition(cx, ARENA.y + ARENA.h * 0.7);
 
+    if (room.type === 'rift_past') this.drawArena(RIFT_THEMES.past);
+    else if (room.type === 'rift_future') this.drawArena(RIFT_THEMES.future);
+    else this.drawArena(this.dungeon.region.theme);
+    this.refreshModText();
     this.doorsLocked = false;
     this.drawDoors();
     this.encounters.setupRoom(room);
@@ -533,6 +554,32 @@ export class GameScene extends Phaser.Scene {
     this.showBanner(room.type === 'elite' ? '挑戰成功！' : '房間清空');
     this.minimap.draw();
     this.tutorial.notify('door');
+    const mod = room.mod ? FUN.mods.find((m) => m.id === room.mod) : undefined;
+    if (mod?.curse) {
+      this.dropCoins(cx, cy, 6);
+      this.fx.floatText(cx, cy - 60, `詛咒解除！額外金幣`, '#ffd166', 22);
+    }
+    this.refreshModText();
+    if (this.quest && (room.type === 'combat' || room.type === 'elite' || isRift(room))) {
+      this.quest.left--;
+      if (this.quest.left <= 0) {
+        this.quest = undefined;
+        this.hud.showToast('委託完成！', '迷路的煉金師送來一把武器作為謝禮', '#c9a3ff');
+        this.dropWeapon(this.player.x, this.player.y - 100, undefined, 1);
+      } else {
+        this.fx.floatText(this.player.x, this.player.y - 80, `委託：還剩 ${this.quest.left} 間`, '#c9a3ff', 20);
+      }
+    }
+    if (room.type === 'rift_past') {
+      for (let i = 0; i < 5; i++) this.dropMaterial(cx - 200 + i * 100, cy + 60);
+      this.dropCoins(cx, cy, 10);
+    }
+    if (room.type === 'rift_future') {
+      this.dropMaterial(cx - 80, cy + 60, { el: pick(ELEMENT_IDS), r: 3 });
+      this.dropWeapon(cx + 80, cy + 60, undefined, 2);
+      this.time.delayedCall(900, () => this.openCardSelect('來自未來的饋贈', 2));
+    }
+    this.encounters.setupRoom(room);
     if (room.type === 'elite') {
       this.dropMaterial(cx - 60, cy, undefined, true);
       this.dropMaterial(cx + 60, cy, undefined, true);
@@ -570,6 +617,64 @@ export class GameScene extends Phaser.Scene {
   onRegionEnter(region: RegionDef, index: number): void {
     this.drawArena(region.theme);
     if (index > 0) this.heal(3);
+  }
+
+  // ---- 時空裂縫 / 房間詞條 ----
+
+  get roomMod(): RoomModId | undefined {
+    return this.dungeon.current?.mod;
+  }
+
+  get enemySpeedMul(): number {
+    return this.roomMod === 'gale' && !this.dungeon.current.cleared ? 1.35 : 1;
+  }
+
+  private refreshModText(): void {
+    const room = this.dungeon.current;
+    const mod = room?.mod ? FUN.mods.find((m) => m.id === room.mod) : undefined;
+    const parts: string[] = [];
+    if (mod) parts.push(`${mod.icon} ${mod.name}：${mod.desc}${room.cleared ? '（已結束）' : ''}`);
+    if (this.quest) parts.push(`📜 委託：再清 ${this.quest.left} 間戰鬥房`);
+    if (this.dungeon.forceRift) parts.push('⌛ 時空正在扭曲……');
+    this.modText.setText(parts.join('\n')).setColor(mod?.curse && !room.cleared ? '#ff9aa8' : '#ffe9a8');
+  }
+
+  onRoomModStart(id: RoomModId): void {
+    const mod = FUN.mods.find((m) => m.id === id)!;
+    this.hud.showToast(`${mod.curse ? '詛咒' : '祝福'}・${mod.icon} ${mod.name}`, mod.desc, mod.curse ? '#ff6b8a' : '#ffd166');
+    if (id === 'darkness' && !this.darkness) {
+      this.darkness = this.add.image(this.player.x, this.player.y, 'darkness').setDisplaySize(2600, 2600).setDepth(DEPTH.fx + 20);
+    }
+    this.refreshModText();
+  }
+
+  /** 進出時空裂縫的特殊轉場 */
+  riftTransition(future: boolean, fn: () => void): void {
+    if (this.transitioning) return;
+    this.transitioning = true;
+    const entering = !this.dungeon.inRift;
+    const [r, g, b] = entering ? (future ? [0, 220, 255] : [220, 170, 90]) : [255, 255, 255];
+    Sound.play('fission');
+    this.cameras.main.shake(400, 0.008);
+    this.cameras.main.flash(300, r, g, b);
+    this.time.delayedCall(250, () => {
+      this.cameras.main.fadeOut(300, r, g, b);
+      this.cameras.main.once('camerafadeoutcomplete', () => {
+        fn();
+        this.cameras.main.fadeIn(400, r, g, b);
+        this.transitioning = false;
+        this.showBanner(entering ? (future ? '穿越到了未來！' : '回到了過去……') : '回到現在');
+        if (entering) {
+          this.hud.showToast(future ? '時空裂縫・未來' : '時空裂縫・過去',
+            future ? '後面區域的強敵！打贏可得傳說素材、武器與史詩突變卡' : '懷舊的溫室，敵人較弱，會掉大量素材',
+            future ? '#00e0ff' : '#e0c08a');
+        }
+      });
+    });
+  }
+
+  onRiftExit(_region: RegionDef): void {
+    this.refreshModText();
   }
 
   // ---- 武器 ----
@@ -618,7 +723,7 @@ export class GameScene extends Phaser.Scene {
   // ---- 金幣 ----
 
   dropCoins(x: number, y: number, n: number): void {
-    n = Math.round(n * (1 + this.mutations.value('greed') / 100));
+    n = Math.round(n * (1 + this.mutations.value('greed') / 100) * (this.roomMod === 'golden' ? 3 : 1));
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 120 + Math.random() * 160;

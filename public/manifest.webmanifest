@@ -3,7 +3,7 @@
   "short_name": "坩堝花園",
   "start_url": "./",
   "display": "fullscreen",
-  "orientation": "portrait",
+  "orientation": "landscape",
   "background_color": "#050806",
   "theme_color": "#0f1a14",
   "icons": [

@@ -1,14 +1,14 @@
 import Phaser from 'phaser';
 import { ARENA, DEPTH, FONT, GAME_W } from '../config';
-import { ELEMENT_IDS, WEAPON_MAP } from '../data';
+import { ELEMENT_IDS, FUN, WEAPON_MAP, hexToInt } from '../data';
 import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
-import type { Material, RarityIndex } from '../types';
+import type { Material, NpcKind, RarityIndex } from '../types';
 import { pick } from '../utils';
-import type { Room } from './DungeonSystem';
+import { isRift, type Room } from './DungeonSystem';
 import { Sound } from './SoundSystem';
 
-export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs';
+export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs' | 'npc' | 'portal';
 
 const INFO: Record<EventKind, { name: string; color: number; texture: string }> = {
   chest: { name: '寶箱', color: 0xffd166, texture: 'chest' },
@@ -17,6 +17,8 @@ const INFO: Record<EventKind, { name: string; color: number; texture: string }> 
   shop: { name: '商店', color: 0x7eff8a, texture: 'merchant' },
   altar: { name: '精英祭壇', color: 0xb36bff, texture: 'altar' },
   stairs: { name: '樓梯', color: 0xffd166, texture: 'stairs' },
+  npc: { name: 'NPC', color: 0xffffff, texture: 'hero' },
+  portal: { name: '時空門', color: 0x7ed4ff, texture: 'ring' },
 };
 
 interface RoomObject {
@@ -28,6 +30,7 @@ interface RoomObject {
   armed: boolean;
   objs: Phaser.GameObjects.GameObject[];
   sprite: Phaser.GameObjects.Image;
+  npc?: NpcKind;
 }
 
 /**
@@ -51,28 +54,43 @@ export class EventSystem {
     if (room.type === 'elite' && !room.cleared) this.spawn('altar', cx, cy);
     if (room.type === 'exit') this.spawn('stairs', cx, cy);
     if (room.type === 'boss' && room.cleared) this.spawn('stairs', cx, cy);
+    if (isRift(room) && room.cleared) this.spawn('portal', cx, cy);
+    if (room.npc && !room.npcDone && room.cleared) this.spawn('npc', cx + 200, cy, room.npc);
   }
 
-  spawn(kind: EventKind, x = GAME_W / 2, y = ARENA.y + ARENA.h / 2): void {
+  spawn(kind: EventKind, x = GAME_W / 2, y = ARENA.y + ARENA.h / 2, npc?: NpcKind): void {
     this.clear();
-    const info = INFO[kind];
+    const base = INFO[kind];
+    const nd = npc ? FUN.npcs[npc] : undefined;
+    const info = nd
+      ? { name: nd.name, color: hexToInt(nd.color), texture: npc === 'chatty_mushroom' ? 'mushroom' : 'hero' }
+      : base;
     const glow = this.game.add.image(x, y, 'circle').setTint(info.color).setAlpha(0.25).setDisplaySize(120, 120).setDepth(DEPTH.pickup);
-    const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(kind === 'stairs' ? 90 : 68, kind === 'stairs' ? 90 : 68)
-      .setDepth(DEPTH.pickup + 1);
+    const size = kind === 'stairs' || kind === 'portal' ? 96 : 68;
+    const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(size, size).setDepth(DEPTH.pickup + 1);
+    if (nd || kind === 'portal') sprite.setTint(info.color);
+    if (kind === 'portal') {
+      this.game.tweens.add({ targets: sprite, angle: 360, duration: 2000, repeat: -1 });
+    }
     const label = this.game.add.text(x, y - 62, info.name, {
       fontFamily: FONT, fontSize: '22px', color: '#ffffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);
     this.game.tweens.add({ targets: glow, scale: glow.scale * 1.25, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
     const p = this.game.player;
     const near = (p.x - x) ** 2 + (p.y - y) ** 2 < 70 ** 2;
-    this.obj = { kind, x, y, t: 0, armed: !near, objs: [glow, sprite, label], sprite };
+    this.obj = { kind, x, y, t: 0, armed: !near, objs: [glow, sprite, label], sprite, npc };
+    if (nd) {
+      const bubble = this.game.add.text(x, y - 92, '💬', { fontSize: '26px' }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);
+      this.game.tweens.add({ targets: bubble, y: y - 100, duration: 600, yoyo: true, repeat: -1 });
+      this.obj.objs.push(bubble);
+    }
   }
 
   update(dt: number): void {
     const o = this.obj;
     if (!o) return;
     o.t += dt;
-    if (o.kind !== 'stairs') o.sprite.setY(o.y + Math.sin(o.t * 3) * 4);
+    if (o.kind === 'portal') { /* 旋轉由 tween 處理 */ } else if (o.kind !== 'stairs') o.sprite.setY(o.y + Math.sin(o.t * 3) * 4);
     else o.sprite.setRotation(Math.sin(o.t) * 0.05);
     const p = this.game.player;
     const inside = (p.x - o.x) ** 2 + (p.y - o.y) ** 2 < (p.radius + 38) ** 2;
@@ -82,10 +100,10 @@ export class EventSystem {
     }
     if (!o.armed || this.game.dungeon.combatActive) return;
     o.armed = false;
-    this.trigger(o.kind, o.x, o.y);
+    this.trigger(o.kind, o.x, o.y, o.npc);
   }
 
-  private trigger(kind: EventKind, x: number, y: number): void {
+  private trigger(kind: EventKind, x: number, y: number, npc?: NpcKind): void {
     const g = this.game;
     const room = g.dungeon.current;
     switch (kind) {
@@ -111,6 +129,13 @@ export class EventSystem {
       case 'stairs':
         g.onStairs();
         break;
+      case 'portal':
+        this.clear();
+        g.dungeon.leaveRift();
+        break;
+      case 'npc':
+        if (npc) this.openNpc(room, npc);
+        break;
       case 'fountain':
         this.openFountain(room);
         break;
@@ -121,6 +146,63 @@ export class EventSystem {
         this.openShop(room);
         break;
     }
+  }
+
+  private openNpc(room: Room, npc: NpcKind): void {
+    const g = this.game;
+    const d = FUN.npcs[npc];
+    const line = pick(d.lines);
+    const done = () => {
+      room.npcDone = true;
+      this.clear();
+    };
+    let options: EventOption[];
+    switch (npc) {
+      case 'future_self':
+        options = [{
+          label: '收下', desc: '獲得 1 個傳說素材', enabled: true,
+          onPick: () => {
+            g.dropMaterial(g.player.x, g.player.y - 90, { el: pick(ELEMENT_IDS), r: 3 });
+            done();
+          },
+        }];
+        break;
+      case 'lost_alchemist':
+        options = [{
+          label: '接受委託', desc: '清空接下來 2 間戰鬥房，完成後得到一把稀有以上的武器', enabled: !g.quest,
+          onPick: () => {
+            g.quest = { left: 2 };
+            g.fx.floatText(g.player.x, g.player.y - 60, '委託：清空 2 間戰鬥房', '#c9a3ff');
+            done();
+          },
+        }];
+        break;
+      case 'time_merchant':
+        options = [{
+          label: '成交　🪙15', desc: '下一次穿過的門必定通往時空裂縫', enabled: g.coins >= 15,
+          onPick: () => {
+            g.coins -= 15;
+            g.dungeon.forceRift = true;
+            g.fx.floatText(g.player.x, g.player.y - 60, '時空開始扭曲……', '#7ed4ff');
+            done();
+          },
+        }];
+        break;
+      case 'chatty_mushroom':
+        options = [{
+          label: '謝謝蘑菇', desc: '蘑菇塞給你 5 枚金幣', enabled: true,
+          onPick: () => {
+            g.dropCoins(g.player.x, g.player.y - 60, 5);
+            done();
+          },
+        }];
+        break;
+    }
+    this.game.scene.launch('Event', {
+      title: d.name, subtitle: `「${line}」`, color: d.color, options,
+      onClose: () => this.game.scene.resume(),
+    });
+    this.game.scene.pause();
   }
 
   private openFountain(room: Room): void {

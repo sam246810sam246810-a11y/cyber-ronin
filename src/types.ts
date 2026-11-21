@@ -166,7 +166,23 @@ export interface RegionDef {
   roomBudget: number[];
 }
 
-export type RoomType = 'start' | 'combat' | 'elite' | 'treasure' | 'shop' | 'event' | 'exit' | 'boss';
+export type RoomType = 'start' | 'combat' | 'elite' | 'treasure' | 'shop' | 'event' | 'exit' | 'boss' | 'rift_past' | 'rift_future';
+
+export type RoomModId = 'golden' | 'bounty' | 'frenzy' | 'darkness' | 'gale' | 'gravity';
+export interface RoomModDef {
+  id: RoomModId;
+  name: string;
+  desc: string;
+  icon: string;
+  curse: boolean;
+}
+
+export type NpcKind = 'future_self' | 'lost_alchemist' | 'time_merchant' | 'chatty_mushroom';
+export interface NpcDef {
+  name: string;
+  color: string;
+  lines: string[];
+}
 
 export interface MutationDef {
   id: string;

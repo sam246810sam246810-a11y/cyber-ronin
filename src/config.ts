@@ -1,16 +1,14 @@
 /** 全域常數。數值調整請優先改這裡或 data/*.json。 */
-export const GAME_W = 720;
-export const GAME_H = 1280;
+export const GAME_W = 1280;
+export const GAME_H = 720;
 
-/** 戰鬥區（上方約 68%） */
-export const ARENA = { x: 24, y: 96, w: 672, h: 760 } as const;
+/** 上方資訊列（血量 / 坩堝 / 樓層 / 金幣 / 暫停） */
+export const TOP_H = 92;
+
+/** 戰鬥區：資訊列以下整片，操作按鈕半透明疊在角落 */
+export const ARENA = { x: 16, y: 98, w: 1248, h: 610 } as const;
 export const ARENA_RIGHT = ARENA.x + ARENA.w;
 export const ARENA_BOTTOM = ARENA.y + ARENA.h;
-
-/** 坩堝列與操作區 */
-export const BAR_Y = 868;
-export const BAR_H = 116;
-export const CONTROLS_Y = BAR_Y + BAR_H;
 
 export const DEPTH = {
   floor: 0,

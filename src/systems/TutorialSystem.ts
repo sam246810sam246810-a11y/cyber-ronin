@@ -6,7 +6,7 @@ import { ProgressStore } from './ProgressStore';
 type Step = 'move' | 'skill' | 'pickup' | 'brew' | 'drink' | 'telegraph' | 'door' | 'stairs' | 'shop' | 'weapon';
 
 const TEXT: Record<Step, string> = {
-  move: '拖曳左下方移動，角色會自動射擊最近的敵人',
+  move: '在畫面左半邊按住拖曳來移動，角色會自動攻擊最近的敵人',
   skill: '右下「技能」是角色專屬主動技，冷卻好就能用（鍵盤 E）',
   weapon: '武器掉落！碰它就能裝備，最多帶 2 把，用「換武器」切換（鍵盤 Q）',
   pickup: '敵人掉了素材！走過去撿起來，會放進坩堝',
@@ -33,11 +33,11 @@ export class TutorialSystem {
 
   constructor(private game: GameScene) {
     this.enabled = !ProgressStore.data.tutorialDone;
-    const bg = game.add.rectangle(0, 0, 640, 70, 0x1e1428, 0.94).setStrokeStyle(3, COLORS.gold, 1);
+    const bg = game.add.rectangle(0, 0, 680, 60, 0x1e1428, 0.94).setStrokeStyle(3, COLORS.gold, 1);
     this.text = game.add.text(0, 0, '', {
-      fontFamily: FONT, fontSize: '21px', color: '#ffffff', align: 'center', wordWrap: { width: 600, useAdvancedWrap: true },
+      fontFamily: FONT, fontSize: '21px', color: '#ffffff', align: 'center', wordWrap: { width: 650, useAdvancedWrap: true },
     }).setOrigin(0.5);
-    this.box = game.add.container(GAME_W / 2, ARENA_BOTTOM - 60, [bg, this.text]).setDepth(DEPTH.overlay - 5).setAlpha(0);
+    this.box = game.add.container(GAME_W / 2 - 60, ARENA_BOTTOM - 46, [bg, this.text]).setDepth(DEPTH.overlay - 5).setAlpha(0);
     this.arrow = game.add.text(0, 0, '▼', { fontFamily: FONT, fontSize: '34px', color: '#ffd166', stroke: '#000', strokeThickness: 4 })
       .setOrigin(0.5).setDepth(DEPTH.overlay - 4).setVisible(false);
     if (this.enabled) {
@@ -72,10 +72,10 @@ export class TutorialSystem {
     // 指示箭頭
     let target: { x: number; y: number } | undefined;
     if (c.step === 'pickup' && g.pickups[0]) target = { x: g.pickups[0].x, y: g.pickups[0].y - 40 };
-    if (c.step === 'brew') target = { x: 500, y: 1124 };
-    if (c.step === 'telegraph') target = { x: 630, y: 1005 };
-    if (c.step === 'skill') target = { x: 638, y: 1148 };
-    if (c.step === 'weapon') target = { x: 486, y: 1012 };
+    if (c.step === 'brew') target = { x: 1196, y: 410 };
+    if (c.step === 'telegraph') target = { x: 1180, y: 535 };
+    if (c.step === 'skill') target = { x: 1050, y: 586 };
+    if (c.step === 'weapon') target = { x: 1078, y: 450 };
     this.arrow.setVisible(!!target);
     if (target) this.arrow.setPosition(target.x, target.y + Math.sin(c.t * 8) * 6);
 

@@ -18,7 +18,7 @@ export class Joystick {
     private restX: number,
     private restY: number,
   ) {
-    this.base = scene.add.image(restX, restY, 'ring').setDepth(DEPTH.ui).setAlpha(0.35)
+    this.base = scene.add.image(restX, restY, 'ring').setDepth(DEPTH.ui).setAlpha(0.25)
       .setDisplaySize(this.radius * 2, this.radius * 2);
     this.knob = scene.add.image(restX, restY, 'circle').setDepth(DEPTH.ui + 1).setAlpha(0.5).setTint(0xc9a3ff)
       .setDisplaySize(56, 56);

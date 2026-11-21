@@ -17,24 +17,26 @@ export class CodexScene extends Phaser.Scene {
   create(data: { returnTo: 'MainMenu' | 'Pause' }): void {
     this.selectedFrame = undefined;
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLORS.bg, 1).setInteractive();
-    this.add.text(GAME_W / 2, 46, '配方圖鑑', { fontFamily: FONT, fontSize: '40px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, 88, `已發現 ${CodexStore.count} / ${CodexStore.total}　（點格子看效果）`, {
+    this.add.text(GAME_W / 2, 36, '配方圖鑑', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    this.add.text(GAME_W / 2, 72, `已發現 ${CodexStore.count} / ${CodexStore.total}　（點格子看效果）`, {
       fontFamily: FONT, fontSize: '19px', color: COLORS.textDim,
     }).setOrigin(0.5);
 
-    const tw = 130;
-    const th = 92;
+    const tw = 140;
+    const th = 74;
+    const cols = 7;
+    const ox = (GAME_W - cols * (tw + 4)) / 2;
     RECIPE_ORDER.forEach((key, i) => {
-      const x = 32 + tw / 2 + (i % 5) * (tw + 2);
-      const y = 120 + th / 2 + Math.floor(i / 5) * (th + 4);
+      const x = ox + tw / 2 + (i % cols) * (tw + 4);
+      const y = 96 + th / 2 + Math.floor(i / cols) * (th + 4);
       const r = RECIPES[key];
       const known = CodexStore.has(key);
       const frame = this.add.rectangle(x, y, tw - 4, th, known ? COLORS.panel : 0x15101c, 1)
         .setStrokeStyle(2, known ? hexToInt(r.color) : 0x2a2235, 1).setInteractive({ useHandCursor: true });
       key.split('').forEach((el, j) => {
-        this.add.image(x - 30 + j * 30, y - 20, `ing_${el}`).setDisplaySize(24, 24).setAlpha(known ? 1 : 0.35);
+        this.add.image(x - 26 + j * 26, y - 16, `ing_${el}`).setDisplaySize(22, 22).setAlpha(known ? 1 : 0.35);
       });
-      this.add.text(x, y + 22, known ? r.name : '？', {
+      this.add.text(x, y + 18, known ? r.name : '？', {
         fontFamily: FONT, fontSize: known ? '15px' : '22px', color: known ? '#ffffff' : '#4a4458', fontStyle: 'bold',
       }).setOrigin(0.5);
       frame.on('pointerup', () => this.show(frame,
@@ -42,13 +44,13 @@ export class CodexScene extends Phaser.Scene {
         known ? `${{ pure: '純色', dual: '雙色', tri: '三色' }[r.kind]}藥水\n${r.desc}` : '還沒煉出過這個組合。'));
     });
 
-    const my = 120 + 7 * (th + 4) + 26;
-    this.add.text(GAME_W / 2, my, `【${MYTHIC.name}】裂變藥水`, {
+    const my = 96 + 5 * (th + 4) + 20;
+    this.add.text(ox + 346, my, `【${MYTHIC.name}】裂變藥水`, {
       fontFamily: FONT, fontSize: '22px', color: MYTHIC.color, fontStyle: 'bold',
     }).setOrigin(0.5);
     MYTHICS.forEach((m, i) => {
-      const x = 32 + 82 + i * 166;
-      const y = my + 60;
+      const x = ox + 82 + i * 176;
+      const y = my + 50;
       const known = CodexStore.has(mythicKey(m.id));
       const frame = this.add.rectangle(x, y, 160, 70, known ? 0x3a1420 : 0x15101c, 1)
         .setStrokeStyle(3, known ? hexToInt(m.color) : 0x2a2235, 1).setInteractive({ useHandCursor: true });
@@ -58,15 +60,15 @@ export class CodexScene extends Phaser.Scene {
       frame.on('pointerup', () => this.show(frame, known ? m.name : '？？？', known ? m.desc : '煉成時有機率裂變出現。'));
     });
 
-    this.add.rectangle(GAME_W / 2, 1090, 660, 112, COLORS.panel, 1).setStrokeStyle(2, COLORS.accent, 0.4);
-    this.detailTitle = this.add.text(60, 1046, '點上方格子查看效果', {
+    this.add.rectangle(1010, my + 50, 420, 120, COLORS.panel, 1).setStrokeStyle(2, COLORS.accent, 0.4);
+    this.detailTitle = this.add.text(812, my, '點格子查看效果', {
       fontFamily: FONT, fontSize: '22px', color: '#ffd166', fontStyle: 'bold',
     });
-    this.detailBody = this.add.text(60, 1078, '', {
-      fontFamily: FONT, fontSize: '17px', color: '#e8e0f0', lineSpacing: 4, wordWrap: { width: 600, useAdvancedWrap: true },
+    this.detailBody = this.add.text(812, my + 30, '', {
+      fontFamily: FONT, fontSize: '15px', color: '#e8e0f0', lineSpacing: 3, wordWrap: { width: 396, useAdvancedWrap: true },
     });
 
-    textButton(this, GAME_W / 2, 1208, 300, 64, '返回', () => {
+    textButton(this, 110, 40, 160, 54, '返回', () => {
       if (data.returnTo === 'Pause') {
         this.scene.stop();
         this.scene.resume('Pause');

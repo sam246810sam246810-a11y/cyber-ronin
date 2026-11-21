@@ -93,6 +93,11 @@ export class ProjectileSystem {
           continue;
         }
       }
+      // 重力異常：玩家子彈往下彎
+      if (b.friendly && !b.returning && this.game.roomMod === 'gravity' && !this.game.dungeon.current.cleared) {
+        b.vy += 520 * dt;
+        b.sprite.setRotation(Math.atan2(b.vy, b.vx) + Math.PI / 2);
+      }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.traveled += b.speed * dt;

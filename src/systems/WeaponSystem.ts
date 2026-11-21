@@ -60,7 +60,7 @@ export class WeaponSystem extends Phaser.Events.EventEmitter {
     const target = this.game.effects.nearestEnemy(p.x, p.y, range);
     if (!target) return;
     const st = this.game.buffs.stats;
-    this.timer = Math.max(0.08, st.fireInterval * w.intervalMul);
+    this.timer = Math.max(0.08, st.fireInterval * w.intervalMul * (this.game.roomMod === 'frenzy' ? 0.77 : 1));
     this.fire(w, target);
     this.game.buffs.onShot();
   }

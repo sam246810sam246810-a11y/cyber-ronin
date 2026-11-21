@@ -146,7 +146,7 @@ export abstract class Enemy {
     const dy = ty - this.y;
     const d = Math.hypot(dx, dy);
     if (d < 1) return;
-    const step = Math.min(d, speed * this.speedMul * dt);
+    const step = Math.min(d, speed * this.speedMul * this.game.enemySpeedMul * dt);
     this.x += (dx / d) * step;
     this.y += (dy / d) * step;
   }

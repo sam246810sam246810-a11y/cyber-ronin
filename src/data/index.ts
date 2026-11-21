@@ -6,10 +6,11 @@ import enemiesJson from './enemies.json';
 import regionsJson from './regions.json';
 import mutationsJson from './mutations.json';
 import weaponsJson from './weapons.json';
+import funJson from './fun.json';
 import { RARITY } from '../config';
 import type {
   CharacterDef, ElementDef, ElementId, EnemyDef, EnemyType, Material, MutationDef, MythicDef, RarityIndex,
-  RecipeDef, RegionDef, WeaponDef,
+  RecipeDef, RegionDef, WeaponDef, RoomModDef, NpcKind, NpcDef, RegionTheme,
 } from '../types';
 
 export const ELEMENTS = elementsJson as ElementDef[];
@@ -105,3 +106,18 @@ export function hexToInt(hex: string): number {
 }
 
 export const rarityColor = (r: RarityIndex) => RARITY[r].color;
+
+/** 時空裂縫、房間詞條、NPC */
+export const FUN = funJson as unknown as {
+  riftChance: number;
+  roomModChance: number;
+  npcChance: number;
+  mods: RoomModDef[];
+  npcs: Record<NpcKind, NpcDef>;
+};
+
+/** 時空裂縫的場景配色 */
+export const RIFT_THEMES: Record<'past' | 'future', RegionTheme> = {
+  past: { bg: '#1e170f', floor: '#3a2e1e', tile: '#43361f', wall: '#7a6440', deco: '#5a4a2a', decoLight: '#e0c08a' },
+  future: { bg: '#05040f', floor: '#0e0b24', tile: '#151036', wall: '#00e0ff', deco: '#3a00a0', decoLight: '#ff3df0' },
+};

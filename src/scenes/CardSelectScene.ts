@@ -20,10 +20,10 @@ export class CardSelectScene extends Phaser.Scene {
   create(data: CardSelectData): void {
     this.picked = false;
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.8).setInteractive();
-    this.add.text(GAME_W / 2, 170, data.title ?? '突變！', {
+    this.add.text(GAME_W / 2, 90, data.title ?? '突變！', {
       fontFamily: FONT, fontSize: '44px', color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 6,
     }).setOrigin(0.5);
-    this.add.text(GAME_W / 2, 235, '選擇一張突變卡', { fontFamily: FONT, fontSize: '24px', color: COLORS.text }).setOrigin(0.5);
+    this.add.text(GAME_W / 2, 145, '選擇一張突變卡', { fontFamily: FONT, fontSize: '24px', color: COLORS.text }).setOrigin(0.5);
 
     const pickIt = (i: number) => {
       if (this.picked) return;
@@ -33,28 +33,27 @@ export class CardSelectScene extends Phaser.Scene {
     };
 
     data.offers.forEach((o, i) => {
-      const y = 420 + i * 250;
+      const x = GAME_W / 2 + (i - 1) * 400;
+      const y = 400;
       const rar = RARITY[o.rarity];
       const rc = hexToInt(rar.color);
-      const bg = this.add.rectangle(0, 0, 600, 220, COLORS.panel, 1).setStrokeStyle(o.rarity >= 2 ? 6 : 4, rc, 1);
-      const band = this.add.rectangle(-300 + 8, 0, 16, 220, rc, 1).setOrigin(0.5);
-      const iconBg = this.add.circle(-200, 0, 62, 0x3a2f45).setStrokeStyle(3, rc, 1);
-      const icon = this.add.text(-200, 0, o.def.icon, { fontFamily: FONT, fontSize: '60px', color: rar.color }).setOrigin(0.5);
-      const rarity = this.add.text(-110, -70, rar.name, { fontFamily: FONT, fontSize: '20px', color: rar.color, fontStyle: 'bold' }).setOrigin(0, 0.5);
-      const name = this.add.text(-110, -32, o.def.name, { fontFamily: FONT, fontSize: '36px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5);
-      const owned = this.add.text(280, -70, o.owned > 0 ? `已有 ${formatCardValue(o.def, o.owned)}` : 'NEW', {
-        fontFamily: FONT, fontSize: '18px', color: o.owned > 0 ? '#7ed4ff' : '#ffd166',
+      const bg = this.add.rectangle(0, 0, 370, 380, COLORS.panel, 1).setStrokeStyle(o.rarity >= 2 ? 6 : 4, rc, 1);
+      const band = this.add.rectangle(0, -182, 370, 16, rc, 1);
+      const iconBg = this.add.circle(0, -90, 58, 0x3a2f45).setStrokeStyle(3, rc, 1);
+      const icon = this.add.text(0, -90, o.def.icon, { fontFamily: FONT, fontSize: '56px', color: rar.color }).setOrigin(0.5);
+      const rarity = this.add.text(-160, -150, rar.name, { fontFamily: FONT, fontSize: '19px', color: rar.color, fontStyle: 'bold' }).setOrigin(0, 0.5);
+      const owned = this.add.text(160, -150, o.owned > 0 ? `已有 ${formatCardValue(o.def, o.owned)}` : 'NEW', {
+        fontFamily: FONT, fontSize: '17px', color: o.owned > 0 ? '#7ed4ff' : '#ffd166',
       }).setOrigin(1, 0.5);
-      const desc = this.add.text(-110, 36, cardDesc(o.def, o.value), {
-        fontFamily: FONT, fontSize: '24px', color: '#e8e0f0', wordWrap: { width: 380, useAdvancedWrap: true }, lineSpacing: 6,
-      }).setOrigin(0, 0.5);
-      const card = this.add.container(GAME_W / 2, y, [bg, band, iconBg, icon, rarity, name, owned, desc])
-        .setSize(600, 220).setInteractive({ useHandCursor: true });
+      const name = this.add.text(0, 6, o.def.name, { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+      const desc = this.add.text(0, 90, cardDesc(o.def, o.value), {
+        fontFamily: FONT, fontSize: '22px', color: '#e8e0f0', align: 'center', wordWrap: { width: 320, useAdvancedWrap: true }, lineSpacing: 6,
+      }).setOrigin(0.5);
+      const card = this.add.container(x, y, [bg, band, iconBg, icon, rarity, owned, name, desc])
+        .setSize(370, 380).setInteractive({ useHandCursor: true });
       card.setScale(0.8).setAlpha(0);
       this.tweens.add({ targets: card, scale: 1, alpha: 1, delay: 120 * i, duration: 220, ease: 'Back.Out' });
-      if (o.rarity >= 2) {
-        this.tweens.add({ targets: bg, alpha: 0.85, duration: 500, yoyo: true, repeat: -1 });
-      }
+      if (o.rarity >= 2) this.tweens.add({ targets: bg, alpha: 0.85, duration: 500, yoyo: true, repeat: -1 });
       card.on('pointerup', () => pickIt(i));
     });
 
