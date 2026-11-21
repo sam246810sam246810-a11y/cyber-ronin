@@ -588,8 +588,8 @@ export class GameScene extends Phaser.Scene {
         const pos: Record<Dir, [number, number, number, number]> = {
           n: [cx, ARENA.y + 22, 156, 156],
           s: [cx, 736, 128, 128],
-          w: [ARENA.x + 26, cy - 70, 70, 128],
-          e: [ARENA_RIGHT - 26, cy - 70, 70, 128],
+          w: [ARENA.x + 26, this.sideDoorY() + 64, 70, 128],
+          e: [ARENA_RIGHT - 26, this.sideDoorY() + 64, 70, 128],
         };
         const [px, py, pw, ph] = pos[dir];
         const s = this.add.image(px, py, key).setOrigin(0.5, 1).setDisplaySize(pw, ph).setDepth(DEPTH.floor + 2);
@@ -625,18 +625,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** 玩家貼到開著的門就換房 */
+  /** 左右門的高度：有傳送門美術時往上移（避開右下按鈕），判定、出現位置、圖都用同一個值 */
+  private sideDoorY(): number {
+    if (this.textures.exists('door_open')) return Math.round(ARENA.y + (ARENA_BOTTOM - ARENA.y) * 0.32);
+    return (ARENA.y + ARENA_BOTTOM) / 2;
+  }
+
   private checkDoors(): void {
     if (this.transitioning || this.dungeon.phase !== 'explore' || this.doorsLocked) return;
     const p = this.player;
     const room = this.dungeon.current;
     const half = 60;
     const cx = (ARENA.x + ARENA_RIGHT) / 2;
-    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
     const edge = p.radius + 2;
     if (room.doors.n && p.y <= ARENA.y + edge && Math.abs(p.x - cx) < half) this.dungeon.go('n');
     else if (room.doors.s && p.y >= ARENA_BOTTOM - edge && Math.abs(p.x - cx) < half) this.dungeon.go('s');
-    else if (room.doors.w && p.x <= ARENA.x + edge && Math.abs(p.y - cy) < half) this.dungeon.go('w');
-    else if (room.doors.e && p.x >= ARENA_RIGHT - edge && Math.abs(p.y - cy) < half) this.dungeon.go('e');
+    else if (room.doors.w && p.x <= ARENA.x + edge && Math.abs(p.y - this.sideDoorY()) < half + 10) this.dungeon.go('w');
+    else if (room.doors.e && p.x >= ARENA_RIGHT - edge && Math.abs(p.y - this.sideDoorY()) < half + 10) this.dungeon.go('e');
   }
 
   /** 換房淡出淡入 */
@@ -683,13 +688,12 @@ export class GameScene extends Phaser.Scene {
     room.stash = [];
 
     const cx = (ARENA.x + ARENA_RIGHT) / 2;
-    const cy = (ARENA.y + ARENA_BOTTOM) / 2;
     const inset = 70;
     const p = this.player;
     if (fromDir === 'n') p.setPosition(cx, ARENA.y + inset);
     else if (fromDir === 's') p.setPosition(cx, ARENA_BOTTOM - inset);
-    else if (fromDir === 'w') p.setPosition(ARENA.x + inset, cy);
-    else if (fromDir === 'e') p.setPosition(ARENA_RIGHT - inset, cy);
+    else if (fromDir === 'w') p.setPosition(ARENA.x + inset, this.sideDoorY());
+    else if (fromDir === 'e') p.setPosition(ARENA_RIGHT - inset, this.sideDoorY());
     else p.setPosition(cx, ARENA.y + ARENA.h * 0.7);
 
     this.terrain.load(room.terrain ?? []);
@@ -1119,7 +1123,7 @@ export class GameScene extends Phaser.Scene {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 120 + Math.random() * 160;
-      const sprite = this.add.image(x, y, 'coin').setDisplaySize(16, 16).setDepth(DEPTH.pickup + 2);
+      const sprite = this.add.image(x, y, 'coin').setDisplaySize(22, 22).setDepth(DEPTH.pickup + 2);
       this.coinItems.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, sprite });
     }
   }
@@ -1142,7 +1146,9 @@ export class GameScene extends Phaser.Scene {
       }
       c.x = Math.max(ARENA.x + 8, Math.min(ARENA_RIGHT - 8, c.x + c.vx * dt));
       c.y = Math.max(ARENA.y + 8, Math.min(ARENA_BOTTOM - 8, c.y + c.vy * dt));
-      c.sprite.setPosition(c.x, c.y).setScale(c.sprite.scaleX, Math.abs(Math.cos(c.t * 8)) * (16 / 32) + 0.05);
+      // 金幣左右翻轉（依貼圖實際大小算比例，不會被拉長）
+      const base = 22 / c.sprite.width;
+      c.sprite.setPosition(c.x, c.y).setScale(base * (0.15 + 0.85 * Math.abs(Math.cos(c.t * 8))), base);
       if (d < p.radius + 8 && c.t > 0.2) {
         this.coins++;
         Sound.play('pickup', 0);

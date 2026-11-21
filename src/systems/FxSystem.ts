@@ -62,7 +62,8 @@ export class FxSystem {
     const f = s.frame;
     s.setScale(size / Math.max(f.width, f.height));
     if (opts.tint !== undefined) s.setTint(opts.tint);
-    s.play(key);
+    // 循環類特效（毒霧、熔岩）被拿來當一次性爆炸時，強制只播一輪，避免殘留在場上
+    s.play(opts.loop ? key : { key, repeat: 0 });
     if (!opts.loop) s.once('animationcomplete', () => s.destroy());
     return s;
   }
