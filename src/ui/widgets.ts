@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { goldify } from './textStyle';
 import { COLORS, FONT } from '../config';
 
 /** 共用的長方形文字按鈕 */
@@ -6,10 +7,18 @@ export function textButton(
   scene: Phaser.Scene, x: number, y: number, w: number, h: number, label: string, onClick: () => void,
   color: number = COLORS.panelLight,
 ): Phaser.GameObjects.Container {
-  const bg = scene.add.rectangle(0, 0, w, h, color, 1).setStrokeStyle(3, COLORS.accent, 0.8);
+  // 黃銅木頭風：主要按鈕（有指定顏色）用金色膠囊鈕，其他用木頭名牌
+  const primary = color !== COLORS.panelLight;
+  const artKey = primary ? 'ui_gold_btn' : 'ui_nameplate';
+  const art = scene.textures.exists(artKey) && scene.textures.get(artKey).getSourceImage() instanceof HTMLImageElement;
+  const bg = art
+    ? scene.add.nineslice(0, 0, artKey, undefined, w + 16, h + 10, primary ? 60 : 30, primary ? 60 : 30, primary ? 30 : 20, primary ? 30 : 20)
+    : scene.add.rectangle(0, 0, w, h, color, 1).setStrokeStyle(3, COLORS.accent, 0.8);
   const text = scene.add.text(0, 0, label, {
-    fontFamily: FONT, fontSize: `${Math.round(h * 0.38)}px`, color: '#ffffff', fontStyle: 'bold',
+    fontFamily: FONT, fontSize: `${Math.round(h * 0.38)}px`, color: art && primary ? '#3a1a06' : '#ffffff', fontStyle: 'bold',
   }).setOrigin(0.5);
+  if (art && !primary) goldify(text, 'gold', 4);
+  if (art && primary) text.setShadow(0, 1, 'rgba(255,240,190,0.8)', 0, false, true);
   const c = scene.add.container(x, y, [bg, text]).setSize(w, h).setInteractive({ useHandCursor: true });
   c.on('pointerdown', () => scene.tweens.add({ targets: c, scale: 0.95, duration: 60, yoyo: true }));
   c.on('pointerup', onClick);

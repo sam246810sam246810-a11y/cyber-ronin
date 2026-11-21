@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { iconOrText } from '../ui/icons';
 import { isArtTexture } from '../utils';
 import { DEPTH, FONT, RARITY } from '../config';
 import { hexToInt } from '../data';
@@ -10,14 +11,15 @@ export class RelicPickup {
   armed: boolean;
   private t = 0;
   private objs: Phaser.GameObjects.GameObject[];
-  private icon: Phaser.GameObjects.Text;
+  private icon: Phaser.GameObjects.Image | Phaser.GameObjects.Text;
 
   constructor(scene: Phaser.Scene, readonly relic: RelicDef, public x: number, public y: number, armed = true) {
     this.armed = armed;
     const c = hexToInt(RARITY[relic.rarity].color);
     const glow = scene.add.image(x, y, 'circle').setTint(c).setAlpha(0.3).setDisplaySize(76, 76).setDepth(DEPTH.pickup);
     const gem = scene.add.image(x, y, 'relic').setTint(isArtTexture(scene, 'relic') ? 0xffffff : c).setDisplaySize(56, 56).setDepth(DEPTH.pickup);
-    this.icon = scene.add.text(x, y, relic.icon, { fontSize: '26px' }).setOrigin(0.5).setDepth(DEPTH.pickup + 1);
+    this.icon = iconOrText(scene, x, y, `relic_${relic.id}`, relic.icon, 60).setDepth(DEPTH.pickup + 1);
+    if (this.icon instanceof Phaser.GameObjects.Image) gem.setVisible(false);
     const label = scene.add.text(x, y - 46, `聖物・${relic.name}`, {
       fontFamily: FONT, fontSize: '16px', color: RARITY[relic.rarity].color, fontStyle: 'bold', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);

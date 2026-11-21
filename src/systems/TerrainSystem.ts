@@ -14,6 +14,15 @@ interface Patch extends TerrainPatch {
   cooldown: number;
   heals: number;
   gfx: Phaser.GameObjects.Graphics;
+  /** 美術地形貼圖（有載入時取代 gfx 畫的橢圓） */
+  img?: Phaser.GameObjects.Image;
+}
+
+/** 地形狀態 → 貼圖 key */
+function terrainKey(p: { type: TerrainType; state: State }): string {
+  if (p.type === 'sun') return 'ter_sun';
+  if (p.state === 'idle' || p.state === 'spent') return `ter_${p.type}`;
+  return `ter_${p.state}`;
 }
 
 const BASE: Record<TerrainType, number> = { water: 0x3a7bd5, grass: 0x4f9a3a, oil: 0x2a1f3a, sun: 0xffe9a0 };
@@ -37,13 +46,20 @@ export class TerrainSystem {
     this.clear();
     for (const t of list) {
       const gfx = this.game.add.graphics().setDepth(DEPTH.floor + 2);
-      this.patches.push({ ...t, state: 'idle', timer: 0, tick: 0, cooldown: 0, heals: 0, gfx });
+      const key = terrainKey({ type: t.type, state: 'idle' });
+      const img = this.game.textures.exists(key)
+        ? this.game.add.image(t.x, t.y, key).setDisplaySize(t.r * 2.5, t.r * 2.0).setDepth(DEPTH.floor + 2)
+        : undefined;
+      this.patches.push({ ...t, state: 'idle', timer: 0, tick: 0, cooldown: 0, heals: 0, gfx, img });
     }
     this.patches.forEach((p) => this.draw(p));
   }
 
   clear(): void {
-    this.patches.forEach((p) => p.gfx.destroy());
+    this.patches.forEach((p) => {
+      p.gfx.destroy();
+      p.img?.destroy();
+    });
     this.patches = [];
   }
 
@@ -52,6 +68,17 @@ export class TerrainSystem {
     g.clear();
     const t = this.game.time.now / 1000;
     const c = STATE_COLOR[p.state] ?? BASE[p.type];
+    if (p.img) {
+      // 美術地形：依狀態換貼圖，燃燒／導電／中毒時閃爍，用完變暗
+      const key = terrainKey(p);
+      if (p.img.texture.key !== key && this.game.textures.exists(key)) {
+        p.img.setTexture(key).setDisplaySize(p.r * 2.5, p.r * 2.0);
+      }
+      const active = p.state === 'burning' || p.state === 'electric' || p.state === 'toxic';
+      p.img.setAlpha(p.type === 'sun' ? 0.75 + 0.15 * Math.sin(t * 2) : active ? 0.85 + 0.15 * Math.sin(t * 12) : 1);
+      p.img.setTint(p.state === 'spent' ? 0x606060 : 0xffffff);
+      return;
+    }
     if (p.type === 'sun') {
       g.fillStyle(0xfff2b0, 0.16 + 0.04 * Math.sin(t * 2)).fillEllipse(p.x, p.y, p.r * 2.2, p.r * 1.5);
       g.fillStyle(0xffffff, 0.1).fillEllipse(p.x - p.r * 0.2, p.y - p.r * 0.1, p.r, p.r * 0.6);

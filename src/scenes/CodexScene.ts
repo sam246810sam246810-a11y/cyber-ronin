@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { goldify } from '../ui/textStyle';
+import { isArtTexture } from '../utils';
 import { COLORS, FONT, GAME_H, GAME_W, MYTHIC, SAFE_X, cx } from '../config';
 import { MYTHICS, RECIPES, RECIPE_ORDER, hexToInt, mythicKey } from '../data';
 import { CodexStore } from '../systems/CodexStore';
@@ -16,8 +18,16 @@ export class CodexScene extends Phaser.Scene {
 
   create(data: { returnTo: 'MainMenu' | 'Pause' | 'Game' }): void {
     this.selectedFrame = undefined;
-    this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLORS.bg, 1).setInteractive();
-    this.add.text(GAME_W / 2, 36, '配方圖鑑', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    if (isArtTexture(this, 'bg_codex')) {
+      const bgi = this.add.image(GAME_W / 2, GAME_H / 2, 'bg_codex').setInteractive();
+      bgi.setScale(Math.max(GAME_W / bgi.width, GAME_H / bgi.height));
+      this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.5);
+      this.add.nineslice(GAME_W / 2, 34, 'ui_nameplate', undefined, 270, 60, 34, 34, 22, 22);
+      goldify(this.add.text(GAME_W / 2, 34, '配方圖鑑', { fontFamily: FONT, fontSize: '28px' })).setOrigin(0.5);
+    } else {
+      this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLORS.bg, 1).setInteractive();
+      this.add.text(GAME_W / 2, 36, '配方圖鑑', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+    }
     this.add.text(GAME_W / 2, 72, `已發現 ${CodexStore.count} / ${CodexStore.total}　（點格子看效果）`, {
       fontFamily: FONT, fontSize: '19px', color: COLORS.textDim,
     }).setOrigin(0.5);

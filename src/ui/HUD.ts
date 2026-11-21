@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { isArtTexture } from '../utils';
+import { iconOrText } from './icons';
+import { hasIcon, isArtTexture } from '../utils';
+import { goldify, paletteFor } from './textStyle';
 import { ARENA, COLORS, DEPTH, FONT, GAME_W, RARITY, RIGHT, SAFE_X } from '../config';
 
 const RARITY_COLORS = RARITY.map((r) => r.color);
@@ -17,6 +19,10 @@ export class HUD {
   private sandText!: Phaser.GameObjects.Text;
   private hpPill!: Phaser.GameObjects.Graphics;
   private hpPanel?: Phaser.GameObjects.NineSlice;
+  private sandIcon?: Phaser.GameObjects.Image;
+  private infoPlate?: Phaser.GameObjects.NineSlice;
+  private bossFrame?: Phaser.GameObjects.Image;
+  private toastFrame?: Phaser.GameObjects.NineSlice;
   private dangerText: Phaser.GameObjects.Text;
   private bossName: Phaser.GameObjects.Text;
   private banner: Phaser.GameObjects.Text;
@@ -28,10 +34,11 @@ export class HUD {
   constructor(private scene: Phaser.Scene, maxHp: number, onPause: () => void) {
     // 左上：血量＋金幣（半透明膠囊底，疊在地圖上）
     this.hpPill = scene.add.graphics().setDepth(DEPTH.ui - 1);
-    if (isArtTexture(scene, 'ui_panel')) {
+    const plaque = isArtTexture(scene, 'ui_hud_plaque') ? 'ui_hud_plaque' : isArtTexture(scene, 'ui_panel') ? 'ui_panel' : undefined;
+    if (plaque) {
       // 黃銅木頭面板（九宮格拉伸，角落花紋不變形）
-      this.hpPanel = scene.add.nineslice(0, 0, 'ui_panel', undefined, 200, 90, 46, 46, 40, 40)
-        .setOrigin(0, 0).setDepth(DEPTH.ui - 1).setAlpha(0.92);
+      this.hpPanel = scene.add.nineslice(0, 0, plaque, undefined, 200, 90, 70, 70, 44, 50)
+        .setOrigin(0, 0).setDepth(DEPTH.ui - 1).setAlpha(0.95);
     }
     // 右上：暫停
     const pause = scene.add.container(RIGHT - 44, 44, isArtTexture(scene, 'ui_pause')
@@ -50,6 +57,7 @@ export class HUD {
     this.sandText = scene.add.text(0, 0, '', {
       fontFamily: FONT, fontSize: '18px', color: '#9fe3ff', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
+    if (hasIcon(scene, 'sand')) this.sandIcon = scene.add.image(0, 0, 'icons', 'sand').setDisplaySize(22, 22).setDepth(DEPTH.ui).setVisible(false);
     this.ensureHearts(maxHp);
     // 小地圖下方的小字：樓層＋危險度
     this.waveText = scene.add.text(RIGHT - 12, 0, '', {
@@ -60,13 +68,16 @@ export class HUD {
       fontFamily: FONT, fontSize: '14px', color: '#c9c9c9', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(1, 0).setDepth(DEPTH.ui);
     this.bossBar = scene.add.graphics().setDepth(DEPTH.ui);
+    if (isArtTexture(scene, 'ui_boss_frame')) {
+      this.bossFrame = scene.add.image(GAME_W / 2, 54, 'ui_boss_frame').setDisplaySize(700, 103).setDepth(DEPTH.ui + 1).setVisible(false);
+    }
     this.bossName = scene.add.text(GAME_W / 2, 30, '', {
       fontFamily: FONT, fontSize: '16px', color: '#ffd1ec', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(DEPTH.ui + 1);
 
-    this.banner = scene.add.text(GAME_W / 2, ARENA.y + ARENA.h * 0.38, '', {
-      fontFamily: FONT, fontSize: '50px', color: '#ffffff', fontStyle: 'bold', stroke: '#2a1a3a', strokeThickness: 8,
-    }).setOrigin(0.5).setDepth(DEPTH.overlay).setAlpha(0);
+    this.banner = goldify(scene.add.text(GAME_W / 2, ARENA.y + ARENA.h * 0.38, '貓', {
+      fontFamily: FONT, fontSize: '56px',
+    })).setOrigin(0.5).setDepth(DEPTH.overlay).setAlpha(0);
 
     const toastBg = this.toastBg = scene.add.rectangle(0, 0, 720, 96, 0x2a1a3a, 0.95).setStrokeStyle(3, COLORS.gold, 1);
     this.toastText = scene.add.text(0, -24, '', {
@@ -76,12 +87,31 @@ export class HUD {
       fontFamily: FONT, fontSize: '16px', color: '#ffffff', align: 'center',
       wordWrap: { width: 680, useAdvancedWrap: true }, lineSpacing: 2,
     }).setOrigin(0.5);
-    this.toast = scene.add.container(GAME_W / 2, 120, [toastBg, this.toastText, this.toastSub])
+    const items: Phaser.GameObjects.GameObject[] = [toastBg, this.toastText, this.toastSub];
+    if (isArtTexture(scene, 'ui_notice')) {
+      this.toastFrame = scene.add.nineslice(0, -6, 'ui_notice', undefined, 780, 138, 80, 80, 60, 40);
+      toastBg.setFillStyle(0, 0).setSize(700, 82);
+      items.unshift(this.toastFrame);
+    }
+    this.toast = scene.add.container(GAME_W / 2, 120, items)
       .setDepth(DEPTH.overlay).setAlpha(0);
   }
 
   /** 小地圖底部的 y，樓層字跟在下面 */
   setInfoY(y: number): void {
+    if (isArtTexture(this.scene, 'ui_nameplate')) {
+      // 樓層＋危險度放在黃銅小名牌上，置中對齊小地圖
+      if (!this.infoPlate) {
+        this.infoPlate = this.scene.add.nineslice(0, 0, 'ui_nameplate', undefined, 150, 56, 30, 30, 22, 22).setDepth(DEPTH.ui - 1);
+        this.waveText.setOrigin(0.5, 0);
+        this.dangerText.setOrigin(0.5, 0);
+      }
+      const cxp = RIGHT - 18 - 84;
+      this.infoPlate.setPosition(cxp, y + 28);
+      this.waveText.setPosition(cxp, y + 6);
+      this.dangerText.setPosition(cxp, y + 26);
+      return;
+    }
     this.waveText.setY(y + 4);
     this.dangerText.setY(y + 24);
   }
@@ -90,7 +120,7 @@ export class HUD {
   private lastMaxHp = 5;
 
   /** 左上膠囊內的聖物圖示列 */
-  setRelics(relics: { icon: string; rarity: number }[]): void {
+  setRelics(relics: { id: string; icon: string; rarity: number }[]): void {
     this.relicIcons.forEach((o) => o.destroy());
     this.relicIcons = [];
     this.relicCount = relics.length;
@@ -102,7 +132,7 @@ export class HUD {
       const c = parseInt(RARITY_COLORS[r.rarity].replace('#', ''), 16);
       this.relicIcons.push(
         this.scene.add.circle(x, y, 13, c, 0.35).setStrokeStyle(2, c, 1).setDepth(DEPTH.ui),
-        this.scene.add.text(x, y, r.icon, { fontSize: '15px' }).setOrigin(0.5).setDepth(DEPTH.ui + 1),
+        iconOrText(this.scene, x, y, `relic_${r.id}`, r.icon, 24).setDepth(DEPTH.ui + 1),
       );
     });
   }
@@ -111,15 +141,21 @@ export class HUD {
 
   /** 大廳：只顯示時之砂總數 */
   setLobbySand(n: number): void {
-    this.coinIcon.setVisible(false);
-    this.coinText.setText(`⌛ 時之砂 ${n}`).setColor('#9fe3ff');
+    if (this.sandIcon) {
+      this.coinIcon.setTexture('icons', 'sand').setDisplaySize(24, 24);
+      this.coinText.setText(`時之砂 ${n}`).setColor('#9fe3ff');
+    } else {
+      this.coinIcon.setVisible(false);
+      this.coinText.setText(`⌛ 時之砂 ${n}`).setColor('#9fe3ff');
+    }
     this.waveText.setText('');
     this.dangerText.setText('');
   }
 
   /** 時之砂（本局） */
   setSand(n: number): void {
-    this.sandText.setText(n ? `⌛${n}` : '');
+    this.sandText.setText(n ? (this.sandIcon ? String(n) : `⌛${n}`) : '');
+    this.sandIcon?.setVisible(n > 0);
   }
 
   private layoutTopLeft(maxHp: number): void {
@@ -133,11 +169,14 @@ export class HUD {
     this.hpPill.clear();
     const pw = Math.max(w, 30 * this.relicCount + 16, 150);
     const ph = coinY + 14 + relicRow;
-    if (this.hpPanel) this.hpPanel.setPosition(x0 - 16, 2).setSize(pw + 30, ph + 14);
+    if (this.hpPanel) this.hpPanel.setPosition(x0 - 34, -10).setSize(Math.max(pw + 76, 220), Math.max(ph + 46, 116));
     else this.hpPill.fillStyle(0x120d18, 0.5).fillRoundedRect(x0 - 8, 8, pw, ph, 14);
     this.coinIcon.setPosition(x0 + 12, coinY - 6);
     this.coinText.setPosition(x0 + 28, coinY - 6);
-    this.sandText?.setPosition(x0 + 86, coinY - 6);
+    if (this.sandIcon) {
+      this.sandIcon.setPosition(x0 + 96, coinY - 6);
+      this.sandText?.setPosition(x0 + 110, coinY - 6);
+    } else this.sandText?.setPosition(x0 + 86, coinY - 6);
   }
 
   /** 最大血量會成長，最多 14 顆，每排 7 顆 */
@@ -158,7 +197,16 @@ export class HUD {
     this.timeText.setText(formatTime(time));
 
     this.bossBar.clear();
-    if (boss && boss.alive) {
+    this.bossFrame?.setVisible(!!(boss && boss.alive));
+    if (boss && boss.alive && this.bossFrame) {
+      // 血條畫在黃銅框的凹槽裡（骷髏頭在左）
+      const W = 700, x = GAME_W / 2 - W / 2 + W * 0.115, w = W * 0.85, y = 54 - 9;
+      const ratio = Math.max(0, boss.hp / boss.maxHp);
+      this.bossBar.fillStyle(0x1a0a10, 1).fillRect(x, y, w, 18);
+      this.bossBar.fillStyle(0xb0204a, 1).fillRect(x, y, w * ratio, 18);
+      this.bossBar.fillStyle(0xff6a8a, 1).fillRect(x, y, w * ratio, 6);
+      this.bossName.setY(92).setText(`${boss.name}  ${Math.ceil(boss.hp)}/${boss.maxHp}`);
+    } else if (boss && boss.alive) {
       const w = 640;
       const x = (GAME_W - w) / 2;
       const y = 44;
@@ -197,9 +245,14 @@ export class HUD {
   showToast(title: string, sub: string, color?: string): void {
     const legendary = !!color;
     const c = color ? parseInt(color.replace('#', ''), 16) : COLORS.gold;
-    this.toastBg.setStrokeStyle(legendary ? 5 : 3, c, 1);
-    this.toastBg.setFillStyle(0x1e1428, 0.96);
-    this.toastText.setColor(color ?? '#ffd166');
+    if (this.toastFrame) {
+      this.toastBg.setStrokeStyle(legendary ? 3 : 0, c, legendary ? 0.8 : 0);
+      goldify(this.toastText, paletteFor(color ?? '#ffd166'), 5);
+    } else {
+      this.toastBg.setStrokeStyle(legendary ? 5 : 3, c, 1);
+      this.toastBg.setFillStyle(0x1e1428, 0.96);
+      this.toastText.setColor(color ?? '#ffd166');
+    }
     this.toastText.setText(title);
     this.toastSub.setText(sub);
     this.scene.tweens.killTweensOf(this.toast);

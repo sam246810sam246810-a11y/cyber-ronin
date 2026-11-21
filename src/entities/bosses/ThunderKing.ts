@@ -1,5 +1,5 @@
 import { Enemy } from '../Enemy';
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT } from '../../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH } from '../../config';
 import { TelegraphSystem } from '../../systems/TelegraphSystem';
 import { Sound } from '../../systems/SoundSystem';
 import { clamp, rand } from '../../utils';
@@ -39,12 +39,17 @@ export class ThunderKing extends Enemy {
   }
 
   private strike(x: number, y: number, r: number, tele: number, onFinish?: () => void): void {
+    // 預警期間地上轉動的時鐘法陣
+    const clock = this.game.fx.anim('vfx_clock', x, y, r * 2.4, { loop: true, depth: DEPTH.zone + 1 });
+    if (clock) this.game.time.delayedCall(tele * 1000, () => clock.destroy());
     this.game.telegraphs.add({
       owner: this, duration: tele, color: 0xffe14d, shape: { kind: 'circle', x, y, r },
       onDone: (shape) => {
         onFinish?.();
         if (!this.alive) return;
-        this.game.fx.line(x, ARENA.y, x, y, 0xffffff, 6);
+        const bolt = this.game.fx.anim('vfx_thunder', x, y, 260);
+        if (bolt) bolt.setOrigin(0.5, 0.9).setPosition(x, y + 10);
+        else this.game.fx.line(x, ARENA.y, x, y, 0xffffff, 6);
         this.game.fx.burst(x, y, r, 0xffe14d);
         Sound.play('zap');
         const pl = this.game.player;
@@ -96,6 +101,9 @@ export class ThunderKing extends Enemy {
       }
       this.game.cameras.main.shake(100, 0.004);
     } else {
+      // 摔出藥瓶召喚毛線球怪
+      this.game.fx.anim('vfx_shatter', this.x - 120, this.y + 60, 170);
+      this.game.fx.anim('vfx_shatter', this.x + 120, this.y + 60, 170);
       this.game.dungeon.spawnEnemy('splitter', this.x - 120, this.y + 60, false, 0.6);
       this.game.dungeon.spawnEnemy('splitter', this.x + 120, this.y + 60, false, 0.6);
       if (this.enraged) this.game.dungeon.spawnEnemy('wisp', this.x, this.y + 160, false, 0.6);

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { goldify, paletteFor } from '../ui/textStyle';
 import { isArtTexture } from '../utils';
 import { COLORS, FONT, GAME_H, GAME_W } from '../config';
 import { hexToInt } from '../data';
@@ -36,9 +37,7 @@ export class EventScene extends Phaser.Scene {
       fn?.();
     };
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.82).setInteractive();
-    this.add.text(GAME_W / 2, 90, d.title, {
-      fontFamily: FONT, fontSize: '48px', color: d.color, fontStyle: 'bold', stroke: '#000', strokeThickness: 6,
-    }).setOrigin(0.5);
+    goldify(this.add.text(GAME_W / 2, 90, d.title, { fontFamily: FONT, fontSize: '48px' }), paletteFor(d.color)).setOrigin(0.5);
     this.add.text(GAME_W / 2, 145, d.subtitle, {
       fontFamily: FONT, fontSize: '22px', color: COLORS.text, align: 'center', lineSpacing: 8,
       wordWrap: { width: 1000, useAdvancedWrap: true },

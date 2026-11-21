@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { goldify } from '../ui/textStyle';
+import { iconOrText } from '../ui/icons';
 import { isArtTexture } from '../utils';
 import { COLORS, FONT, GAME_H, GAME_W, RARITY } from '../config';
 import { hexToInt } from '../data';
@@ -25,9 +27,7 @@ export class CardSelectScene extends Phaser.Scene {
   create(data: CardSelectData): void {
     this.picked = false;
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.8).setInteractive();
-    this.add.text(GAME_W / 2, 90, data.title ?? '突變！', {
-      fontFamily: FONT, fontSize: '44px', color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 6,
-    }).setOrigin(0.5);
+    goldify(this.add.text(GAME_W / 2, 90, data.title ?? '突變！', { fontFamily: FONT, fontSize: '46px' })).setOrigin(0.5);
     this.add.text(GAME_W / 2, 145, '選擇一張突變卡', { fontFamily: FONT, fontSize: '24px', color: COLORS.text }).setOrigin(0.5);
 
     guardInput(this);
@@ -66,7 +66,7 @@ export class CardSelectScene extends Phaser.Scene {
         .setStrokeStyle(o.rarity >= 2 ? 5 : 3, rc, art ? 0.7 : 1);
       const band = this.add.rectangle(0, -182, 370, 16, rc, art ? 0 : 1);
       const iconBg = this.add.circle(0, -90, 58, 0x3a2f45).setStrokeStyle(3, rc, 1);
-      const icon = this.add.text(0, -90, o.def.icon, { fontFamily: FONT, fontSize: '56px', color: rar.color }).setOrigin(0.5);
+      const icon = iconOrText(this, 0, -90, `mut_${o.def.id}`, o.def.icon, 92, rar.color);
       const rarity = this.add.text(art ? -138 : -160, art ? -132 : -150, rar.name, { fontFamily: FONT, fontSize: '19px', color: rar.color, fontStyle: 'bold' }).setOrigin(0, 0.5);
       const owned = this.add.text(art ? 138 : 160, art ? -132 : -150, o.owned > 0 ? `已有 ${formatCardValue(o.def, o.owned)}` : 'NEW', {
         fontFamily: FONT, fontSize: '17px', color: o.owned > 0 ? '#7ed4ff' : '#ffd166',

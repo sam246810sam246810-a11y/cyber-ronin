@@ -1,5 +1,5 @@
 import { Enemy } from '../Enemy';
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT } from '../../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH } from '../../config';
 import { TelegraphSystem } from '../../systems/TelegraphSystem';
 import { Sound } from '../../systems/SoundSystem';
 import { clamp } from '../../utils';
@@ -58,7 +58,7 @@ export class MagmaSnail extends Enemy {
             this.game.effects.delay(w * 0.35, () => {
               if (!this.alive) return;
               const off = w * (Math.PI / n);
-              for (let i = 0; i < n; i++) this.game.projectiles.fireEnemy(this.x, this.y, off + (Math.PI * 2 * i) / n, 260);
+              for (let i = 0; i < n; i++) this.game.projectiles.fireEnemy(this.x, this.y, off + (Math.PI * 2 * i) / n, 260, 1, 'vfx_lavabomb');
             });
           }
           Sound.play('explode');
@@ -72,7 +72,9 @@ export class MagmaSnail extends Enemy {
         onDone: (shape) => {
           this.busy = false;
           if (!this.alive) return;
-          this.game.fx.burst(x, y, 110, 0xff5a2a);
+          const gey = this.game.fx.anim('vfx_geyser', x, y, 260);
+          if (gey) gey.setOrigin(0.5, 0.92).setPosition(x, y + 20);
+          if (!this.game.fx.anim('vfx_magma', x, y, 240, { depth: DEPTH.zone + 1 })) this.game.fx.burst(x, y, 110, 0xff5a2a);
           this.game.hazards.add(x, y, 70, 3);
           this.game.cameras.main.shake(120, 0.006);
           Sound.play('explode');

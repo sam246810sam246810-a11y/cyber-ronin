@@ -202,5 +202,59 @@
   "fh": 192,
   "frames": 7,
   "ms": 60
+ },
+ "vfx_bloom": {
+  "fw": 192,
+  "fh": 175,
+  "frames": 7,
+  "ms": 70
+ },
+ "vfx_clock": {
+  "fw": 192,
+  "fh": 190,
+  "frames": 8,
+  "ms": 90
+ },
+ "vfx_flask": {
+  "fw": 192,
+  "fh": 184,
+  "frames": 6,
+  "ms": 70
+ },
+ "vfx_geyser": {
+  "fw": 164,
+  "fh": 192,
+  "frames": 8,
+  "ms": 80
+ },
+ "vfx_lavabomb": {
+  "fw": 168,
+  "fh": 192,
+  "frames": 6,
+  "ms": 70
+ },
+ "vfx_magma": {
+  "fw": 192,
+  "fh": 146,
+  "frames": 7,
+  "ms": 70
+ },
+ "vfx_petal": {
+  "fw": 192,
+  "fh": 184,
+  "frames": 6,
+  "ms": 70
+ },
+ "vfx_shatter": {
+  "fw": 192,
+  "fh": 159,
+  "frames": 7,
+  "ms": 70
+ },
+ "vfx_vines": {
+  "fw": 192,
+  "fh": 177,
+  "frames": 8,
+  "ms": 80
  }
 }

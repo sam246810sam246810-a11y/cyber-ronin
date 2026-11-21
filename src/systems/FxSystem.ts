@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { DEPTH, FONT } from '../config';
+import { goldify } from '../ui/textStyle';
 
 /** 佔位用的簡單特效 */
 export class FxSystem {
@@ -20,10 +21,11 @@ export class FxSystem {
     this.activeNumbers++;
     const v = amount >= 10 ? Math.round(amount) : Math.round(amount * 10) / 10;
     t.setText(crit ? `${v}!` : String(v))
-      .setFontSize(crit ? 28 : 18)
-      .setColor(crit ? '#ffe14d' : '#ffffff')
+      .setFontSize(crit ? 30 : 20)
       .setPosition(x + (Math.random() - 0.5) * 20, y)
       .setAlpha(1).setScale(crit ? 1.4 : 1).setVisible(true);
+    // 文字風格 A：一般傷害金色、暴擊橘紅漸層
+    goldify(t, crit ? 'crit' : 'gold', crit ? 6 : 4);
     this.scene.tweens.add({
       targets: t, y: y - 36, scale: 1, duration: 420, ease: 'Quad.Out',
       onComplete: () => {

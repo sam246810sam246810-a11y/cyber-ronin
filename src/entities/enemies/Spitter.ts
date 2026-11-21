@@ -34,7 +34,7 @@ export class Spitter extends Enemy {
     const speed = Number(this.def.thornSpeed ?? 380);
     for (let i = 0; i < n; i++) {
       const a = angle - spread / 2 + (spread * i) / Math.max(1, n - 1);
-      this.game.projectiles.fireEnemy(this.x, this.y, a, speed);
+      this.game.projectiles.fireEnemy(this.x, this.y, a, speed, 1, 'proj_dart');
     }
   }
 }

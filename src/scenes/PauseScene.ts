@@ -4,6 +4,9 @@ import { ELEMENTS, hexToInt } from '../data';
 import type { RunSummary } from './GameScene';
 import { canFullscreen, textButton, toggleFullscreen } from '../ui/widgets';
 import { Sound } from '../systems/SoundSystem';
+import { iconOrText } from '../ui/icons';
+import { goldify } from '../ui/textStyle';
+import { isArtTexture } from '../utils';
 
 /** 暫停：左欄數值、中欄藥水被動、右欄按鈕 */
 export class PauseScene extends Phaser.Scene {
@@ -12,8 +15,13 @@ export class PauseScene extends Phaser.Scene {
   }
 
   create(d: RunSummary): void {
-    this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.9).setInteractive();
-    this.add.text(SAFE_X + 60, 30, '暫停', { fontFamily: FONT, fontSize: '40px', color: '#ffffff', fontStyle: 'bold' });
+    // 遊戲畫面壓暗留在後面，內容放在黃銅木框裡
+    this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.72).setInteractive();
+    if (isArtTexture(this, 'ui_hud_plaque')) {
+      this.add.nineslice(SAFE_X + 20 + (RIGHT - SAFE_X - 480) / 2, 392, 'ui_hud_plaque', undefined, RIGHT - SAFE_X - 460, 644, 70, 70, 44, 50)
+        .setAlpha(0.96);
+    }
+    goldify(this.add.text(SAFE_X + 60, 26, '暫停', { fontFamily: FONT, fontSize: '40px' }));
     this.add.text(SAFE_X + 190, 44, `${d.character}・${d.region}　已喝 ${d.drinks} 瓶`, { fontFamily: FONT, fontSize: '20px', color: COLORS.textDim });
     ELEMENTS.forEach((e, i) => {
       const x = SAFE_X + 80 + i * 110;
@@ -45,15 +53,19 @@ export class PauseScene extends Phaser.Scene {
     if (d.relics.length) {
       this.add.text(SAFE_X + 720, 150, '聖物', { fontFamily: FONT, fontSize: '21px', color: '#ffd166', fontStyle: 'bold' });
       d.relics.forEach((r, i) => {
-        this.add.text(SAFE_X + 720, 186 + i * 52, `${r.icon} ${r.name}`, { fontFamily: FONT, fontSize: '18px', color: r.color, fontStyle: 'bold' });
-        this.add.text(SAFE_X + 720, 208 + i * 52, r.desc, {
+        iconOrText(this, SAFE_X + 734, 206 + i * 52, `relic_${r.id}`, r.icon, 40);
+        this.add.text(SAFE_X + 760, 186 + i * 52, r.name, { fontFamily: FONT, fontSize: '18px', color: r.color, fontStyle: 'bold' });
+        this.add.text(SAFE_X + 760, 208 + i * 52, r.desc, {
           fontFamily: FONT, fontSize: '14px', color: '#d8d0e6', wordWrap: { width: 260, useAdvancedWrap: true },
         });
       });
     }
-    const muts = d.mutations.length ? d.mutations.map((m) => `${m.icon}${m.name} ${m.value}`).join('　') : '（還沒有）';
-    this.add.text(SAFE_X + 60, 630, `突變卡：${muts}`, {
-      fontFamily: FONT, fontSize: '17px', color: '#ffffff', wordWrap: { width: 740, useAdvancedWrap: true },
+    this.add.text(SAFE_X + 60, 630, '突變卡：', { fontFamily: FONT, fontSize: '17px', color: '#ffd166', fontStyle: 'bold' });
+    if (!d.mutations.length) this.add.text(SAFE_X + 140, 630, '（還沒有）', { fontFamily: FONT, fontSize: '17px', color: '#ffffff' });
+    d.mutations.forEach((m, i) => {
+      const x = SAFE_X + 160 + i * 112;
+      iconOrText(this, x, 641, `mut_${m.id}`, m.icon, 34);
+      this.add.text(x + 20, 641, m.value, { fontFamily: FONT, fontSize: '15px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0, 0.5);
     });
 
     const bx = RIGHT - 260;

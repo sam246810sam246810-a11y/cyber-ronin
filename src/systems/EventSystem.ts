@@ -5,6 +5,7 @@ import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
 import type { Material, NpcKind, RarityIndex } from '../types';
 import { isArtTexture, pick } from '../utils';
+import { goldify } from '../ui/textStyle';
 import { isRift, type Room } from './DungeonSystem';
 import { Sound } from './SoundSystem';
 
@@ -101,11 +102,17 @@ export class EventSystem {
     }
     const labelObj = this.game.add.text(x, y - sh / 2 - 22, info.name, {
       fontFamily: FONT, fontSize: '22px', color: '#ffffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);
+    }).setOrigin(0.5).setDepth(DEPTH.pickup + 3);
+    // 文字風格 A：物件名稱放在黃銅名牌上（雕像名稱已經很短，名牌一樣適用）
+    const plate = isArtTexture(this.game, 'ui_nameplate') && info.name
+      ? this.game.add.nineslice(x, y - sh / 2 - 22, 'ui_nameplate', undefined, labelObj.width + 46, 44, 30, 30, 20, 20)
+        .setDepth(DEPTH.pickup + 2)
+      : undefined;
+    if (plate) goldify(labelObj, 'gold', 4).setFontSize(20);
     this.game.tweens.add({ targets: glow, scale: glow.scale * 1.25, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
     const p = this.game.player;
     const near = (p.x - x) ** 2 + (p.y - y) ** 2 < 70 ** 2;
-    const o: RoomObject = { kind, x, y, t: 0, armed: !near, objs: [glow, sprite, labelObj], sprite, npc, extra };
+    const o: RoomObject = { kind, x, y, t: 0, armed: !near, objs: plate ? [glow, sprite, plate, labelObj] : [glow, sprite, labelObj], sprite, npc, extra };
     this.list.push(o);
     if (kind === 'cauldron') {
       glow.setDisplaySize(300, 200);

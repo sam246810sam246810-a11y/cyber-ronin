@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { COLORS, FONT, GAME_W, cx } from '../config';
+import { goldify } from '../ui/textStyle';
+import { isArtTexture } from '../utils';
+import { COLORS, FONT, GAME_H, GAME_W, cx } from '../config';
 import { MYTHICS, RECIPES } from '../data';
 import { CodexStore } from '../systems/CodexStore';
 import { MetaStore } from '../systems/MetaStore';
@@ -27,9 +29,16 @@ export class ResultScene extends Phaser.Scene {
 
   create(d: ResultData): void {
     this.cameras.main.setBackgroundColor(COLORS.bg);
-    this.add.text(GAME_W / 2, 64, d.victory ? '勝利！' : '倒下了…', {
-      fontFamily: FONT, fontSize: '62px', color: d.victory ? '#ffd166' : '#ff6b6b', fontStyle: 'bold', stroke: '#000', strokeThickness: 8,
-    }).setOrigin(0.5);
+    const bgKey = d.victory ? 'bg_win' : 'bg_lose';
+    if (isArtTexture(this, bgKey)) {
+      const bgi = this.add.image(GAME_W / 2, GAME_H / 2, bgKey);
+      bgi.setScale(Math.max(GAME_W / bgi.width, GAME_H / bgi.height));
+      this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x05030a, 0.45);
+      if (isArtTexture(this, 'ui_dialog')) this.add.nineslice(GAME_W / 2, 410, 'ui_dialog', undefined, Math.min(1180, GAME_W - 60), 560, 70, 70, 80, 50).setAlpha(0.94);
+    }
+    goldify(this.add.text(GAME_W / 2, 64, d.victory ? '勝利！' : '倒下了…', {
+      fontFamily: FONT, fontSize: '62px',
+    }), d.victory ? 'gold' : 'red').setOrigin(0.5);
     this.add.text(GAME_W / 2, 124, `${d.character}・${d.victory ? '征服了雷雲山頂！' : `倒在 ${d.region}`}`, {
       fontFamily: FONT, fontSize: '22px', color: COLORS.textDim,
     }).setOrigin(0.5);
@@ -63,7 +72,7 @@ export class ResultScene extends Phaser.Scene {
     block(210, '本局新發現', '#ffd166', d.discoveries.length ? d.discoveries.map(codexName).join('、') : '（沒有）');
     block(320, '藥水被動', '#c9a3ff',
       d.passives.length ? d.passives.slice(0, 10).map((p) => `${p.name} Lv.${Math.round(p.stacks * 10) / 10}`).join('、') : '（沒有）');
-    block(560, '聖物', '#ffd166', d.relics.length ? d.relics.map((r) => `${r.icon}${r.name}`).join('、') : '（沒有）');
+    block(560, '聖物', '#ffd166', d.relics.length ? d.relics.map((r) => r.name).join('、') : '（沒有）');
     block(450, '突變卡', '#7ed4ff', d.mutations.length ? d.mutations.map((m) => `${m.name} ${m.value}`).join('、') : '（沒有）');
 
     textButton(this, GAME_W / 2 + 160, 650, 360, 84, '回到工房', () => this.scene.start('Game', { mode: 'lobby' }), 0x7a4fc0);

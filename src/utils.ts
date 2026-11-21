@@ -42,3 +42,8 @@ export function isArtTexture(scene: Phaser.Scene, key: string): boolean {
   if (!scene.textures.exists(key)) return false;
   return scene.textures.get(key).getSourceImage() instanceof HTMLImageElement;
 }
+
+/** 圖集裡有沒有這個圖示（例如 relic_cat_eye、mut_spread、room_boss） */
+export function hasIcon(scene: Phaser.Scene, frame: string): boolean {
+  return scene.textures.exists('icons') && scene.textures.get('icons').has(frame);
+}

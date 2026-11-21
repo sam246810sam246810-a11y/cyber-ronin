@@ -1,5 +1,5 @@
 import { Enemy } from '../Enemy';
-import { ARENA, ARENA_BOTTOM, ARENA_RIGHT } from '../../config';
+import { ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH } from '../../config';
 import { TelegraphSystem } from '../../systems/TelegraphSystem';
 import { clamp, rand } from '../../utils';
 import type { EnemyDef } from '../../types';
@@ -117,7 +117,8 @@ export class FlowerBoss extends Enemy {
             remaining--;
             if (remaining === 0) this.busy = false;
             if (!this.alive) return;
-            this.game.fx.burst(x, y, 80, 0x9a2f6e);
+            if (!this.game.fx.anim('vfx_vines', x, y, 190, { depth: DEPTH.zone + 1 })) this.game.fx.burst(x, y, 80, 0x9a2f6e);
+            this.game.fx.anim('vfx_bloom', x, y - 20, 170);
             const pl = this.game.player;
             if (TelegraphSystem.hits(shape, pl.x, pl.y, pl.radius)) this.game.hurtPlayer(1);
           },
@@ -139,7 +140,7 @@ export class FlowerBoss extends Enemy {
     const jitter = rand(-0.05, 0.05);
     for (let i = 0; i < n; i++) {
       const a = angle - spread / 2 + (spread * i) / (n - 1) + jitter;
-      this.game.projectiles.fireEnemy(this.x, this.y, a, 340);
+      this.game.projectiles.fireEnemy(this.x, this.y, a, 340, 1, 'vfx_petal');
     }
   }
 }

@@ -91,11 +91,11 @@ export class Thief extends Enemy {
     const a = Math.atan2(t.y - this.y, t.x - this.x);
     switch (this.mutated) {
       case 'F': // 火環
-        for (let i = 0; i < 12; i++) g.projectiles.fireEnemy(this.x, this.y, (Math.PI * 2 * i) / 12, 260);
+        for (let i = 0; i < 12; i++) g.projectiles.fireEnemy(this.x, this.y, (Math.PI * 2 * i) / 12, 260, 1, 'proj_spore');
         g.fx.burst(this.x, this.y, 60, 0xff8a3d);
         break;
       case 'I': // 三連冰刃
-        for (let k = 0; k < 3; k++) g.effects.delay(k * 0.15, () => this.alive && g.projectiles.fireEnemy(this.x, this.y, a + (k - 1) * 0.12, 460));
+        for (let k = 0; k < 3; k++) g.effects.delay(k * 0.15, () => this.alive && g.projectiles.fireEnemy(this.x, this.y, a + (k - 1) * 0.12, 460, 1, 'vfx_flask'));
         break;
       case 'S': // 毒沼
         g.hazards.add(this.x, this.y, 46, 5, 0x7eff8a);

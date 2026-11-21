@@ -18,9 +18,14 @@ export const ART_SPRITES = [
 const ART_UI = [
   'door_open', 'door_locked', 'ui_joy_base', 'ui_joy_knob', 'ui_btn', 'ui_ic_dash', 'ui_ic_skill', 'ui_ic_brew', 'ui_ic_swap',
   'ui_pause', 'ui_slot', 'ui_panel', 'ui_card', 'ui_dialog',
+  'ui_hud_plaque', 'ui_nameplate', 'ui_title_banner', 'ui_minimap', 'ui_boss_frame', 'ui_notice', 'ui_gold_btn', 'ui_tile', 'logo',
+  'ter_grass', 'ter_burning', 'ter_toxic', 'ter_water', 'ter_frozen', 'ter_electric', 'ter_oil', 'ter_sun',
+  'proj_dart', 'proj_bomb', 'proj_spore',
 ];
+/** 選單畫面背景（jpg） */
+const ART_BGS = ['bg_menu', 'bg_meta', 'bg_relic', 'bg_codex', 'bg_win', 'bg_lose'];
 /** 會循環播放的特效（其他特效播一次就消失） */
-const LOOP_VFX = new Set(['vfx_poison', 'vfx_lava']);
+const LOOP_VFX = new Set(['vfx_poison', 'vfx_lava', 'vfx_petal', 'vfx_lavabomb', 'vfx_flask', 'vfx_clock']);
 const ART_ROOMS = ['room_greenhouse', 'room_lava', 'room_storm', 'room_lobby'];
 const ART_FLOORS = ['floor_greenhouse', 'floor_lava', 'floor_storm', 'floor_lobby'];
 
@@ -35,6 +40,9 @@ export class PreloadScene extends Phaser.Scene {
     for (const k of ART_FLOORS) this.load.image(k, `art/${k}.jpg`);
     for (const k of ART_ROOMS) this.load.image(k, `art/${k}.jpg`);
     for (const k of ART_UI) this.load.image(k, `art/${k}.png`);
+    for (const k of ART_BGS) this.load.image(k, `art/${k}.jpg`);
+    // 圖示圖集：聖物、突變卡、坩堝升級、神話藥水、小地圖房間（frame 名稱見 icons.json）
+    this.load.atlas('icons', 'art/icons.png', 'art/icons.json');
     // 動畫：Higgsfield 產生的 GIF 轉成橫向 spritesheet
     for (const [k, a] of Object.entries(ANIMS)) {
       this.load.spritesheet(k, `art/anim/${k}.png`, { frameWidth: a.fw, frameHeight: a.fh });

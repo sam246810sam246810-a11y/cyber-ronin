@@ -40,7 +40,7 @@ import type { ResultData } from './ResultScene';
 
 export interface RunSummary {
   character: string;
-  relics: { name: string; icon: string; color: string; desc: string }[];
+  relics: { id: string; name: string; icon: string; color: string; desc: string }[];
   sand: number;
   weapons: { name: string; color: string }[];
   skill: string;
@@ -48,7 +48,7 @@ export interface RunSummary {
   drinks: number;
   elements: Record<ElementId, number>;
   passives: { name: string; stacks: number; color: string; mythic: boolean }[];
-  mutations: { name: string; icon: string; value: string }[];
+  mutations: { id: string; name: string; icon: string; value: string }[];
   stats: [string, string][];
 }
 
@@ -1086,10 +1086,10 @@ export class GameScene extends Phaser.Scene {
         // 滿格：選一個丟掉
         this.scene.launch('Event', {
           title: `聖物欄已滿（${this.relics.maxSlots} 格）`,
-          subtitle: `要用「${rp.relic.icon} ${rp.relic.name}」換掉哪一個？\n${rp.relic.desc}`,
+          subtitle: `要用「${rp.relic.name}」換掉哪一個？\n${rp.relic.desc}`,
           color: RARITY[rp.relic.rarity].color,
           options: this.relics.owned.map((old) => ({
-            label: `丟掉 ${old.icon} ${old.name}`, desc: old.desc, enabled: true,
+            label: `丟掉 ${old.name}`, desc: old.desc, enabled: true,
             onPick: () => {
               this.relics.replace(old.id, rp.relic);
               rp.destroy();
@@ -1112,7 +1112,7 @@ export class GameScene extends Phaser.Scene {
 
   private announceRelic(r: RelicDef): void {
     Sound.play('pickup', r.rarity);
-    this.hud.showToast(`聖物・${r.icon} ${r.name}`, r.desc, RARITY[r.rarity].color);
+    this.hud.showToast(`聖物・${r.name}`, r.desc, RARITY[r.rarity].color);
     this.hud.setRelics(this.relics.owned);
   }
 
@@ -1208,7 +1208,7 @@ export class GameScene extends Phaser.Scene {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     return {
       character: this.character.name,
-      relics: this.relics.owned.map((r) => ({ name: r.name, icon: r.icon, color: RARITY[r.rarity].color, desc: r.desc })),
+      relics: this.relics.owned.map((r) => ({ id: r.id, name: r.name, icon: r.icon, color: RARITY[r.rarity].color, desc: r.desc })),
       sand: this.sand,
       weapons: this.weapons.slots.filter(Boolean).map((w) => ({ name: w!.name, color: RARITY[w!.rarity].color })),
       skill: `${this.character.skill.name}（冷卻 ${this.character.skill.cooldown} 秒）`,
@@ -1217,7 +1217,7 @@ export class GameScene extends Phaser.Scene {
       elements: { ...this.buffs.elements },
       passives,
       mutations: this.mutations.owned().map((m) => ({
-        name: m.def.name, icon: m.def.icon, value: `${Math.round(m.value * 10) / 10}${m.def.unit}`,
+        id: m.def.id, name: m.def.name, icon: m.def.icon, value: `${Math.round(m.value * 10) / 10}${m.def.unit}`,
       })),
       stats: [
         ['最大血量', String(st.maxHp)],

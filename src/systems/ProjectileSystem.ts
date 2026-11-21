@@ -43,7 +43,7 @@ interface Bullet {
   r: number;
   damage: number;
   friendly: boolean;
-  sprite: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Sprite;
   opts: BulletOptions;
   dead: boolean;
   pierceLeft: number;
@@ -64,7 +64,12 @@ export class ProjectileSystem {
     this.spawn(x, y, angle, speed, damage, true, opts);
   }
 
-  fireEnemy(x: number, y: number, angle: number, speed: number, damage = 1): void {
+  /** look：敵人子彈外觀（proj_dart / proj_spore / vfx_petal / vfx_lavabomb / vfx_flask），沒載入就用荊棘 */
+  fireEnemy(x: number, y: number, angle: number, speed: number, damage = 1, look?: string): void {
+    if (look && this.game.textures.exists(look)) {
+      this.spawn(x, y, angle, speed, damage, false, { radius: 8, color: 0xffffff, texture: look });
+      return;
+    }
     this.spawn(x, y, angle, speed, damage, false, { radius: 8, color: COLORS.enemyBullet, texture: 'thorn', long: true });
   }
 
@@ -72,12 +77,19 @@ export class ProjectileSystem {
     const r = opts.radius ?? PLAYER.bulletRadius;
     // 有美術光球就用光球＋加亮混色，看起來像發光的法術彈
     const glowArt = !opts.texture && isArtTexture(this.game, 'proj_orb');
-    const sprite = this.game.add.image(x, y, opts.texture ?? (glowArt ? 'proj_orb' : 'circle'))
+    const sprite = this.game.add.sprite(x, y, opts.texture ?? (glowArt ? 'proj_orb' : 'circle'))
       .setTint(opts.color ?? COLORS.bullet)
       .setBlendMode(glowArt ? Phaser.BlendModes.ADD : Phaser.BlendModes.NORMAL)
       .setDepth(DEPTH.projectile)
       .setRotation(angle + Math.PI / 2);
-    if (opts.long || opts.texture === 'thorn') sprite.setDisplaySize(r * 1.6, r * 3.2);
+    const artLook = !!opts.texture && (opts.texture.startsWith('proj_') || opts.texture.startsWith('vfx_'));
+    if (artLook) {
+      // 美術子彈：會轉的（花瓣、熔岩彈、藥瓶）播動畫；吹箭朝飛行方向
+      if (this.game.anims.exists(opts.texture!)) sprite.play(opts.texture!);
+      const f = sprite.frame;
+      if (opts.texture === 'proj_dart') sprite.setRotation(angle).setScale((r * 5) / f.width);
+      else sprite.setRotation(0).setScale((r * 3.6) / Math.max(f.width, f.height));
+    } else if (opts.long || opts.texture === 'thorn') sprite.setDisplaySize(r * 1.6, r * 3.2);
     else sprite.setDisplaySize(r * (glowArt ? 4.2 : 2), r * (glowArt ? 4.2 : 2));
     this.bullets.push({
       x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r, damage, friendly, sprite, opts, dead: false,
