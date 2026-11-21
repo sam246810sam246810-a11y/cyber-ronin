@@ -47,6 +47,11 @@ export class CrucibleBar {
     this.refresh();
   }
 
+  setVisible(v: boolean): void {
+    [this.panel, this.hint, ...this.slotBgs, ...this.slotIcons].forEach((o) => (o as unknown as { setVisible(b: boolean): void }).setVisible(v));
+    this.slotBgs.forEach((b) => (v ? b.setInteractive() : b.disableInteractive()));
+  }
+
   refresh(): void {
     const c = this.crucible;
     c.slots.forEach((m, i) => {

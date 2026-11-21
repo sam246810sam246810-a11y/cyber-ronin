@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
-import { ARENA, COLORS, DEPTH, FONT, GAME_W, RIGHT, SAFE_X } from '../config';
+import { ARENA, COLORS, DEPTH, FONT, GAME_W, RARITY, RIGHT, SAFE_X } from '../config';
+
+const RARITY_COLORS = RARITY.map((r) => r.color);
 import type { Player } from '../entities/Player';
 import { formatTime } from '../utils';
 
@@ -11,6 +13,7 @@ export class HUD {
   private bossBar: Phaser.GameObjects.Graphics;
   private coinText: Phaser.GameObjects.Text;
   private coinIcon!: Phaser.GameObjects.Image;
+  private sandText!: Phaser.GameObjects.Text;
   private hpPill!: Phaser.GameObjects.Graphics;
   private dangerText: Phaser.GameObjects.Text;
   private bossName: Phaser.GameObjects.Text;
@@ -34,6 +37,9 @@ export class HUD {
     this.coinIcon = scene.add.image(0, 0, 'coin').setDisplaySize(22, 22).setDepth(DEPTH.ui);
     this.coinText = scene.add.text(0, 0, '0', {
       fontFamily: FONT, fontSize: '21px', color: '#ffd166', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
+    }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
+    this.sandText = scene.add.text(0, 0, '', {
+      fontFamily: FONT, fontSize: '18px', color: '#9fe3ff', fontStyle: 'bold', stroke: '#000', strokeThickness: 3,
     }).setOrigin(0, 0.5).setDepth(DEPTH.ui);
     this.ensureHearts(maxHp);
     // 小地圖下方的小字：樓層＋危險度
@@ -71,16 +77,55 @@ export class HUD {
     this.dangerText.setY(y + 24);
   }
 
+  private relicIcons: Phaser.GameObjects.GameObject[] = [];
+  private lastMaxHp = 5;
+
+  /** 左上膠囊內的聖物圖示列 */
+  setRelics(relics: { icon: string; rarity: number }[]): void {
+    this.relicIcons.forEach((o) => o.destroy());
+    this.relicIcons = [];
+    this.relicCount = relics.length;
+    this.layoutTopLeft(this.lastMaxHp);
+    const rows = Math.ceil(this.lastMaxHp / 7);
+    const y = 28 + rows * 32 + 26;
+    relics.forEach((r, i) => {
+      const x = SAFE_X + 30 + i * 30;
+      const c = parseInt(RARITY_COLORS[r.rarity].replace('#', ''), 16);
+      this.relicIcons.push(
+        this.scene.add.circle(x, y, 13, c, 0.35).setStrokeStyle(2, c, 1).setDepth(DEPTH.ui),
+        this.scene.add.text(x, y, r.icon, { fontSize: '15px' }).setOrigin(0.5).setDepth(DEPTH.ui + 1),
+      );
+    });
+  }
+
+  private relicCount = 0;
+
+  /** 大廳：只顯示時之砂總數 */
+  setLobbySand(n: number): void {
+    this.coinIcon.setVisible(false);
+    this.coinText.setText(`⌛ 時之砂 ${n}`).setColor('#9fe3ff');
+    this.waveText.setText('');
+    this.dangerText.setText('');
+  }
+
+  /** 時之砂（本局） */
+  setSand(n: number): void {
+    this.sandText.setText(n ? `⌛${n}` : '');
+  }
+
   private layoutTopLeft(maxHp: number): void {
+    this.lastMaxHp = maxHp;
     const perRow = 7;
     const rows = Math.ceil(maxHp / perRow);
     const w = Math.min(maxHp, perRow) * 29 + 16;
     const x0 = SAFE_X + 18;
     const coinY = 28 + rows * 32;
+    const relicRow = this.relicCount ? 30 : 0;
     this.hpPill.clear();
-    this.hpPill.fillStyle(0x120d18, 0.5).fillRoundedRect(x0 - 8, 8, Math.max(w, 110), coinY + 14, 14);
+    this.hpPill.fillStyle(0x120d18, 0.5).fillRoundedRect(x0 - 8, 8, Math.max(w, 30 * this.relicCount + 16, 150), coinY + 14 + relicRow, 14);
     this.coinIcon.setPosition(x0 + 12, coinY - 6);
     this.coinText.setPosition(x0 + 28, coinY - 6);
+    this.sandText?.setPosition(x0 + 86, coinY - 6);
   }
 
   /** 最大血量會成長，最多 14 顆，每排 7 顆 */

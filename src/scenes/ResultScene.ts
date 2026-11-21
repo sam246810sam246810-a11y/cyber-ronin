@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, FONT, GAME_W, cx } from '../config';
 import { MYTHICS, RECIPES } from '../data';
 import { CodexStore } from '../systems/CodexStore';
+import { MetaStore } from '../systems/MetaStore';
 import { textButton } from '../ui/widgets';
 import { formatTime } from '../utils';
 import type { RunSummary } from './GameScene';
@@ -45,6 +46,7 @@ export class ResultScene extends Phaser.Scene {
       ['喝下藥水', `${d.drinks} 瓶（裂變 ${d.fissions}）`],
       ['圖鑑進度', `${CodexStore.count}/${CodexStore.total}`],
       ['武器', d.weapons.map((w) => w.name).join(' ／ ')],
+      ['時之砂', `+${d.sand} ⌛（共 ${MetaStore.sand}）`],
     ];
     rows.forEach(([k, v], i) => {
       const y = 230 + i * 52;
@@ -61,9 +63,10 @@ export class ResultScene extends Phaser.Scene {
     block(210, '本局新發現', '#ffd166', d.discoveries.length ? d.discoveries.map(codexName).join('、') : '（沒有）');
     block(320, '藥水被動', '#c9a3ff',
       d.passives.length ? d.passives.slice(0, 10).map((p) => `${p.name} Lv.${Math.round(p.stacks * 10) / 10}`).join('、') : '（沒有）');
+    block(560, '聖物', '#ffd166', d.relics.length ? d.relics.map((r) => `${r.icon}${r.name}`).join('、') : '（沒有）');
     block(450, '突變卡', '#7ed4ff', d.mutations.length ? d.mutations.map((m) => `${m.name} ${m.value}`).join('、') : '（沒有）');
 
-    textButton(this, GAME_W / 2 + 160, 650, 360, 84, '再玩一次', () => this.scene.start('CharacterSelect'), 0x7a4fc0);
+    textButton(this, GAME_W / 2 + 160, 650, 360, 84, '回到工房', () => this.scene.start('Game', { mode: 'lobby' }), 0x7a4fc0);
     textButton(this, GAME_W / 2 - 220, 650, 300, 70, '回主選單', () => this.scene.start('MainMenu'));
   }
 }

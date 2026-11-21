@@ -6,6 +6,7 @@ import { PASSIVES, type PassiveCtx } from '../potions/passives';
 import type { GameScene } from '../scenes/GameScene';
 import type { Brew, CharacterDef, ElementId } from '../types';
 import type { Zone } from './EffectSystem';
+import { MetaStore } from './MetaStore';
 
 /** 角色在本局的即時數值 */
 export interface Stats {
@@ -99,8 +100,9 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
     const q = RARITY[brew.quality].mult;
     const twice = Math.random() < m.value('double_brew') / 100;
     for (let t = 0; t < (twice ? 2 : 1); t++) {
+      const relicMul = this.game.relics?.elementMul ?? 1;
       for (const mat of brew.mats) {
-        this.elements[mat.el] += RARITY[mat.r].mult * (this.character.elementBonus?.[mat.el] ?? 1);
+        this.elements[mat.el] += RARITY[mat.r].mult * (this.character.elementBonus?.[mat.el] ?? 1) * relicMul;
       }
       if (brew.kind === 'recipe') {
         for (const mod of recipe.modules) {
@@ -117,6 +119,7 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
       ids.forEach((id) => PASSIVES[id]?.onAcquire?.(this.ctx(id)));
     }
     this.bestQuality = Math.max(this.bestQuality, brew.quality);
+    this.game.relics?.onDrink();
     if (Math.random() < m.value('rejuvenate') / 100) {
       const p = this.game.player;
       p.hp = Math.min(p.maxHp, p.hp + 1);
@@ -146,6 +149,15 @@ export class BuffSystem extends Phaser.Events.EventEmitter {
     s.pickupRadius *= 1 + m.value('magnet') / 100;
 
     for (const [id, n] of this.stacks) if (n > 0) PASSIVES[id]?.stats?.(s, this.ctx(id));
+
+    // 大坩堝永久升級
+    s.maxHp += MetaStore.level('vitality');
+    s.damage *= 1 + 0.06 * MetaStore.level('claws');
+    s.dashCooldown *= 1 - 0.06 * MetaStore.level('paws');
+    s.pickupRadius *= 1 + 0.15 * MetaStore.level('whiskers');
+    s.fortune += 0.1 * MetaStore.level('lucky_paw');
+    // 聖物
+    this.game.relics?.applyStats(s);
 
     s.maxHp = Math.min(ELEMENT.maxHp, s.maxHp);
     s.dashCooldown = Math.max(ELEMENT.minDashCooldown, s.dashCooldown);

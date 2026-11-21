@@ -7,10 +7,12 @@ import regionsJson from './regions.json';
 import mutationsJson from './mutations.json';
 import weaponsJson from './weapons.json';
 import funJson from './fun.json';
+import relicsJson from './relics.json';
+import metaJson from './meta.json';
 import { RARITY } from '../config';
 import type {
   CharacterDef, ElementDef, ElementId, EnemyDef, EnemyType, Material, MutationDef, MythicDef, RarityIndex,
-  RecipeDef, RegionDef, WeaponDef, RoomModDef, NpcKind, NpcDef, RegionTheme,
+  RecipeDef, RegionDef, WeaponDef, RelicDef, MetaUpgradeDef, RoomModDef, NpcKind, NpcDef, RegionTheme,
 } from '../types';
 
 export const ELEMENTS = elementsJson as ElementDef[];
@@ -120,4 +122,15 @@ export const FUN = funJson as unknown as {
 export const RIFT_THEMES: Record<'past' | 'future', RegionTheme> = {
   past: { bg: '#1e170f', floor: '#3a2e1e', tile: '#43361f', wall: '#7a6440', deco: '#5a4a2a', decoLight: '#e0c08a' },
   future: { bg: '#05040f', floor: '#0e0b24', tile: '#151036', wall: '#00e0ff', deco: '#3a00a0', decoLight: '#ff3df0' },
+};
+
+export const RELICS = relicsJson as RelicDef[];
+export const RELIC_MAP = Object.fromEntries(RELICS.map((r) => [r.id, r])) as Record<string, RelicDef>;
+export const META_UPGRADES = metaJson as MetaUpgradeDef[];
+/** 聖物在大廳解鎖的價格（依稀有度） */
+export const RELIC_UNLOCK_COST = [10, 25, 45, 75];
+
+/** 大廳「貓咪煉金工房」的配色 */
+export const LOBBY_THEME: RegionTheme = {
+  bg: '#1a1410', floor: '#3a2a1e', tile: '#45321f', wall: '#7a5530', deco: '#5a3a1a', decoLight: '#ffd166',
 };

@@ -38,14 +38,14 @@ export class MainMenuScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     const rx = cx(940);
-    textButton(this, rx, 250, 420, 104, '開始遊戲', () => this.scene.start('CharacterSelect'), 0x7a4fc0);
+    textButton(this, rx, 250, 420, 104, '進入工房', () => this.scene.start('Game', { mode: 'lobby' }), 0x7a4fc0);
     textButton(this, rx, 380, 420, 86, `配方圖鑑  ${CodexStore.count}/${CodexStore.total}`,
       () => this.scene.start('Codex', { returnTo: 'MainMenu' }));
     if (canFullscreen()) textButton(this, rx, 480, 260, 64, '⛶ 全螢幕', () => void toggleFullscreen());
     this.add.text(rx, 580, '左半邊拖曳移動　右下：衝刺 / 技能 / 煉成 / 換武器\n鍵盤：WASD 移動　空白 衝刺　K 煉成　E 技能　Q 換武器', {
       fontFamily: FONT, fontSize: '18px', color: COLORS.textDim, align: 'center', lineSpacing: 10,
     }).setOrigin(0.5);
-    this.add.text(GAME_W - 20, GAME_H - 20, 'v0.8 貓咪煉金術師版', {
+    this.add.text(GAME_W - 20, GAME_H - 20, 'v0.9 工房大廳＋聖物版', {
       fontFamily: FONT, fontSize: '15px', color: '#4a4458',
     }).setOrigin(1, 1);
   }

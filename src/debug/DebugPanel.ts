@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import type { GameScene } from '../scenes/GameScene';
 import { CodexStore } from '../systems/CodexStore';
 import { ProgressStore } from '../systems/ProgressStore';
+import { MetaStore } from '../systems/MetaStore';
 import { WEAPON_MAP } from '../data';
 import type { ElementId, RarityIndex } from '../types';
 
@@ -91,9 +92,15 @@ export function installDebugPanel(game: Phaser.Game): void {
   });
   add('解鎖全圖鑑', () => CodexStore.unlockAll());
   add('解鎖全角色', () => ProgressStore.debugUnlockAll());
+  add('+200 時之砂', () => MetaStore.debugAddSand(200));
+  add('掉聖物', () => {
+    const g = getGame();
+    if (g) g.dropRelic(g.player.x + 90, g.player.y - 60);
+  });
   add('重置圖鑑/進度', () => {
     CodexStore.reset();
     ProgressStore.reset();
+    MetaStore.reset();
   });
   panel.appendChild(status);
 

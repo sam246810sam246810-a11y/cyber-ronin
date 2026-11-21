@@ -24,9 +24,17 @@ export class Minimap {
     this.gfx = scene.add.graphics().setDepth(DEPTH.ui + 5);
   }
 
+  setVisible(v: boolean): void {
+    this.hidden = !v;
+    this.gfx.setVisible(v);
+  }
+
+  private hidden = false;
+
   draw(): void {
     const g = this.gfx;
     g.clear();
+    if (this.hidden) return;
     const rooms = this.dungeon.rooms;
     const known = new Set<Room>();
     for (const r of rooms) {

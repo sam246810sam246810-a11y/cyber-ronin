@@ -27,8 +27,9 @@ export const DIRS: Record<Dir, { dx: number; dy: number; opposite: Dir }> = {
 };
 
 export interface ShopItem {
-  id: 'heal' | 'epic' | 'legendary' | 'card_rare' | 'card_epic' | 'weapon';
+  id: 'heal' | 'epic' | 'legendary' | 'card_rare' | 'card_epic' | 'weapon' | 'relic';
   weaponId?: string;
+  relicId?: string;
   label: string;
   desc: string;
   price: number;
@@ -49,6 +50,8 @@ export interface Room {
   stash: { mat: Material; x: number; y: number; life: number }[];
   /** 地上的武器 */
   weapons: { id: string; x: number; y: number }[];
+  /** 地上的聖物 */
+  relics?: { id: string; x: number; y: number }[];
   eventKind?: EventKind;
   shop?: ShopItem[];
   /** 房間詞條（祝福 / 詛咒） */
@@ -121,12 +124,12 @@ export class DungeonSystem {
 
   /** 敵人血量倍率＝指數曲線 × 火力追趕 */
   get hpMul(): number {
-    return this.curveMul * this.catchUpMul;
+    return this.curveMul * this.catchUpMul * (this.game.relics?.enemyHpMul ?? 1);
   }
 
   /** 敵人每次攻擊造成的傷害（愛心數） */
   get enemyDamage(): number {
-    return 1 + Math.floor((this.difficultyFloor - 1) / DIFFICULTY.damageEveryFloors);
+    return 1 + Math.floor((this.difficultyFloor - 1) / DIFFICULTY.damageEveryFloors) + (this.game.relics?.enemyDamageAdd ?? 0);
   }
 
   get enemySpeedMul(): number {
@@ -152,6 +155,7 @@ export class DungeonSystem {
   }
 
   get label(): string {
+    if (this.current?.type === 'lobby') return '貓咪煉金工房';
     if (this.current?.type === 'rift_past') return '時空裂縫・過去';
     if (this.current?.type === 'rift_future') return '時空裂縫・未來';
     return `${this.region.name} ${this.regionIndex + 1}-${this.floor}`;
@@ -167,6 +171,17 @@ export class DungeonSystem {
 
   roomAt(gx: number, gy: number): Room | undefined {
     return this.rooms.find((r) => r.gx === gx && r.gy === gy);
+  }
+
+  /** 大廳：單一房間、沒有門 */
+  startLobby(): void {
+    const lobby: Room = {
+      gx: 0, gy: 0, type: 'lobby', depth: 0, doors: {}, visited: true, cleared: true, used: false, stash: [], weapons: [],
+    };
+    this.rooms = [lobby];
+    this.phase = 'explore';
+    this.current = lobby;
+    this.game.onRoomEnter(lobby, undefined);
   }
 
   start(): void {
@@ -278,7 +293,15 @@ export class DungeonSystem {
       id: 'weapon', weaponId: w.id, label: `【${RARITY[w.rarity].name}】${w.name}`, desc: w.desc,
       price: Math.round([12, 30, 50, 80][w.rarity] * m), sold: false,
     };
-    return [all[0], weapon, ...shuffle(all.slice(1)).slice(0, 2)];
+    const items = [all[0], weapon];
+    const relic = this.game.relics?.roll([35, 40, 18, 7]);
+    if (relic) {
+      items.push({
+        id: 'relic', relicId: relic.id, label: `【聖物】${relic.name}`, desc: relic.desc,
+        price: Math.round([25, 45, 70, 110][relic.rarity] * m), sold: false,
+      });
+    }
+    return [...items, ...shuffle(all.slice(1)).slice(0, 4 - items.length)];
   }
 
   // ---- 換房 ----
@@ -290,7 +313,7 @@ export class DungeonSystem {
     const next = this.roomAt(this.current.gx + d.dx, this.current.gy + d.dy);
     if (!next) return;
     const riftable = !['start', 'exit', 'boss'].includes(next.type) && !this.inRift;
-    if (riftable && (this.forceRift || Math.random() < FUN.riftChance)) {
+    if (riftable && (this.forceRift || Math.random() < FUN.riftChance + (this.game.relics?.riftAdd ?? 0))) {
       this.forceRift = false;
       const kind: RoomType = Math.random() < 0.5 ? 'rift_past' : 'rift_future';
       this.riftReturn = { room: next, fromDir: d.opposite };

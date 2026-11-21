@@ -14,7 +14,7 @@ export class CodexScene extends Phaser.Scene {
     super('Codex');
   }
 
-  create(data: { returnTo: 'MainMenu' | 'Pause' }): void {
+  create(data: { returnTo: 'MainMenu' | 'Pause' | 'Game' }): void {
     this.selectedFrame = undefined;
     this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, COLORS.bg, 1).setInteractive();
     this.add.text(GAME_W / 2, 36, '配方圖鑑', { fontFamily: FONT, fontSize: '34px', color: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
@@ -69,9 +69,9 @@ export class CodexScene extends Phaser.Scene {
     });
 
     textButton(this, SAFE_X + 110, 40, 160, 54, '返回', () => {
-      if (data.returnTo === 'Pause') {
+      if (data.returnTo === 'Pause' || data.returnTo === 'Game') {
         this.scene.stop();
-        this.scene.resume('Pause');
+        this.scene.resume(data.returnTo);
       } else {
         this.scene.start('MainMenu');
       }

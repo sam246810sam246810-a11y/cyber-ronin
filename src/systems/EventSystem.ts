@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ARENA, DEPTH, FONT, GAME_W } from '../config';
-import { ELEMENT_IDS, FUN, WEAPON_MAP, hexToInt } from '../data';
+import { ELEMENT_IDS, FUN, RELIC_MAP, WEAPON_MAP, hexToInt } from '../data';
 import type { GameScene } from '../scenes/GameScene';
 import type { EventOption } from '../scenes/EventScene';
 import type { Material, NpcKind, RarityIndex } from '../types';
@@ -8,7 +8,8 @@ import { pick } from '../utils';
 import { isRift, type Room } from './DungeonSystem';
 import { Sound } from './SoundSystem';
 
-export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs' | 'npc' | 'portal';
+export type EventKind = 'chest' | 'fountain' | 'merchant' | 'shop' | 'altar' | 'stairs' | 'npc' | 'portal'
+  | 'statue' | 'cauldron' | 'shelf' | 'bookshelf' | 'start';
 
 const INFO: Record<EventKind, { name: string; color: number; texture: string }> = {
   chest: { name: '寶箱', color: 0xffd166, texture: 'chest' },
@@ -19,6 +20,15 @@ const INFO: Record<EventKind, { name: string; color: number; texture: string }> 
   stairs: { name: '樓梯', color: 0xffd166, texture: 'stairs' },
   npc: { name: 'NPC', color: 0xffffff, texture: 'hero' },
   portal: { name: '時空門', color: 0x7ed4ff, texture: 'ring' },
+  statue: { name: '', color: 0xffd166, texture: 'cat_apprentice' },
+  cauldron: { name: '大坩堝・永久升級', color: 0xc9a3ff, texture: 'big_cauldron' },
+  shelf: { name: '聖物展示架', color: 0xffd166, texture: 'shelf' },
+  bookshelf: { name: '配方圖鑑', color: 0x7ed4ff, texture: 'bookshelf' },
+  start: { name: '出發冒險！', color: 0x7eff8a, texture: 'ring' },
+};
+
+const SIZES: Partial<Record<EventKind, [number, number]>> = {
+  stairs: [96, 96], portal: [96, 96], start: [120, 120], cauldron: [230, 154], shelf: [110, 110], bookshelf: [110, 110], statue: [80, 80],
 };
 
 interface RoomObject {
@@ -31,6 +41,8 @@ interface RoomObject {
   objs: Phaser.GameObjects.GameObject[];
   sprite: Phaser.GameObjects.Image;
   npc?: NpcKind;
+  /** 大廳雕像對應的角色 id */
+  extra?: string;
 }
 
 /**
@@ -38,7 +50,9 @@ interface RoomObject {
  * 走過去碰到就觸發；每次換房依房間類型重建。
  */
 export class EventSystem {
-  private obj?: RoomObject;
+  private list: RoomObject[] = [];
+  /** 正在觸發的物件（對話結束後移除用） */
+  private activeObj?: RoomObject;
   qualityBonus = 0;
 
   constructor(private game: GameScene) {}
@@ -58,9 +72,8 @@ export class EventSystem {
     if (room.npc && !room.npcDone && room.cleared) this.spawn('npc', cx + 200, cy, room.npc);
   }
 
-  spawn(kind: EventKind, x = GAME_W / 2, y = ARENA.y + ARENA.h / 2, npc?: NpcKind): void {
-    this.clear();
-    const base = INFO[kind];
+  spawn(kind: EventKind, x = GAME_W / 2, y = ARENA.y + ARENA.h / 2, npc?: NpcKind, extra?: string, label?: string): void {
+    const base = { ...INFO[kind], ...(kind === 'statue' && extra ? { texture: `cat_${extra}` } : {}), ...(label ? { name: label } : {}) };
     const nd = npc ? FUN.npcs[npc] : undefined;
     const info = nd
       ? {
@@ -70,44 +83,69 @@ export class EventSystem {
       }
       : base;
     const glow = this.game.add.image(x, y, 'circle').setTint(info.color).setAlpha(0.25).setDisplaySize(120, 120).setDepth(DEPTH.pickup);
-    const size = kind === 'stairs' || kind === 'portal' ? 96 : 68;
-    const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(size, size).setDepth(DEPTH.pickup + 1);
-    if (kind === 'portal' || npc === 'chatty_mushroom') sprite.setTint(info.color);
-    if (kind === 'portal') {
+    const [sw, sh] = SIZES[kind] ?? [68, 68];
+    const sprite = this.game.add.image(x, y, info.texture).setDisplaySize(sw, sh).setDepth(DEPTH.pickup + 1);
+    if (kind === 'portal' || kind === 'start' || npc === 'chatty_mushroom') sprite.setTint(info.color);
+    if (kind === 'portal' || kind === 'start') {
       this.game.tweens.add({ targets: sprite, angle: 360, duration: 2000, repeat: -1 });
     }
-    const label = this.game.add.text(x, y - 62, info.name, {
+    const labelObj = this.game.add.text(x, y - sh / 2 - 22, info.name, {
       fontFamily: FONT, fontSize: '22px', color: '#ffffff', fontStyle: 'bold', stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);
     this.game.tweens.add({ targets: glow, scale: glow.scale * 1.25, alpha: 0.1, duration: 700, yoyo: true, repeat: -1 });
     const p = this.game.player;
     const near = (p.x - x) ** 2 + (p.y - y) ** 2 < 70 ** 2;
-    this.obj = { kind, x, y, t: 0, armed: !near, objs: [glow, sprite, label], sprite, npc };
+    const o: RoomObject = { kind, x, y, t: 0, armed: !near, objs: [glow, sprite, labelObj], sprite, npc, extra };
+    this.list.push(o);
+    if (kind === 'cauldron') {
+      glow.setDisplaySize(300, 200);
+      // 冒泡
+      this.game.time.addEvent({
+        delay: 380, loop: true, callback: () => {
+          if (!sprite.active) return;
+          const b = this.game.add.image(x - 80 + Math.random() * 160, y - 30, 'circle').setTint(0x9bff8a).setAlpha(0.8)
+            .setDisplaySize(10, 10).setDepth(DEPTH.pickup + 2);
+          this.game.tweens.add({ targets: b, y: y - 90 - Math.random() * 40, alpha: 0, duration: 900, onComplete: () => b.destroy() });
+        },
+      });
+    }
     if (nd) {
       const bubble = this.game.add.text(x, y - 92, '💬', { fontSize: '26px' }).setOrigin(0.5).setDepth(DEPTH.pickup + 2);
       this.game.tweens.add({ targets: bubble, y: y - 100, duration: 600, yoyo: true, repeat: -1 });
-      this.obj.objs.push(bubble);
+      o.objs.push(bubble);
     }
   }
 
   update(dt: number): void {
-    const o = this.obj;
-    if (!o) return;
-    o.t += dt;
-    if (o.kind === 'portal') { /* 旋轉由 tween 處理 */ } else if (o.kind !== 'stairs') o.sprite.setY(o.y + Math.sin(o.t * 3) * 4);
-    else o.sprite.setRotation(Math.sin(o.t) * 0.05);
     const p = this.game.player;
-    const inside = (p.x - o.x) ** 2 + (p.y - o.y) ** 2 < (p.radius + 38) ** 2;
-    if (!inside) {
-      o.armed = true;
-      return;
+    for (const o of [...this.list]) {
+      o.t += dt;
+      if (o.kind === 'portal' || o.kind === 'start') { /* 旋轉由 tween 處理 */ }
+      else if (o.kind === 'stairs') o.sprite.setRotation(Math.sin(o.t) * 0.05);
+      else if (o.kind !== 'cauldron' && o.kind !== 'shelf' && o.kind !== 'bookshelf') o.sprite.setY(o.y + Math.sin(o.t * 3) * 4);
+      const reach = o.kind === 'cauldron' ? 90 : o.kind === 'shelf' || o.kind === 'bookshelf' ? 60 : 38;
+      const inside = (p.x - o.x) ** 2 + (p.y - o.y) ** 2 < (p.radius + reach) ** 2;
+      if (!inside) {
+        o.armed = true;
+        continue;
+      }
+      if (!o.armed || this.game.dungeon.combatActive) continue;
+      o.armed = false;
+      this.activeObj = o;
+      this.trigger(o.kind, o.x, o.y, o.npc, o.extra);
     }
-    if (!o.armed || this.game.dungeon.combatActive) return;
-    o.armed = false;
-    this.trigger(o.kind, o.x, o.y, o.npc);
   }
 
-  private trigger(kind: EventKind, x: number, y: number, npc?: NpcKind): void {
+  /** 移除正在觸發的物件 */
+  private removeActive(): void {
+    const o = this.activeObj;
+    if (!o) return;
+    o.objs.forEach((x) => x.destroy());
+    this.list = this.list.filter((x) => x !== o);
+    this.activeObj = undefined;
+  }
+
+  private trigger(kind: EventKind, x: number, y: number, npc?: NpcKind, extra?: string): void {
     const g = this.game;
     const room = g.dungeon.current;
     switch (kind) {
@@ -115,7 +153,7 @@ export class EventSystem {
         Sound.play('fission');
         g.fx.burst(x, y, 140, 0xffd166, 500);
         room.used = true;
-        this.clear();
+        this.removeActive();
         const n = 3 + (Math.random() < 0.4 ? 1 : 0);
         for (let i = 0; i < n; i++) {
           const a = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -123,22 +161,38 @@ export class EventSystem {
         }
         g.dropCoins(x, y, 8 + g.dungeon.regionIndex * 4);
         if (Math.random() < 0.5) g.dropWeapon(x, y + 90);
+        if (Math.random() < 0.4) g.dropRelic(x + 110, y);
         break;
       }
       case 'altar':
         room.used = true;
-        this.clear();
+        this.removeActive();
         g.dungeon.startEliteChallenge();
         break;
       case 'stairs':
         g.onStairs();
         break;
       case 'portal':
-        this.clear();
+        this.removeActive();
         g.dungeon.leaveRift();
         break;
       case 'npc':
         if (npc) this.openNpc(room, npc);
+        break;
+      case 'statue':
+        if (extra) g.lobbySelect(extra);
+        break;
+      case 'cauldron':
+        g.openOverlay('Meta');
+        break;
+      case 'shelf':
+        g.openOverlay('RelicShelf');
+        break;
+      case 'bookshelf':
+        g.openOverlay('Codex', { returnTo: 'Game' });
+        break;
+      case 'start':
+        g.startRunFromLobby();
         break;
       case 'fountain':
         this.openFountain(room);
@@ -158,7 +212,7 @@ export class EventSystem {
     const line = pick(d.lines);
     const done = () => {
       room.npcDone = true;
-      this.clear();
+      this.removeActive();
     };
     let options: EventOption[];
     switch (npc) {
@@ -232,7 +286,7 @@ export class EventSystem {
       },
     ], () => {
       room.used = true;
-      this.clear();
+      this.removeActive();
     });
   }
 
@@ -258,7 +312,7 @@ export class EventSystem {
       },
     ], () => {
       room.used = true;
-      this.clear();
+      this.removeActive();
     });
   }
 
@@ -280,6 +334,7 @@ export class EventSystem {
           case 'card_rare': g.time.delayedCall(100, () => g.openCardSelect(undefined, 1)); break;
           case 'card_epic': g.time.delayedCall(100, () => g.openCardSelect(undefined, 2)); break;
           case 'weapon': if (it.weaponId) g.dropWeapon(g.player.x, g.player.y - 100, WEAPON_MAP[it.weaponId]); break;
+          case 'relic': if (it.relicId) g.dropRelic(g.player.x + 80, g.player.y - 100, RELIC_MAP[it.relicId]); break;
         }
       },
     })));
@@ -298,8 +353,9 @@ export class EventSystem {
   }
 
   clear(): void {
-    this.obj?.objs.forEach((o) => o.destroy());
-    this.obj = undefined;
+    this.list.forEach((o) => o.objs.forEach((x) => x.destroy()));
+    this.list = [];
+    this.activeObj = undefined;
   }
 
   takeQualityBonus(): number {

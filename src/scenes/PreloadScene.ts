@@ -196,6 +196,34 @@ export class PreloadScene extends Phaser.Scene {
       }
       g.fillCircle(32, 32, 16);
     });
+    gen('relic', 64, 64, () => {
+      g.fillStyle(0xffffff).fillPoints([
+        new Phaser.Math.Vector2(32, 2), new Phaser.Math.Vector2(60, 24), new Phaser.Math.Vector2(48, 62),
+        new Phaser.Math.Vector2(16, 62), new Phaser.Math.Vector2(4, 24),
+      ], true);
+      g.fillStyle(0x000000, 0.35).fillCircle(32, 34, 18);
+    });
+    gen('dummy', 64, 64, () => {
+      g.fillStyle(0x8a6a4a).fillRect(28, 30, 8, 34);
+      g.fillStyle(0xd8b890).fillCircle(32, 22, 18);
+      g.fillStyle(0xffffff).fillCircle(32, 22, 11);
+      g.fillStyle(0xff4d4d).fillCircle(32, 22, 6);
+      g.fillStyle(0xc8a070).fillRect(10, 36, 44, 7);
+    });
+    gen('bookshelf', 96, 96, () => {
+      g.fillStyle(0x6a4a2a).fillRect(4, 4, 88, 88);
+      g.fillStyle(0x3a2a1a).fillRect(10, 10, 76, 22).fillRect(10, 38, 76, 22).fillRect(10, 66, 76, 22);
+      const cs = [0xff7eb6, 0x7ed4ff, 0x7eff8a, 0xff8a3d, 0xffe14d, 0xc9a3ff];
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 8; i++) g.fillStyle(cs[(i + r) % 6]).fillRect(12 + i * 9, 12 + r * 28, 7, 18);
+    });
+    gen('shelf', 96, 96, () => {
+      g.fillStyle(0x7a5530).fillRect(4, 20, 88, 72);
+      g.fillStyle(0x3a2a1a).fillRect(10, 26, 76, 26).fillRect(10, 58, 76, 28);
+      g.fillStyle(0xffd166).fillCircle(26, 40, 8).fillCircle(70, 72, 8);
+      g.fillStyle(0xb36bff).fillCircle(48, 40, 8);
+      g.fillStyle(0x4da3ff).fillCircle(48, 72, 8);
+      g.fillStyle(0x9a6a3a).fillTriangle(0, 22, 96, 22, 48, 0);
+    });
     // 角色佔位圖（白色可上色）
     gen('hero', 64, 64, () => {
       g.fillStyle(0xffffff).fillCircle(32, 36, 24);

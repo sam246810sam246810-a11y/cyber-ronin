@@ -168,7 +168,7 @@ export interface RegionDef {
   roomBudget: number[];
 }
 
-export type RoomType = 'start' | 'combat' | 'elite' | 'treasure' | 'shop' | 'event' | 'exit' | 'boss' | 'rift_past' | 'rift_future';
+export type RoomType = 'start' | 'combat' | 'elite' | 'treasure' | 'shop' | 'event' | 'exit' | 'boss' | 'rift_past' | 'rift_future' | 'lobby';
 
 export type RoomModId = 'golden' | 'bounty' | 'frenzy' | 'darkness' | 'gale' | 'gravity';
 export interface RoomModDef {
@@ -195,4 +195,23 @@ export interface MutationDef {
   /** 普通稀有度時每張的數值 */
   base: number;
   unit: string;
+}
+
+export interface RelicDef {
+  id: string;
+  name: string;
+  rarity: RarityIndex;
+  icon: string;
+  desc: string;
+  /** 一開始就在掉落池裡（其餘要在大廳用時之砂解鎖） */
+  starter?: boolean;
+}
+
+export interface MetaUpgradeDef {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  max: number;
+  costs: number[];
 }

@@ -183,5 +183,18 @@ export function generateSprites(scene: Phaser.Scene): void {
     gg.lineStyle(2, 0x333344).strokeCircle(24, 31, 7).strokeCircle(40, 31, 7);
     gg.fillStyle(0xffe14d).fillTriangle(30, 6, 38, 6, 28, 18);
   }));
+  // 大廳的大坩堝
+  gen('big_cauldron', 240, 160, () => {
+    g.fillStyle(0x2a2430).fillRect(46, 118, 16, 38).fillRect(178, 118, 16, 38).fillRect(112, 124, 16, 34);
+    g.fillStyle(0x3a3344).fillEllipse(120, 92, 220, 120);
+    g.fillStyle(0x4a4256).fillEllipse(100, 84, 120, 60);
+    g.fillStyle(0x24202c).fillEllipse(120, 46, 228, 46);
+    g.fillStyle(0x7eff8a).fillEllipse(120, 46, 196, 32);
+    g.fillStyle(0xc8ffb0, 0.9).fillCircle(84, 42, 9).fillCircle(140, 50, 7).fillCircle(168, 40, 5).fillCircle(110, 36, 4);
+    g.fillStyle(0xffffff, 0.8).fillCircle(81, 39, 3).fillCircle(138, 48, 2);
+    g.lineStyle(6, 0x6a6078).strokeEllipse(120, 46, 228, 46);
+    g.fillStyle(0xffd166).fillCircle(120, 100, 10);
+    g.lineStyle(3, 0xc9a3ff).strokeCircle(120, 100, 16);
+  });
   g.destroy();
 }

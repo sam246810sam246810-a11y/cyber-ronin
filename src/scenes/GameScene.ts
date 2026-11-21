@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import {
   ARENA, ARENA_BOTTOM, ARENA_RIGHT, DEPTH, DROP_RARITY, FONT, GAME_W, MYTHIC, RARITY, RIGHT, SAFE_X,
 } from '../config';
-import { ELEMENT_IDS, ELEMENT_MAP, FUN, MYTHICS, RIFT_THEMES, WEAPON_MAP, hexToInt } from '../data';
+import { CHARACTERS, ELEMENT_IDS, ELEMENT_MAP, FUN, LOBBY_THEME, MYTHICS, RELIC_MAP, RIFT_THEMES, WEAPON_MAP, hexToInt } from '../data';
 import type { Enemy } from '../entities/Enemy';
 import { Pickup } from '../entities/Pickup';
 import { Player } from '../entities/Player';
@@ -21,11 +21,15 @@ import { Minimap } from '../ui/Minimap';
 import { WeaponSystem, rollWeapon } from '../systems/WeaponSystem';
 import { SkillSystem } from '../systems/SkillSystem';
 import { WeaponPickup } from '../entities/WeaponPickup';
+import { RelicPickup } from '../entities/RelicPickup';
+import { RelicSystem } from '../systems/RelicSystem';
+import { MetaStore } from '../systems/MetaStore';
+import { Dummy } from '../entities/enemies/Dummy';
 import { HazardSystem } from '../systems/HazardSystem';
 import { EventSystem } from '../systems/EventSystem';
 import { TutorialSystem } from '../systems/TutorialSystem';
 import { Sound } from '../systems/SoundSystem';
-import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme, RoomModId, WeaponDef } from '../types';
+import type { Brew, CharacterDef, ElementId, Material, RarityIndex, RegionDef, RegionTheme, RelicDef, RoomModId, WeaponDef } from '../types';
 import { createRoundButton, type RoundButton } from '../ui/ActionButtons';
 import { CrucibleBar } from '../ui/CrucibleBar';
 import { HUD } from '../ui/HUD';
@@ -34,6 +38,8 @@ import type { ResultData } from './ResultScene';
 
 export interface RunSummary {
   character: string;
+  relics: { name: string; icon: string; color: string; desc: string }[];
+  sand: number;
   weapons: { name: string; color: string }[];
   skill: string;
   region: string;
@@ -66,6 +72,12 @@ export class GameScene extends Phaser.Scene {
   weapons!: WeaponSystem;
   skills!: SkillSystem;
   weaponPickups: WeaponPickup[] = [];
+  relicPickups: RelicPickup[] = [];
+  relics!: RelicSystem;
+  /** 本局獲得的時之砂 */
+  sand = 0;
+  /** 剩餘突變卡重抽次數 */
+  rerolls = 0;
   private swapBtn!: RoundButton;
   private skillBtn!: RoundButton;
   private weaponText!: Phaser.GameObjects.Text;
@@ -99,13 +111,19 @@ export class GameScene extends Phaser.Scene {
     super('Game');
   }
 
-  create(): void {
+  /** lobby：大廳（貓咪煉金工房）；run：冒險 */
+  mode: 'lobby' | 'run' = 'run';
+
+  create(data?: { mode?: 'lobby' | 'run' }): void {
+    this.mode = data?.mode ?? 'run';
     this.enemies = [];
     this.pickups = [];
     this.runTime = 0;
     this.kills = 0;
     this.ended = false;
     this.weaponPickups = [];
+    this.relicPickups = [];
+    this.sand = 0;
     this.quest = undefined;
     this.darkness = undefined;
     this.drawnTheme = undefined;
@@ -131,7 +149,11 @@ export class GameScene extends Phaser.Scene {
     this.doorGfx = this.add.graphics().setDepth(DEPTH.floor + 1);
     this.hazards = new HazardSystem(this);
     this.encounters = new EventSystem(this);
-    this.crucible.qualityBonusProvider = () => this.encounters.takeQualityBonus();
+    this.relics = new RelicSystem(this);
+    this.crucible.qualityBonusProvider = () => this.encounters.takeQualityBonus() + this.relics.qualityBonus();
+    this.crucible.bonusChance += 0.03 * MetaStore.level('affinity');
+    this.crucible.extraChance = () => this.relics.fissionAdd;
+    this.rerolls = MetaStore.level('reroll');
     this.player = new Player(this, GAME_W / 2, ARENA.y + ARENA.h * 0.7, `cat_${this.character.id}`);
     this.buffs = new BuffSystem(this, this.character);
     this.player.hp = this.player.maxHp = this.character.stats.hp;
@@ -165,9 +187,22 @@ export class GameScene extends Phaser.Scene {
     });
 
     this.events.on('resume', () => this.input2.consume());
-    this.tutorial = new TutorialSystem(this);
+    this.tutorial = new TutorialSystem(this, this.mode === 'run');
     this.events.on('telegraph-warning', () => this.tutorial.notify('telegraph'));
-    this.dungeon.start();
+    this.events.on('resume', () => {
+      this.buffs.recompute();
+      this.hud.setRelics(this.relics.owned);
+    });
+    if (this.mode === 'lobby') {
+      this.setupLobby();
+    } else {
+      this.dungeon.start();
+      // 大坩堝永久升級：開局金幣與素材袋
+      this.coins = 15 * MetaStore.level('fortune_cat');
+      for (let i = 0; i < MetaStore.level('satchel'); i++) {
+        this.dropMaterial(this.player.x - 60 + i * 60, this.player.y - 90, { el: pick(ELEMENT_IDS), r: 1 });
+      }
+    }
 
     (window as unknown as { __game?: GameScene }).__game = this;
   }
@@ -232,7 +267,10 @@ export class GameScene extends Phaser.Scene {
 
     const actions = this.input2.consume();
     const move = this.input2.move;
-    if (actions.dash && this.player.tryDash(move.x, move.y)) Sound.play('dash');
+    if (actions.dash && this.player.tryDash(move.x, move.y)) {
+      Sound.play('dash');
+      this.effects.delay(0.16, () => this.relics.onDash(this.player.x, this.player.y));
+    }
     if (actions.brew) this.brewAndDrink();
     if (actions.skill && !this.skills.use() && this.skills.cooldown > 0) {
       this.fx.floatText(this.player.x, this.player.y - 40, `技能冷卻 ${Math.ceil(this.skills.cooldown)}s`, '#9a90a8', 18);
@@ -261,6 +299,7 @@ export class GameScene extends Phaser.Scene {
     this.tutorial.update(dt);
     this.updateCoins(dt);
     this.updateWeaponPickups(dt);
+    this.updateRelicPickups(dt);
     this.dungeon.update(dt);
 
     if (this.darkness) {
@@ -272,9 +311,13 @@ export class GameScene extends Phaser.Scene {
     this.skillBtn.setCooldown(this.skills.ratio);
     this.skillBtn.setEnabled(this.skills.ready);
     const boss = this.dungeon.boss;
-    this.hud.setCoins(this.coins);
+    if (this.mode === 'lobby') this.hud.setLobbySand(MetaStore.sand);
+    else {
+      this.hud.setCoins(this.coins);
+      this.hud.setSand(this.sand);
+    }
     this.hud.setDanger(this.dungeon.hpMul, this.dungeon.enemyDamage);
-    this.hud.update(this.player, this.dungeon.label, this.runTime,
+    this.hud.update(this.player, this.mode === 'lobby' ? '' : this.dungeon.label, this.runTime,
       boss ? { hp: boss.hp, maxHp: boss.maxHp, name: boss.def.name, alive: boss.alive } : undefined);
   }
 
@@ -397,6 +440,11 @@ export class GameScene extends Phaser.Scene {
   /** 敵人造成的傷害會依難度放大 */
   hurtPlayer(amount: number): void {
     if (this.ended) return;
+    if (!this.player.invulnerable && this.relics.dodge()) {
+      this.fx.floatText(this.player.x, this.player.y - 50, '閃避！', '#7ed4ff', 22);
+      this.player.hurt(0);
+      return;
+    }
     if (!this.player.hurt(amount * this.dungeon.enemyDamage)) return;
     Sound.play('hurt');
     this.hitStop(0.08);
@@ -424,8 +472,11 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.shake(e.def.boss ? 400 : 120, e.def.boss ? 0.012 : 0.005);
     }
     this.buffs.onKill(e);
+    this.relics.onKill(e);
+    if (e.elite) this.addSand(1, e.x, e.y);
     if (e.def.boss) {
       this.dropCoins(e.x, e.y, 25);
+      this.addSand(12, e.x, e.y);
       return;
     }
     if (e.elite) this.dropCoins(e.x, e.y, 5);
@@ -523,7 +574,11 @@ export class GameScene extends Phaser.Scene {
     if (prev && prev !== room) {
       prev.stash = this.pickups.filter((pk) => pk.alive).map((pk) => ({ mat: pk.mat, x: pk.x, y: pk.y, life: pk.life }));
       prev.weapons = this.weaponPickups.filter((w) => w.alive).map((w) => ({ id: w.weapon.id, x: w.x, y: w.y }));
+      prev.relics = this.relicPickups.filter((r) => r.alive).map((r) => ({ id: r.relic.id, x: r.x, y: r.y }));
     }
+    this.relicPickups.forEach((r) => r.destroy());
+    this.relicPickups = (room.relics ?? []).map((r) => new RelicPickup(this, RELIC_MAP[r.id], r.x, r.y));
+    room.relics = [];
     this.weaponPickups.forEach((w) => w.destroy());
     this.weaponPickups = room.weapons.map((w) => new WeaponPickup(this, WEAPON_MAP[w.id], w.x, w.y));
     room.weapons = [];
@@ -555,7 +610,8 @@ export class GameScene extends Phaser.Scene {
     else if (fromDir === 'e') p.setPosition(ARENA_RIGHT - inset, cy);
     else p.setPosition(cx, ARENA.y + ARENA.h * 0.7);
 
-    if (room.type === 'rift_past') this.drawArena(RIFT_THEMES.past);
+    if (room.type === 'lobby') this.drawArena(LOBBY_THEME);
+    else if (room.type === 'rift_past') this.drawArena(RIFT_THEMES.past);
     else if (room.type === 'rift_future') this.drawArena(RIFT_THEMES.future);
     else this.drawArena(this.dungeon.region.theme);
     this.refreshModText();
@@ -569,6 +625,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   onRoomCleared(room: Room): void {
+    this.relics.onRoomClear();
+    if (room.type === 'elite') this.addSand(3);
+    if (room.type === 'rift_past') this.addSand(5);
+    if (room.type === 'rift_future') this.addSand(8);
+    if (room.type === 'elite' && Math.random() < 0.5) this.dropRelic(GAME_W / 2 + 140, ARENA.y + ARENA.h / 2);
     this.buffs.commitRoom();
     this.projectiles.clearEnemyBullets();
     const cx = (ARENA.x + ARENA_RIGHT) / 2;
@@ -621,6 +682,7 @@ export class GameScene extends Phaser.Scene {
     this.showBanner(`${region.name} 突破！`);
     for (let i = 0; i < 3; i++) this.dropMaterial(GAME_W / 2 - 80 + i * 80, ARENA.y + ARENA.h / 2 + 80, undefined, true);
     this.dropWeapon(GAME_W / 2, ARENA.y + ARENA.h / 2 - 140, undefined, 2);
+    this.dropRelic(GAME_W / 2 + 160, ARENA.y + ARENA.h / 2 - 140, undefined, 1);
     this.minimap.draw();
     this.hud.setInfoY(this.minimap.bottom);
     this.time.delayedCall(1800, () => this.openCardSelect('Boss 獎勵', 1, () => {
@@ -748,10 +810,130 @@ export class GameScene extends Phaser.Scene {
     this.weaponPickups = this.weaponPickups.filter((w) => w.alive);
   }
 
+  // ---- 大廳 ----
+
+  private setupLobby(): void {
+    this.dungeon.startLobby();
+    this.player.godMode = true;
+    this.minimap.setVisible(false);
+    this.crucibleBar.setVisible(false);
+    this.player.setPosition(GAME_W / 2, 440);
+    const e = this.encounters;
+    // 四隻貓：碰到就換角色
+    CHARACTERS.forEach((c, i) => {
+      const unlocked = ProgressStore.isUnlocked(c);
+      const sel = c.id === this.character.id;
+      e.spawn('statue', SAFE_X + 140 + i * 120, 210, undefined, c.id,
+        unlocked ? `${sel ? '★ ' : ''}${c.name}` : `🔒 ${c.name}`);
+    });
+    e.spawn('cauldron', GAME_W / 2, 230);
+    e.spawn('shelf', RIGHT - 340, 230);
+    e.spawn('bookshelf', RIGHT - 180, 230);
+    e.spawn('start', GAME_W / 2, 600);
+    this.addEnemy(new Dummy(this, SAFE_X + 330, 500));
+    this.hud.showBanner('貓咪煉金工房');
+    this.hud.showToast(`${this.character.title}・${this.character.name}`,
+      '碰其他貓咪換角色・大坩堝買永久升級・展示架解鎖聖物・木樁試打・走進傳送門出發', '#ffd166');
+  }
+
+  /** 大廳換角色 */
+  lobbySelect(id: string): void {
+    const c = CHARACTERS.find((x) => x.id === id);
+    if (!c) return;
+    if (!ProgressStore.isUnlocked(c)) {
+      this.fx.floatText(this.player.x, this.player.y - 60, `🔒 ${c.unlock.text}（${ProgressStore.progressText(c)}）`, '#ff9aa8', 20);
+      return;
+    }
+    if (c.id === this.character.id) return;
+    ProgressStore.select(c.id);
+    Sound.play('card');
+    this.transition(() => this.scene.restart({ mode: 'lobby' }));
+  }
+
+  /** 在大廳打開大坩堝 / 展示架 / 圖鑑 */
+  openOverlay(key: string, data?: object): void {
+    this.scene.launch(key, data ?? {});
+    this.scene.pause();
+  }
+
+  startRunFromLobby(): void {
+    Sound.play('fission');
+    this.riftTransition(true, () => this.scene.restart({ mode: 'run' }));
+  }
+
+  // ---- 聖物 / 時之砂 ----
+
+  addSand(n: number, x?: number, y?: number): void {
+    this.sand += n;
+    const px = x ?? this.player.x;
+    const py = y ?? this.player.y;
+    this.fx.floatText(px, py - 70, `+${n} ⌛`, '#9fe3ff', 20);
+  }
+
+  /** 掉落聖物（不指定就從已解鎖的聖物依稀有度抽） */
+  dropRelic(x: number, y: number, r?: RelicDef, minRarity: RarityIndex = 0): void {
+    if (!r) {
+      const w = DROP_RARITY.elite.map((v, i) => Math.max(0.1, v + DROP_RARITY.perWave[i] * this.dungeon.depthIndex));
+      r = this.relics.roll(w, minRarity);
+      if (!r) return;
+    }
+    x = Math.max(ARENA.x + 40, Math.min(ARENA_RIGHT - 40, x));
+    y = Math.max(ARENA.y + 60, Math.min(ARENA_BOTTOM - 40, y));
+    this.relicPickups.push(new RelicPickup(this, r, x, y));
+  }
+
+  private updateRelicPickups(dt: number): void {
+    const p = this.player;
+    for (const rp of this.relicPickups) {
+      if (!rp.alive) continue;
+      rp.update(dt);
+      const inside = (p.x - rp.x) ** 2 + (p.y - rp.y) ** 2 < (p.radius + 30) ** 2;
+      if (!inside) {
+        rp.armed = true;
+        continue;
+      }
+      if (!rp.armed) continue;
+      rp.armed = false;
+      if (!this.relics.full) {
+        this.takeRelic(rp);
+      } else {
+        // 滿格：選一個丟掉
+        this.scene.launch('Event', {
+          title: `聖物欄已滿（${this.relics.maxSlots} 格）`,
+          subtitle: `要用「${rp.relic.icon} ${rp.relic.name}」換掉哪一個？\n${rp.relic.desc}`,
+          color: RARITY[rp.relic.rarity].color,
+          options: this.relics.owned.map((old) => ({
+            label: `丟掉 ${old.icon} ${old.name}`, desc: old.desc, enabled: true,
+            onPick: () => {
+              this.relics.replace(old.id, rp.relic);
+              rp.destroy();
+              this.announceRelic(rp.relic);
+            },
+          })),
+          onClose: () => this.scene.resume(),
+        });
+        this.scene.pause();
+      }
+    }
+    this.relicPickups = this.relicPickups.filter((r) => r.alive);
+  }
+
+  private takeRelic(rp: RelicPickup): void {
+    this.relics.add(rp.relic);
+    rp.destroy();
+    this.announceRelic(rp.relic);
+  }
+
+  private announceRelic(r: RelicDef): void {
+    Sound.play('pickup', r.rarity);
+    this.hud.showToast(`聖物・${r.icon} ${r.name}`, r.desc, RARITY[r.rarity].color);
+    this.hud.setRelics(this.relics.owned);
+  }
+
   // ---- 金幣 ----
 
   dropCoins(x: number, y: number, n: number): void {
-    n = Math.round(n * (1 + this.mutations.value('greed') / 100) * (this.roomMod === 'golden' ? 3 : 1));
+    n = Math.round(n * (1 + this.mutations.value('greed') / 100) * (this.roomMod === 'golden' ? 3 : 1) * this.relics.coinMul);
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 120 + Math.random() * 160;
@@ -791,21 +973,31 @@ export class GameScene extends Phaser.Scene {
 
   openCardSelect(title?: string, minRarity: RarityIndex = 0, after?: () => void): void {
     if (this.ended) return;
-    const offers = this.mutations.roll(this.dungeon.depthIndex + 1, minRarity);
-    this.scene.launch('CardSelect', {
-      title,
-      offers: offers.map((o) => ({ ...o, owned: this.mutations.value(o.def.id) })),
-      onPick: (index: number) => {
-        const o = offers[index];
-        Sound.play('card');
-        this.mutations.add(o.def.id, RARITY[o.rarity].mult);
-        this.buffs.recompute();
-        this.crucible.emit('changed');
-        this.buffs.emit('changed', false);
-        this.scene.resume();
-        after?.();
-      },
-    });
+    const show = () => {
+      const offers = this.mutations.roll(this.dungeon.depthIndex + 1, minRarity);
+      this.scene.launch('CardSelect', {
+        title,
+        rerolls: this.rerolls,
+        offers: offers.map((o) => ({ ...o, owned: this.mutations.value(o.def.id) })),
+        onReroll: () => {
+          if (this.rerolls <= 0) return;
+          this.rerolls--;
+          this.scene.stop('CardSelect');
+          show();
+        },
+        onPick: (index: number) => {
+          const o = offers[index];
+          Sound.play('card');
+          this.mutations.add(o.def.id, RARITY[o.rarity].mult);
+          this.buffs.recompute();
+          this.crucible.emit('changed');
+          this.buffs.emit('changed', false);
+          this.scene.resume();
+          after?.();
+        },
+      });
+    };
+    show();
     this.scene.pause();
   }
 
@@ -828,6 +1020,8 @@ export class GameScene extends Phaser.Scene {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     return {
       character: this.character.name,
+      relics: this.relics.owned.map((r) => ({ name: r.name, icon: r.icon, color: RARITY[r.rarity].color, desc: r.desc })),
+      sand: this.sand,
       weapons: this.weapons.slots.filter(Boolean).map((w) => ({ name: w!.name, color: RARITY[w!.rarity].color })),
       skill: `${this.character.skill.name}（冷卻 ${this.character.skill.cooldown} 秒）`,
       region: `${this.dungeon.label}　${formatTime(this.runTime)}`,
@@ -869,6 +1063,10 @@ export class GameScene extends Phaser.Scene {
     this.ended = true;
     this.telegraphs.clear();
     this.tutorial.finish();
+    // 時之砂：本局掉落 + 依樓層結算，倒下也保留
+    const bonus = this.dungeon.globalFloor * 3 + (victory ? 30 : 0);
+    this.sand += bonus;
+    MetaStore.addSand(this.sand);
     const data: ResultData = {
       victory,
       time: this.runTime,

@@ -15,8 +15,12 @@ export class SkillSystem {
 
   constructor(private game: GameScene, readonly skill: SkillDef) {}
 
+  get maxCooldown(): number {
+    return this.skill.cooldown * (this.game.relics?.skillCdMul ?? 1);
+  }
+
   get ratio(): number {
-    return this.cooldown / this.skill.cooldown;
+    return this.cooldown / this.maxCooldown;
   }
 
   get ready(): boolean {
@@ -28,14 +32,14 @@ export class SkillSystem {
     if (!this.ready || g.player.state === 'dead') return false;
     const ok = this.cast();
     if (ok) {
-      this.cooldown = this.skill.cooldown;
+      this.cooldown = this.maxCooldown;
       g.fx.floatText(g.player.x, g.player.y - 60, this.skill.name, '#ffd166', 24);
     }
     return ok;
   }
 
   private dmg(mul: number): number {
-    return this.game.buffs.stats.damage * mul;
+    return this.game.buffs.stats.damage * mul * (this.game.relics?.skillDmgMul ?? 1);
   }
 
   private cast(): boolean {

@@ -44,8 +44,8 @@ export class EventScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
 
     const n = d.options.length;
-    const cw = n > 3 ? 270 : 330;
-    const gap = 20;
+    const gap = n > 4 ? 12 : 20;
+    const cw = Math.min(n > 3 ? 270 : 330, (GAME_W - 40) / n - gap);
     d.options.forEach((o, i) => {
       const x = GAME_W / 2 + (i - (n - 1) / 2) * (cw + gap);
       const y = 400;

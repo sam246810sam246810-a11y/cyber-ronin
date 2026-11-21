@@ -1,0 +1,12 @@
+[
+  { "id": "vitality", "name": "貓之活力", "icon": "❤", "desc": "最大血量 +1", "max": 5, "costs": [20, 40, 70, 110, 160] },
+  { "id": "fortune_cat", "name": "招財起手", "icon": "🪙", "desc": "開局金幣 +15", "max": 5, "costs": [15, 30, 50, 75, 105] },
+  { "id": "claws", "name": "鋒利貓爪", "icon": "🗡", "desc": "傷害 +6%", "max": 5, "costs": [25, 50, 85, 130, 190] },
+  { "id": "paws", "name": "輕盈貓步", "icon": "🐾", "desc": "衝刺冷卻 −6%", "max": 4, "costs": [20, 45, 80, 125] },
+  { "id": "affinity", "name": "時空親和", "icon": "☢", "desc": "裂變率 +3%", "max": 5, "costs": [25, 50, 85, 130, 190] },
+  { "id": "satchel", "name": "素材袋", "icon": "🎒", "desc": "開局多 1 個稀有素材", "max": 3, "costs": [30, 70, 130] },
+  { "id": "reroll", "name": "命運重抽", "icon": "🎲", "desc": "每局可重抽突變卡 +1 次", "max": 3, "costs": [35, 80, 150] },
+  { "id": "relic_slot", "name": "聖物格", "icon": "🏺", "desc": "聖物欄位 +1（基礎 4 格）", "max": 2, "costs": [60, 140] },
+  { "id": "whiskers", "name": "磁吸鬍鬚", "icon": "〰", "desc": "拾取範圍 +15%", "max": 3, "costs": [15, 35, 65] },
+  { "id": "lucky_paw", "name": "幸運貓掌", "icon": "🍀", "desc": "高稀有度掉落機率 +10%", "max": 3, "costs": [30, 70, 130] }
+]

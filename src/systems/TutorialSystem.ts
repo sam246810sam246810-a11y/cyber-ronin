@@ -31,8 +31,8 @@ export class TutorialSystem {
   private arrow: Phaser.GameObjects.Text;
   readonly enabled: boolean;
 
-  constructor(private game: GameScene) {
-    this.enabled = !ProgressStore.data.tutorialDone;
+  constructor(private game: GameScene, active = true) {
+    this.enabled = active && !ProgressStore.data.tutorialDone;
     const bg = game.add.rectangle(0, 0, 680, 60, 0x1e1428, 0.94).setStrokeStyle(3, COLORS.gold, 1);
     this.text = game.add.text(0, 0, '', {
       fontFamily: FONT, fontSize: '21px', color: '#ffffff', align: 'center', wordWrap: { width: 650, useAdvancedWrap: true },

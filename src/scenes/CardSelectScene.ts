@@ -1,12 +1,15 @@
 import Phaser from 'phaser';
 import { COLORS, FONT, GAME_H, GAME_W, RARITY } from '../config';
 import { hexToInt } from '../data';
+import { textButton } from '../ui/widgets';
 import { cardDesc, formatCardValue, type CardOffer } from '../systems/MutationSystem';
 
 export interface CardSelectData {
   title?: string;
   offers: (CardOffer & { owned: number })[];
   onPick: (index: number) => void;
+  rerolls?: number;
+  onReroll?: () => void;
 }
 
 /** 三選一突變卡：每張有稀有度，越稀有數值越高 */
@@ -57,6 +60,14 @@ export class CardSelectScene extends Phaser.Scene {
       card.on('pointerup', () => pickIt(i));
     });
 
+    if (data.rerolls && data.onReroll) {
+      textButton(this, GAME_W / 2, 650, 260, 60, `🎲 重抽（剩 ${data.rerolls}）`, () => {
+        if (!this.picked) {
+          this.picked = true;
+          data.onReroll!();
+        }
+      });
+    }
     this.input.keyboard?.on('keydown', (e: KeyboardEvent) => {
       const n = Number(e.key);
       if (n >= 1 && n <= data.offers.length) pickIt(n - 1);

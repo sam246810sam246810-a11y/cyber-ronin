@@ -25,6 +25,8 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
   forceFission = false;
   /** 祈願泉祝福等額外品質（由 GameScene 提供，取用後歸零） */
   qualityBonusProvider: () => number = () => 0;
+  /** 聖物等動態裂變加成 */
+  extraChance: () => number = () => 0;
 
   constructor(private mutations: MutationSystem) {
     super();
@@ -46,7 +48,7 @@ export class CrucibleSystem extends Phaser.Events.EventEmitter {
     const mats = this.slots.filter(Boolean) as Material[];
     const fromMats = mats.reduce((s, m) => s + FISSION.perMaterial[m.r], 0);
     return Math.max(0, Math.min(FISSION.maxChance,
-      FISSION.baseChance + fromMats + this.mutations.value('catalyst') / 100 + this.bonusChance));
+      FISSION.baseChance + fromMats + this.mutations.value('catalyst') / 100 + this.bonusChance + this.extraChance()));
   }
 
   get canAccept(): boolean {

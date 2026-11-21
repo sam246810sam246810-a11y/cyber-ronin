@@ -4,7 +4,8 @@ import { BootScene } from './scenes/BootScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
 import { GameScene } from './scenes/GameScene';
-import { CharacterSelectScene } from './scenes/CharacterSelectScene';
+import { MetaScene } from './scenes/MetaScene';
+import { RelicShelfScene } from './scenes/RelicShelfScene';
 import { CardSelectScene } from './scenes/CardSelectScene';
 import { PauseScene } from './scenes/PauseScene';
 import { ResultScene } from './scenes/ResultScene';
@@ -48,7 +49,7 @@ function createGame(): void {
     },
     input: { activePointers: 4 },
     render: { antialias: true, roundPixels: false },
-    scene: [BootScene, PreloadScene, MainMenuScene, CharacterSelectScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene, EventScene],
+    scene: [BootScene, PreloadScene, MainMenuScene, GameScene, CardSelectScene, PauseScene, ResultScene, CodexScene, EventScene, MetaScene, RelicShelfScene],
   });
   (window as unknown as { __phaser?: Phaser.Game }).__phaser = game;
   if (!debugInstalled && (import.meta.env.DEV || new URLSearchParams(location.search).has('debug'))) {
